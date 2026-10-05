@@ -89,6 +89,7 @@ func Handler(d Deps) http.Handler {
 			fmt.Fprint(w, "# Read the file at "+d.CfgPath+" — write via POST here.\n")
 		case http.MethodPost:
 			c := config.Defaults()
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 			if err := json.NewDecoder(r.Body).Decode(c); err != nil {
 				http.Error(w, err.Error(), 400)
 				return
