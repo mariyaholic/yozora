@@ -1,0 +1,7 @@
+# Build outputs
+*.exe
+
+# Runtime files (should never appear in the module; sanity list)
+dashboard.json
+launcher.log
+state.json

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Yozora — dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center;
+         background:#111318; color:#e8e6e3; font:15px/1.5 system-ui, sans-serif; }
+  .wrap { width:min(560px, 92vw); }
+  h1 { font-size:15px; font-weight:600; color:#d4a843; letter-spacing:.04em; }
+  .card { background:#1e1f22; border-radius:10px; padding:14px; display:flex; gap:14px;
+          box-shadow:0 2px 10px rgba(0,0,0,.4); }
+  .art-wrap { position:relative; width:88px; height:88px; flex:none; }
+  .small-icon { position:absolute; right:-4px; bottom:-4px; width:28px; height:28px; border-radius:50%; border:2px solid #1e1f22; background:#2b2d31; }
+  .art { width:88px; height:88px; border-radius:8px; object-fit:cover; background:#2b2d31; flex:none; }
+  .body { min-width:0; }
+  .head { font-size:14px; font-weight:700; margin-bottom:4px; color:#fff; }
+  .det { font-size:14px; color:#dbdee1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .st  { font-size:13px; color:#b5bac1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar { height:4px; border-radius:2px; background:#2b2d31; margin:9px 0 3px; overflow:hidden; }
+  .bar i { display:block; height:100%; background:#d4a843; width:0; transition:width 1s linear; }
+  .t   { font-size:11px; color:#949ba4; font-variant-numeric:tabular-nums; }
+  .btn { margin-top:8px; display:block; font-size:12px; color:#00a8fc; text-decoration:none; }
+  .meta { margin-top:14px; font-size:12px; color:#949ba4; white-space:pre-wrap; }
+  .err { color:#f2736b; }
+  .made-by { margin:16px 0 0; font-size:12px; color:#949ba4; text-align:center; }
+  .made-by a { color:#00a8fc; text-decoration:none; }
+  .made-by a:hover { text-decoration:underline; }
+  fieldset { margin:18px 0 0; border:1px solid #34363c; border-radius:8px; padding:12px 14px; }
+  legend { font-size:13px; color:#b5bac1; padding:0 5px; }
+  .source-option { display:flex; align-items:center; gap:8px; margin:5px 0; }
+  .source-option input { accent-color:#b5bac1; }
+  .source-help, #source-status { font-size:12px; color:#949ba4; }
+  #source-save { margin-top:10px; padding:4px 12px; border:1px solid #45474e; border-radius:5px; background:#24262b; color:#dbdee1; font:inherit; font-size:12px; cursor:pointer; }
+  #source-save:disabled { opacity:.5; cursor:default; }
+  #source-save:focus-visible, .source-option input:focus-visible { outline:2px solid #d4a843; outline-offset:3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>YOZORA · live preview</h1>
+  <div class="card">
+    <div class="art-wrap">
+      <img class="art" id="art" alt="Album cover">
+      <img class="small-icon" id="small-icon" alt="Yozora">
+    </div>
+    <div class="body">
+      <div class="head" id="head"></div>
+      <div class="det" id="det"></div>
+      <div class="st" id="st"></div>
+      <div class="bar"><i id="fill"></i></div>
+      <div class="t"><span id="el">0:00</span> / <span id="du">0:00</span></div>
+      <div id="buttons"></div>
+    </div>
+  </div>
+  <div class="meta" id="meta"></div>
+  <form id="sources-form">
+    <fieldset id="source-fields" disabled>
+      <legend>Detected sources</legend>
+      <div class="source-option"><input type="checkbox" id="source-applemusic"><label for="source-applemusic">Apple Music</label></div>
+      <div class="source-option"><input type="checkbox" id="source-spotify"><label for="source-spotify">Spotify (desktop)</label></div>
+      <div class="source-option"><input type="checkbox" id="source-spotifyapi"><label for="source-spotifyapi">Spotify (Web API, if configured)</label></div>
+      <div class="source-option"><input type="checkbox" id="source-browser"><label for="source-browser">Browser media / videos</label></div>
+      <div class="source-option"><input type="checkbox" id="source-generic"><label for="source-generic">Other media players</label></div>
+      <div class="source-help">Checked sources may appear in your activity. Custom app filters still apply.</div>
+      <button type="submit" id="source-save">Apply</button>
+    </fieldset>
+    <p id="source-status" role="status" aria-live="polite">Loading saved sources…</p>
+  </form>
+  <p class="made-by">Made with love by <a href="https://github.com/mariyaholic" target="_blank" rel="noopener noreferrer">Maria</a>.</p>
+</div>
+<script>
+const t = new URLSearchParams(location.search).get("t");
+const sourceKeys = ["applemusic", "spotify", "spotifyapi", "browser", "generic"];
+const sourceFields = document.getElementById("source-fields");
+const sourceStatus = document.getElementById("source-status");
+const sourceSave = document.getElementById("source-save");
+const sourceURL = `/api/sources?t=${encodeURIComponent(t)}`;
+function showSources(enabled) {
+  for (const source of sourceKeys) document.getElementById(`source-${source}`).checked = enabled[source] === true;
+}
+async function loadSources() {
+  try {
+    const r = await fetch(sourceURL, {cache:"no-store"});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    showSources((await r.json()).enabled);
+    sourceFields.disabled = false;
+    sourceStatus.textContent = "Saved source settings loaded.";
+  } catch (e) { sourceStatus.textContent = `Could not load sources: ${e}. Reload to retry.`; }
+}
+document.getElementById("sources-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  const enabled = Object.fromEntries(sourceKeys.map(source => [source, document.getElementById(`source-${source}`).checked]));
+  sourceFields.disabled = true;
+  sourceStatus.textContent = "Saving…";
+  try {
+    const r = await fetch(sourceURL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled})});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    showSources((await r.json()).enabled);
+    sourceStatus.textContent = "Saved. Activity updates after the current rate limit.";
+  } catch (e) { sourceStatus.textContent = `Save failed: ${e}. Your changes were not confirmed; try again.`; }
+  finally { sourceFields.disabled = false; }
+});
+loadSources();
+const fmt = s => { s = Math.max(0, Math.round(s||0)); const m = Math.floor(s/60);
+  return m >= 60 ? `${Math.floor(m/60)}:${String(m%60).padStart(2,"0")}:${String(s%60).padStart(2,"0")}` : `${m}:${String(s%60).padStart(2,"0")}`; };
+async function tick() {
+  try {
+    const r = await fetch(`/api/state?t=${encodeURIComponent(t)}`, {cache:"no-store"});
+    const s = await r.json();
+    head.textContent = s.playing ? `Listening to ${s.service || "Media Player"}` : `Paused — ${s.service || "Media Player"}`;
+    det.textContent = s.title || "— nothing playing —";
+    st.textContent = s.artist ? `${s.artist}${s.album ? " — " + s.album : ""}` : "";
+    art.src = s.art_url || "";
+    art.style.visibility = s.art_url ? "visible" : "hidden";
+    const badge = document.getElementById("small-icon");
+    badge.src = s.small_image || "";
+    badge.style.visibility = s.small_image ? "visible" : "hidden";
+    const buttons = document.getElementById("buttons");
+    buttons.replaceChildren();
+    for (const b of s.published_activity?.buttons || []) {
+      const link = document.createElement("a");
+      link.className = "btn"; link.textContent = b.label; link.href = b.url;
+      link.target = "_blank"; link.rel = "noopener noreferrer";
+      buttons.appendChild(link);
+    }
+    const p = s.duration_sec > 0 ? Math.min(100, 100 * s.elapsed_sec / s.duration_sec) : 0;
+    fill.style.width = (s.playing ? p : 0) + "%";
+    el.textContent = fmt(s.elapsed_sec); du.textContent = fmt(s.duration_sec);
+    meta.textContent = `source: ${s.source||"—"} · art: ${s.art_via||"—"} · sends: ${s.sends} · connected: ${s.discord_connected}`;
+    if (s.last_error) {
+      const e2 = document.createElement("span");
+      e2.className = "err";
+      e2.style.display = "block";
+      e2.textContent = "error: " + s.last_error;
+      meta.appendChild(e2);
+    }
+  } catch (e) { meta.textContent = "fetch failed: " + e; }
+}
+tick(); setInterval(tick, 1000);
+</script>
+</body>
+</html>
