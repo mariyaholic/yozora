@@ -32,6 +32,11 @@ func TestSourcesOrderRoundTrip(t *testing.T) {
 	if got.Order == nil || !reflect.DeepEqual(got.Order, canonicalSources) {
 		t.Fatalf("default order = %v, want canonical list", got.Order)
 	}
+	blockedCfg, err := config.Load(cfg.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	blockedBefore := blockedCfg.Sources.Blocked
 
 	// Reorder: browser to the front, then save.
 	newOrder := []string{"browser", "spotify", "applemusic", "spotifyapi", "generic"}
@@ -51,6 +56,32 @@ func TestSourcesOrderRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(loaded.Sources.Order, newOrder) {
 		t.Fatalf("saved order = %v, want %v", loaded.Sources.Order, newOrder)
+	}
+	// Order-only POST must leave Blocked untouched, and vice versa.
+	w = request(h, "POST", "/api/sources", `{"order":["browser","spotify","applemusic","spotifyapi","generic"]}`, true)
+	if w.Code != 200 {
+		t.Fatalf("POST order status=%d body=%s", w.Code, w.Body.String())
+	}
+	loadedAfterOrder, err := config.Load(cfg.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(loadedAfterOrder.Sources.Blocked, blockedBefore) {
+		t.Fatalf("order-only POST changed blocked: %v", loadedAfterOrder.Sources.Blocked)
+	}
+	w = request(h, "POST", "/api/sources", `{"enabled":{"browser":false}}`, true)
+	if w.Code != 200 {
+		t.Fatalf("POST enabled status=%d body=%s", w.Code, w.Body.String())
+	}
+	loadedAfterEnabled, err := config.Load(cfg.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(loadedAfterEnabled.Sources.Order, newOrder) {
+		t.Fatalf("enabled-only POST changed order: %v", loadedAfterEnabled.Sources.Order)
+	}
+	if !reflect.DeepEqual(loadedAfterEnabled.Sources.Blocked, []string{"browser"}) {
+		t.Fatalf("enabled toggle not applied: %v", loadedAfterEnabled.Sources.Blocked)
 	}
 }
 

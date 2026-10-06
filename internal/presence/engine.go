@@ -491,12 +491,10 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 		}, prefer)
 		imageURL := lookup.ImageURL
 		// Preserve the resolved artwork for the local dashboard verbatim
-		// (including loopback SMTC thumbnails), but never send a Discord
-		// asset Discord cannot fetch. Two deliberate behaviors:
-		//   • loopback/browser art → Discord asset omitted (the client's
-		//     "no large image" rendering is the app icon; Maria chose this);
-		//   • genuinely empty lookups on public sources → the bundled
-		//     default cover, as before.
+		// (including loopback SMTC thumbnails); the Discord asset stays
+		// empty for loopback art (send() re-strips it) or when the lookup
+		// failed, since DefaultURL() is itself loopback-hosted and Discord
+		// renders its own app-icon fallback for a missing large image.
 		dashboardArt := imageURL
 		discordArt := discordAssetURL(imageURL)
 		if imageURL == "" {

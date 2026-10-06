@@ -204,7 +204,7 @@ func (c *Config) normalize() {
 		c.Presence.IdleClearSecs = 90
 	}
 	if c.Art.CacheMB <= 0 {
-		c.Art.CacheMB = 50
+		c.Art.CacheMB = 4 // small thumbnails only; a relay keeps little artwork
 	}
 	if c.Spotify.PollSecs < 5 {
 		c.Spotify.PollSecs = 12
