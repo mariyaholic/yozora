@@ -6,11 +6,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
 
 	webview "github.com/jchv/go-webview2"
+
+	"uika-resonance/internal/sysutil"
+	"uika-resonance/internal/tray"
 )
 
 const (
@@ -111,8 +116,9 @@ func launcherNotify(title, message string, flags uintptr) {
 }
 
 // openDashboardWindow shows the control panel in a native WebView2 window —
-// pure Go, no browser tab, no Electron/Node. Returns false when a window
-// cannot be created so the caller can fall back to the default browser.
+// pure Go, no browser tab, no Electron/Node — and hosts the system-tray icon
+// for the launcher's lifetime. Returns false when a window cannot be created
+// so the caller can fall back to the default browser.
 func openDashboardWindow(endpoint dashboardEndpoint, dataDir string) (ok bool) {
 	u, err := dashboardURL(endpoint)
 	if err != nil {
@@ -141,10 +147,93 @@ func openDashboardWindow(endpoint dashboardEndpoint, dataDir string) (ok bool) {
 		return false
 	}
 	createPanelEntry(uintptr(w.Window()))
-	defer w.Destroy()
+
+	// Tray host runs on its own locked thread while the WebView2 window
+	// pumps its loop on the caller's thread; quitting either path ends both.
+	actions := &panelTrayActions{
+		panel:         w,
+		dashboardJSON: dashboardEndpointPath(dataDir),
+		daemonExe:     daemonExecutableOrEmpty(dataDir),
+		dataDir:       dataDir,
+	}
+	trayPanel := tray.New(actions)
+	trayDone := make(chan struct{})
+	go func() {
+		runtime.LockOSThread()
+		defer close(trayDone)
+		trayPanel.Run()
+	}()
+	defer func() {
+		// End the tray loop (PostQuitMessage via WM_CLOSE to its host).
+		trayPanel.PostClose()
+		select {
+		case <-trayDone:
+		case <-time.After(2 * time.Second):
+		}
+	}()
+
 	w.Navigate(u.String())
 	w.Run()
+	w.Destroy()
+	// Panel window closed: hide to tray — the launcher stays alive with the
+	// tray icon until the user quits from the menu. The launcher process
+	// therefore parks here instead of returning.
+	<-trayDone
 	return true
+}
+
+// panelTrayActions binds tray events to the launcher's panel and daemon.
+type panelTrayActions struct {
+	panel         webview.WebView
+	dashboardJSON string
+	daemonExe     string
+	dataDir       string
+	quitRequested atomic.Bool
+}
+
+func (a *panelTrayActions) ShowPanel() {
+	// Re-showing needs a trigger inside the WebView2 loop; the simplest
+	// portable Nudge is re-focus via the entry window's stored HWND.
+	title, _ := syscall.UTF16PtrFromString(panelEntryTitle)
+	class, _ := syscall.UTF16PtrFromString(panelEntryClass)
+	entry, _, _ := procFindWindowW.Call(uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)))
+	if entry == 0 {
+		return
+	}
+	prop, _ := syscall.UTF16PtrFromString(panelHWNDProp)
+	panel, _, _ := procGetPropW.Call(entry, uintptr(unsafe.Pointer(prop)))
+	if panel == 0 {
+		return
+	}
+	procSetCursorPos.Call(0, 0)
+	procSetCursorPos.Call(1, 1)
+	procShowWindow.Call(panel, 9 /* SW_RESTORE */)
+	procForeground.Call(panel)
+}
+
+func (a *panelTrayActions) Quit() {
+	// Idempotence: a double-quit (menu + WM_CLOSE race) must not double-stop.
+	if a.quitRequested.CompareAndSwap(false, true) {
+		return
+	}
+	if err := sysutil.StopDaemon(a.dashboardJSON, a.daemonExe); err != nil {
+		launcherLog(a.dataDir, "tray quit: stop daemon: "+err.Error())
+	}
+	// End the WebView2 loop and our own process; PostQuitMessage on the
+	// panel thread happens via Destroy:
+	if a.panel != nil {
+		a.panel.Terminate()
+	}
+}
+
+// daemonExecutableOrEmpty finds the daemon next to the launcher for the
+// tray's guarded stop; empty means the launcher IS the daemon binary.
+func daemonExecutableOrEmpty(dataDir string) string {
+	exe, err := daemonExecutable()
+	if err != nil {
+		return ""
+	}
+	return exe
 }
 
 func launcherLog(dataDir, line string) {

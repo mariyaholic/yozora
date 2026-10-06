@@ -40,11 +40,13 @@ func TestResolverMemoryStaysModestBeyondCacheBudget(t *testing.T) {
 	}
 	runtime.GC()
 	runtime.ReadMemStats(&after)
-	heapGrewMB := float64(after.HeapAlloc-before.HeapAlloc) / (1 << 20)
-	t.Logf("heap grew %.1f MB for 500 distinct resolutions (incl. cache map)", heapGrewMB)
-	// 512-entry map cap + JSON + strings should stay well under ~5 MB.
-	if heapGrewMB > 10 {
-		t.Fatalf("resolver memory ballooned: %.1f MB", heapGrewMB)
+	heapGrewMB := float64(int64(after.HeapAlloc)-int64(before.HeapAlloc)) / (1 << 20)
+	t.Logf("heap delta %.1f MB for 500 distinct resolutions (incl. cache map)", heapGrewMB)
+	// 512-entry map cap + JSON + strings: the live set is a few KB, so any
+	// growth beyond a small budget — including a substantial *shrink* caused
+	// by unrelated allocations in parallel tests — signals something wrong.
+	if heapGrewMB > 10 || heapGrewMB < -10 {
+		t.Fatalf("resolver memory shifted unexpectedly: %.1f MB", heapGrewMB)
 	}
 	// Disk cache stayed honest despite 500 lookups (one file per distinct key capped by trim)
 	entries, _ := os.ReadDir(dir)
