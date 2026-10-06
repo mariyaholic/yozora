@@ -84,15 +84,10 @@ func daemonExecutable() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Dir(self)
-	candidate := filepath.Join(dir, "uika-resonance.exe")
-	if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
-		return candidate, nil
+	if st, err := os.Stat(self); err != nil || st.IsDir() {
+		return "", fmt.Errorf("cannot find %s to start Yozora", self)
 	}
-	if st, err := os.Stat(self); err == nil && !st.IsDir() {
-		return self, nil
-	}
-	return "", fmt.Errorf("no daemon executable found next to %s", self)
+	return self, nil
 }
 
 func spawnDaemon(exe string) error {
