@@ -72,7 +72,7 @@ func TestRenderBadTemplate(t *testing.T) {
 }
 
 func TestLongFieldsTruncated(t *testing.T) {
-	long := strings.Repeat("あ", 300) // 300 CJK runes
+	long := strings.Repeat("あ", 300)
 	e := New("{{.Title}}", "", "", "", "")
 	tr := player.Track{Title: long, Playing: true}
 	details, _, _, _ := e.Render(tr, time.Now())

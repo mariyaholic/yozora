@@ -25,7 +25,6 @@ type dashboardEndpoint struct {
 	PID     int    `json:"pid"`
 }
 
-// dashboardURL never launches a nonlocal or malformed endpoint from disk.
 func dashboardURL(endpoint dashboardEndpoint) (*url.URL, error) {
 	u, err := url.Parse(endpoint.BaseURL)
 	if err != nil {
@@ -92,7 +91,6 @@ func readDashboardEndpoint(path string) (dashboardEndpoint, error) {
 	return endpoint, err
 }
 
-// ensureDashboardConfig changes only the setting needed by the control panel.
 func ensureDashboardConfig(path string) error {
 	cfg, err := config.Load(path)
 	if err != nil {
@@ -105,8 +103,6 @@ func ensureDashboardConfig(path string) error {
 	return config.Save(cfg, path)
 }
 
-// dashboardEndpointPath is where a running daemon publishes its panel
-// coordinates for the launcher.
 func dashboardEndpointPath(dataDir string) string {
 	return filepath.Join(dataDir, "dashboard.json")
 }

@@ -11,11 +11,6 @@ import (
 	"uika-resonance/internal/player"
 )
 
-// When a YouTube video plays in the browser, its SMTC thumbnail is
-// loopback-only (the Discord proxy cannot fetch it), so the Discord card
-// must not fall back to the app's bundled default artwork. Omitting the
-// image entirely is the correct
-// rendering; the substituted Yozora icon looks like a broken cover.
 func TestBrowserLoopbackArtworkDoesNotFallbackToDefaultImage(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		now := time.Now()
@@ -35,16 +30,13 @@ func TestBrowserLoopbackArtworkDoesNotFallbackToDefaultImage(t *testing.T) {
 		if got := client.activities[0].Assets.LargeImage; got != "" {
 			t.Fatalf("video card fell back to default image: %q", got)
 		}
-		// Dashboard keeps the real loopback thumbnail.
+
 		if got := engine.Status().ArtURL; got != "http://127.0.0.1:49152/art/thumb.jpg" {
 			t.Fatalf("dashboard lost the real thumbnail: %q", got)
 		}
 	})
 }
 
-// TestPublicArtworkStillResolvesToDefaultWhenMissing guards the opposite
-// edge: public-facing music sources keep the bundled default cover when no
-// artwork resolves (previous behavior, unchanged).
 func TestPublicArtworkStillResolvesToDefaultWhenMissing(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		now := time.Now()
@@ -69,8 +61,6 @@ func TestPublicArtworkStillResolvesToDefaultWhenMissing(t *testing.T) {
 	})
 }
 
-// defaultingArtwork mimics the production resolver's fallback-to-default
-// behavior on top of the queued fixture used by the artwork tests.
 type defaultingArtwork struct {
 	queued *queuedArtwork
 }

@@ -1,12 +1,12 @@
 //go:build windows
 
-// Package server serves the localhost dashboard: a live Discord-card
-// preview fed by the engine status, plus a config editor.
 package server
 
 import (
+	"crypto/rand"
 	"crypto/subtle"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,7 +26,6 @@ import (
 //go:embed ui.html
 var uiHTML string
 
-// Deps are the server's collaborators.
 type Deps struct {
 	Engine     *presence.Engine
 	Cfg        *config.Holder
@@ -35,9 +34,6 @@ type Deps struct {
 	DiscordApp string
 }
 
-// validateSourceOrder enforces the hierarchy invariant: an exact set of the
-// canonical sources, no duplicates, no case games. A missing or extra entry
-// would otherwise silently drop or invent priorities on save.
 func validateSourceOrder(order, canonical []string) error {
 	if len(order) != len(canonical) {
 		return errors.New("order must contain every source exactly once")
@@ -59,13 +55,10 @@ func validateSourceOrder(order, canonical []string) error {
 	return nil
 }
 
-// constantTimeEqual keeps the session-token check from leaking through
-// comparison timing (defense-in-depth; the dashboard listens on loopback).
 func constantTimeEqual(a, b string) bool {
 	return len(a) == len(b) && subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
-// Handler builds the dashboard's routes (extracted for offline httptest use).
 func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	var configMu sync.Mutex
@@ -81,7 +74,7 @@ func Handler(d Deps) http.Handler {
 	}
 	auth := func(h http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			if !constantTimeEqual(r.URL.Query().Get("t"), d.Token) && !constantTimeEqual(r.Header.Get("X-Uika-Token"), d.Token) {
+			if d.Token == "" || (!constantTimeEqual(r.URL.Query().Get("t"), d.Token) && !constantTimeEqual(r.Header.Get("X-Uika-Token"), d.Token)) {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -89,16 +82,24 @@ func Handler(d Deps) http.Handler {
 		}
 	}
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("t") != d.Token {
+		if d.Token == "" || !constantTimeEqual(r.URL.Query().Get("t"), d.Token) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+		b := make([]byte, 18)
+		if _, err := rand.Read(b); err != nil {
+			http.Error(w, "dashboard nonce unavailable", http.StatusInternalServerError)
+			return
+		}
+		nonce := base64.RawURLEncoding.EncodeToString(b)
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'nonce-"+nonce+"'; style-src 'unsafe-inline'; img-src 'self' http: https:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'")
 		t, err := template.New("ui").Parse(uiHTML)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		_ = t.Execute(w, map[string]any{"Token": d.Token, "App": d.DiscordApp})
+		_ = t.Execute(w, map[string]any{"Token": d.Token, "App": d.DiscordApp, "Nonce": nonce})
 	})
 	mux.HandleFunc("/api/state", auth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -219,7 +220,6 @@ func Handler(d Deps) http.Handler {
 	return mux
 }
 
-// Start binds the existing localhost dashboard, preserving its launcher contract.
 func Start(d Deps, port int) (string, error) {
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	ln, err := net.Listen("tcp", addr)

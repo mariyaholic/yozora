@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -19,32 +20,31 @@ import (
 )
 
 const (
-	notifyInfo  = 0x40 // MB_ICONINFORMATION
-	notifyError = 0x10 // MB_ICONERROR
+	notifyInfo  = 0x40
+	notifyError = 0x10
 )
 
 var (
-	procMessageBoxW      = syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW")
-	procShowWindow       = syscall.NewLazyDLL("user32.dll").NewProc("ShowWindow")
-	procGetDpiForSystem  = syscall.NewLazyDLL("user32.dll").NewProc("GetDpiForSystem")
-	procGetConsoleWindow = syscall.NewLazyDLL("kernel32.dll").NewProc("GetConsoleWindow")
-	procFindWindowW      = syscall.NewLazyDLL("user32.dll").NewProc("FindWindowW")
-	procCreateWindowExW  = syscall.NewLazyDLL("user32.dll").NewProc("CreateWindowExW")
-	procSetPropW         = syscall.NewLazyDLL("user32.dll").NewProc("SetPropW")
-	procGetPropW         = syscall.NewLazyDLL("user32.dll").NewProc("GetPropW")
-	procForeground       = syscall.NewLazyDLL("user32.dll").NewProc("SetForegroundWindow")
-	procSetCursorPos     = syscall.NewLazyDLL("user32.dll").NewProc("SetCursorPos")
+	procMessageBoxW       = syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW")
+	procShowWindow        = syscall.NewLazyDLL("user32.dll").NewProc("ShowWindow")
+	procGetDpiForSystem   = syscall.NewLazyDLL("user32.dll").NewProc("GetDpiForSystem")
+	procGetConsoleWindow  = syscall.NewLazyDLL("kernel32.dll").NewProc("GetConsoleWindow")
+	procCreateWindowExW   = syscall.NewLazyDLL("user32.dll").NewProc("CreateWindowExW")
+	procSetPropW          = syscall.NewLazyDLL("user32.dll").NewProc("SetPropW")
+	procGetPropW          = syscall.NewLazyDLL("user32.dll").NewProc("GetPropW")
+	procFindWindowExW     = syscall.NewLazyDLL("user32.dll").NewProc("FindWindowExW")
+	procForeground        = syscall.NewLazyDLL("user32.dll").NewProc("SetForegroundWindow")
+	procSetWindowLongPtrW = syscall.NewLazyDLL("user32.dll").NewProc("SetWindowLongPtrW")
+	procCallWindowProcW   = syscall.NewLazyDLL("user32.dll").NewProc("CallWindowProcW")
 )
 
 const (
-	panelEntryClass = "Static" // built-in user32 class, safe for message-only
+	panelEntryClass = "Static"
 	panelEntryTitle = "YozoraControlPanelEntry"
 	panelHWNDProp   = "YozoraPanelHWND"
-	hwndMessage     = ^uintptr(2) // (HWND)-3
+	hwndMessage     = ^uintptr(2)
 )
 
-// createPanelEntry makes a hidden message-only window and stores the real
-// panel HWND in a property, so a second launcher can lift the panel later.
 func createPanelEntry(panelHwnd uintptr) {
 	title, _ := syscall.UTF16PtrFromString(panelEntryTitle)
 	class, _ := syscall.UTF16PtrFromString(panelEntryClass)
@@ -57,15 +57,13 @@ func createPanelEntry(panelHwnd uintptr) {
 	}
 }
 
-// activateRunningPanel focuses the panel window owned by the first launcher.
 func activateRunningPanel() int {
 	title, _ := syscall.UTF16PtrFromString(panelEntryTitle)
 	class, _ := syscall.UTF16PtrFromString(panelEntryClass)
-	entry, _, _ := procFindWindowW.Call(
+	entry, _, _ := procFindWindowExW.Call(hwndMessage, 0,
 		uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)))
 	if entry == 0 {
-		// The owner may still be initializing; the fresh window will appear
-		// momentarily, so this press simply exits quietly.
+
 		return 0
 	}
 	prop, _ := syscall.UTF16PtrFromString(panelHWNDProp)
@@ -73,17 +71,11 @@ func activateRunningPanel() int {
 	if panel == 0 {
 		return 0
 	}
-	// A synthetic input event grants this process foreground rights.
-	procSetCursorPos.Call(0, 0)
-	procSetCursorPos.Call(1, 1)
-	procShowWindow.Call(panel, 9 /* SW_RESTORE */)
+	procShowWindow.Call(panel, 9)
 	procForeground.Call(panel)
 	return 0
 }
 
-// Control-panel window size in CSS pixels (matches the dashboard's 560px
-// column). Sizes are scaled by the system DPI so the layout gets the same
-// room on 100% and 125% displays.
 const (
 	windowCSSWidth  = 560
 	windowCSSHeight = 760
@@ -97,12 +89,10 @@ func scaledWindowSize() (uint, uint) {
 	return uint(windowCSSWidth * int(dpi) / 96), uint(windowCSSHeight * int(dpi) / 96)
 }
 
-// hideLauncherConsole keeps double-click launches from flashing a console
-// window. Passthrough commands (`Yozora.exe doctor` ...) never reach this.
 func hideLauncherConsole() {
 	console, _, _ := procGetConsoleWindow.Call()
 	if console != 0 {
-		procShowWindow.Call(console, 0 /* SW_HIDE */)
+		procShowWindow.Call(console, 0)
 	}
 }
 
@@ -115,11 +105,9 @@ func launcherNotify(title, message string, flags uintptr) {
 	procMessageBoxW.Call(0, uintptr(unsafe.Pointer(m)), uintptr(unsafe.Pointer(t)), flags)
 }
 
-// openDashboardWindow shows the control panel in a native WebView2 window —
-// pure Go, no browser tab, no Electron/Node — and hosts the system-tray icon
-// for the launcher's lifetime. Returns false when a window cannot be created
-// so the caller can fall back to the default browser.
 func openDashboardWindow(endpoint dashboardEndpoint, dataDir string) (ok bool) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	u, err := dashboardURL(endpoint)
 	if err != nil {
 		return false
@@ -138,7 +126,7 @@ func openDashboardWindow(endpoint dashboardEndpoint, dataDir string) (ok bool) {
 			Title:  "Yozora",
 			Width:  width,
 			Height: height,
-			IconId: 1, // rsrc icon generated from assets/yozora.ico (go-winres)
+			IconId: 1,
 			Center: true,
 		},
 	})
@@ -146,25 +134,28 @@ func openDashboardWindow(endpoint dashboardEndpoint, dataDir string) (ok bool) {
 		launcherLog(dataDir, "webview unavailable; falling back to browser")
 		return false
 	}
-	createPanelEntry(uintptr(w.Window()))
-
-	// Tray host runs on its own locked thread while the WebView2 window
-	// pumps its loop on the caller's thread; quitting either path ends both.
 	actions := &panelTrayActions{
 		panel:         w,
+		panelHwnd:     uintptr(w.Window()),
 		dashboardJSON: dashboardEndpointPath(dataDir),
 		daemonExe:     daemonExecutableOrEmpty(dataDir),
 		dataDir:       dataDir,
 	}
+	createPanelEntry(actions.panelHwnd)
+	if err := installPanelWindowHook(actions.panelHwnd, actions); err != nil {
+		launcherLog(dataDir, "panel close hook: "+err.Error())
+	}
 	trayPanel := tray.New(actions)
 	trayDone := make(chan struct{})
 	go func() {
-		runtime.LockOSThread()
 		defer close(trayDone)
-		trayPanel.Run()
+		if err := trayPanel.Run(); err != nil {
+			actions.trayReady.Store(false)
+			launcherLog(dataDir, err.Error())
+		}
 	}()
 	defer func() {
-		// End the tray loop (PostQuitMessage via WM_CLOSE to its host).
+
 		trayPanel.PostClose()
 		select {
 		case <-trayDone:
@@ -174,60 +165,87 @@ func openDashboardWindow(endpoint dashboardEndpoint, dataDir string) (ok bool) {
 
 	w.Navigate(u.String())
 	w.Run()
-	w.Destroy()
-	// Panel window closed: hide to tray — the launcher stays alive with the
-	// tray icon until the user quits from the menu. The launcher process
-	// therefore parks here instead of returning.
 	<-trayDone
 	return true
 }
 
-// panelTrayActions binds tray events to the launcher's panel and daemon.
 type panelTrayActions struct {
 	panel         webview.WebView
+	panelHwnd     uintptr
 	dashboardJSON string
 	daemonExe     string
 	dataDir       string
+	trayReady     atomic.Bool
 	quitRequested atomic.Bool
 }
 
 func (a *panelTrayActions) ShowPanel() {
-	// Re-showing needs a trigger inside the WebView2 loop; the simplest
-	// portable Nudge is re-focus via the entry window's stored HWND.
-	title, _ := syscall.UTF16PtrFromString(panelEntryTitle)
-	class, _ := syscall.UTF16PtrFromString(panelEntryClass)
-	entry, _, _ := procFindWindowW.Call(uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)))
-	if entry == 0 {
+	if a.panelHwnd == 0 {
 		return
 	}
-	prop, _ := syscall.UTF16PtrFromString(panelHWNDProp)
-	panel, _, _ := procGetPropW.Call(entry, uintptr(unsafe.Pointer(prop)))
-	if panel == 0 {
-		return
-	}
-	procSetCursorPos.Call(0, 0)
-	procSetCursorPos.Call(1, 1)
-	procShowWindow.Call(panel, 9 /* SW_RESTORE */)
-	procForeground.Call(panel)
+	procShowWindow.Call(a.panelHwnd, 9)
+	procForeground.Call(a.panelHwnd)
+}
+
+func (a *panelTrayActions) TrayReady() {
+	a.trayReady.Store(true)
 }
 
 func (a *panelTrayActions) Quit() {
-	// Idempotence: a double-quit (menu + WM_CLOSE race) must not double-stop.
-	if a.quitRequested.CompareAndSwap(false, true) {
+	if !a.quitRequested.CompareAndSwap(false, true) {
 		return
 	}
 	if err := sysutil.StopDaemon(a.dashboardJSON, a.daemonExe); err != nil {
 		launcherLog(a.dataDir, "tray quit: stop daemon: "+err.Error())
 	}
-	// End the WebView2 loop and our own process; PostQuitMessage on the
-	// panel thread happens via Destroy:
 	if a.panel != nil {
-		a.panel.Terminate()
+		a.panel.Destroy()
 	}
 }
 
-// daemonExecutableOrEmpty finds the daemon next to the launcher for the
-// tray's guarded stop; empty means the launcher IS the daemon binary.
+type panelWindowHook struct {
+	original uintptr
+	actions  *panelTrayActions
+}
+
+var panelWindowHooks = struct {
+	sync.RWMutex
+	windows map[uintptr]panelWindowHook
+}{windows: make(map[uintptr]panelWindowHook)}
+
+var panelWindowProcCallback = syscall.NewCallback(panelWindowProc)
+
+func installPanelWindowHook(hwnd uintptr, actions *panelTrayActions) error {
+	if hwnd == 0 {
+		return fmt.Errorf("empty panel HWND")
+	}
+	original, _, _ := procSetWindowLongPtrW.Call(hwnd, ^uintptr(3), panelWindowProcCallback)
+	if original == 0 {
+		return fmt.Errorf("SetWindowLongPtrW(GWLP_WNDPROC) failed")
+	}
+	panelWindowHooks.Lock()
+	panelWindowHooks.windows[hwnd] = panelWindowHook{original: original, actions: actions}
+	panelWindowHooks.Unlock()
+	return nil
+}
+
+func panelWindowProc(hwnd, msg, wp, lp uintptr) uintptr {
+	panelWindowHooks.RLock()
+	hook := panelWindowHooks.windows[hwnd]
+	panelWindowHooks.RUnlock()
+	if msg == 0x0010 && hook.actions != nil && hook.actions.trayReady.Load() && !hook.actions.quitRequested.Load() {
+		procShowWindow.Call(hwnd, 0)
+		return 0
+	}
+	r, _, _ := procCallWindowProcW.Call(hook.original, hwnd, msg, wp, lp)
+	if msg == 0x0082 {
+		panelWindowHooks.Lock()
+		delete(panelWindowHooks.windows, hwnd)
+		panelWindowHooks.Unlock()
+	}
+	return r
+}
+
 func daemonExecutableOrEmpty(dataDir string) string {
 	exe, err := daemonExecutable()
 	if err != nil {

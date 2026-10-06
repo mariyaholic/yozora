@@ -1,7 +1,5 @@
 //go:build windows
 
-// Package sysutil groups small Windows integrations: autostart registry
-// entry and the single-instance mutex.
 package sysutil
 
 import (
@@ -33,9 +31,6 @@ const (
 	runKeySubkey       = `Software\Microsoft\Windows\CurrentVersion\Run`
 )
 
-// AcquireNamedMutex creates-or-opens a named mutex and reports whether this
-// process became its initial owner. The returned release closes the handle
-// and is safe to call even when acquisition failed.
 func AcquireNamedMutex(name string) (bool, func(), error) {
 	namePtr, err := syscall.UTF16PtrFromString(name)
 	if err != nil {
@@ -55,9 +50,6 @@ func AcquireNamedMutex(name string) (bool, func(), error) {
 	return true, func() { procCloseHandle.Call(h) }, nil
 }
 
-// AcquireSingleInstance tries to create the process mutex. Returns false
-// when another instance is running. The returned release function closes the
-// handle owned by this process.
 func AcquireSingleInstance() (bool, func(), error) {
 	name, err := syscall.UTF16PtrFromString(singleInstanceName)
 	if err != nil {
@@ -92,7 +84,6 @@ func runKeyPath() (uintptr, error) {
 
 func valueName() (*uint16, error) { return syscall.UTF16PtrFromString("UikaResonance") }
 
-// InstallAutostart adds the HKCU Run entry for the current executable.
 func InstallAutostart() error {
 	h, err := runKeyPath()
 	if err != nil {
@@ -112,7 +103,6 @@ func InstallAutostart() error {
 	return nil
 }
 
-// RemoveAutostart deletes the HKCU Run entry.
 func RemoveAutostart() error {
 	h, err := runKeyPath()
 	if err != nil {
@@ -127,7 +117,6 @@ func RemoveAutostart() error {
 	return nil
 }
 
-// AutostartEnabled reports whether the Run entry exists.
 func AutostartEnabled() bool {
 	h, err := runKeyPath()
 	if err != nil {

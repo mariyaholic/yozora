@@ -59,6 +59,16 @@ func TestSourcesRejectInvalidBodiesWithoutChangingConfig(t *testing.T) {
 		}
 	}
 }
+func TestEmptyDashboardTokenFailsClosed(t *testing.T) {
+	h := Handler(Deps{})
+	for _, path := range []string{"/?t=", "/api/state?t=", "/api/sources?t="} {
+		w := request(h, "GET", path, "", false)
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("empty-token request %s returned %d", path, w.Code)
+		}
+	}
+}
+
 func TestSourcesAuthAndMethods(t *testing.T) {
 	h, _ := fixtureHandler(t)
 	for _, method := range []string{"GET", "POST"} {
@@ -129,12 +139,48 @@ func TestDashboardSourceControls(t *testing.T) {
 			t.Errorf("missing working control %s", marker)
 		}
 	}
-	// Hierarchy controls: draggable priority list with keyboard fallback.
+
 	for _, marker := range []string{`id="source-order"`, `draggable`, `data.order || []`, `order:savedOrder`, "Priority ",
 		"Priority decides which source wins when several play at once"} {
 		if !strings.Contains(page, marker) {
 			t.Errorf("missing hierarchy control %q", marker)
 		}
+	}
+}
+
+func TestDashboardButtonLinksRejectUnsafeSchemes(t *testing.T) {
+	if strings.Contains(uiHTML, "link.href = b.url") {
+		t.Fatal("dashboard assigns untrusted button URLs without a scheme check")
+	}
+	for _, marker := range []string{"safeButtonURL(b.url)", `u.protocol !== "http:"`, `u.protocol !== "https:"`} {
+		if !strings.Contains(uiHTML, marker) {
+			t.Errorf("missing button URL allowlist check %q", marker)
+		}
+	}
+}
+
+func TestDashboardSetsNonceCSPAndNoReferrer(t *testing.T) {
+	h, _ := fixtureHandler(t)
+	w := request(h, "GET", "/?t=fixture-token", "", false)
+	if w.Code != 200 {
+		t.Fatal(w.Code)
+	}
+	csp := w.Header().Get("Content-Security-Policy")
+	if csp == "" || strings.Contains(csp, "script-src 'unsafe-inline'") {
+		t.Fatalf("missing restrictive script policy: %q", csp)
+	}
+	page := w.Body.String()
+	start := strings.Index(page, `<script nonce="`)
+	if start < 0 {
+		t.Fatal("script element has no CSP nonce")
+	}
+	start += len(`<script nonce="`)
+	end := strings.Index(page[start:], `"`)
+	if end < 0 || !strings.Contains(csp, "'nonce-"+page[start:start+end]+"'") {
+		t.Fatalf("script nonce does not match policy: %q", csp)
+	}
+	if w.Header().Get("Referrer-Policy") != "no-referrer" {
+		t.Fatalf("referrer policy = %q", w.Header().Get("Referrer-Policy"))
 	}
 }
 

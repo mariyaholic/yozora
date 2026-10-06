@@ -1,18 +1,10 @@
-// Package tray shows the Yozora control panel's icon in the system tray
-// (notification area) for as long as the launcher process is alive.
-//
-// The Windows-specific pieces — the hidden host window whose WndProc receives
-// the Shell_NotifyIcon callback, and the Shell_NotifyIconW calls themselves —
-// are thin wrappers. The behavior on tray events (what a click does, which
-// menu entries exist, what quitting means) lives in a small dispatch layer
-// that the tests drive directly with synthetic messages, so no test ever
-// touches a real tray icon.
-//
 //go:build windows
 
 package tray
 
 import (
+	"fmt"
+	"runtime"
 	"syscall"
 	"unsafe"
 )
@@ -38,6 +30,8 @@ var (
 	procShellNotifyIconW  = modShell.NewProc("Shell_NotifyIconW")
 	procPostMessageW      = modUser32.NewProc("PostMessageW")
 	procGetMessageW       = modUser32.NewProc("GetMessageW")
+	procTranslateMessage  = modUser32.NewProc("TranslateMessage")
+	procDispatchMessageW  = modUser32.NewProc("DispatchMessageW")
 	procSetWindowLongPtrW = modUser32.NewProc("SetWindowLongPtrW")
 	procGetWindowLongPtrW = modUser32.NewProc("GetWindowLongPtrW")
 )
@@ -54,59 +48,47 @@ const (
 	nifIcon    = 0x00000002
 	nifTip     = 0x00000004
 
-	imageIcon = 2      // IMAGE_ICON
-	lrShared  = 0x8000 // LR_SHARED
+	imageIcon     = 1
+	lrDefaultSize = 0x0040
+	lrShared      = 0x8000
 
-	// iconResource is the resource id under which both binaries'
-	// .syso embeds assets/yozora.ico.
 	iconResource = 1
 )
 
 const (
-	// wmAppTray is the message Shell_NotifyIconW posts to the host window.
-	wmAppTray = 0x8000 // WM_APP
+	wmAppTray = 0x8000
 
-	// Mouse events delivered in lParam of wmAppTray.
 	wmLButtonUp     = 0x0202
 	wmLButtonDblClk = 0x0203
 	wmRButtonUp     = 0x0205
 
-	// Popup-menu plumbing on the host window.
 	wmCommand = 0x0111
 	wmClose   = 0x0010
 	wmDestroy = 0x0002
 	wmQuit    = 0x0012
+	wmNull    = 0x0000
 
 	swShow = 5
 
 	tpmRightAlign  = 0x0008
 	tpmBottomAlign = 0x0020
-	tpmNonotify    = 0x0080
 	tpmRightButton = 0x0002
+	tpmReturnCmd   = 0x0100
 
 	mfString = 0x00000000
 )
 
-// Menu item identifiers for the right-click popup.
 const (
 	cmdOpenPanel = 1001
 	cmdQuit      = 1002
 )
 
-// Actions is what the tray does on user interaction. The indirection keeps
-// the message-driven behavior independent of the Windows plumbing: tests
-// supply their own implementation and send synthetic events; production
-// binds the launcher's WebView2 panel.
 type Actions interface {
-	// ShowPanel opens or focuses the control-panel window.
 	ShowPanel()
-	// Quit closes the panel, stops the daemon and ends the launcher.
+
 	Quit()
 }
 
-// Panel owns one tray icon for the launcher process. It exists from the
-// moment the control panel opens until the user quits Yozora from the tray
-// menu (or the launcher process dies).
 type Panel struct {
 	tooltip string
 	actions Actions
@@ -114,28 +96,21 @@ type Panel struct {
 	hostHwnd uintptr
 	icon     uintptr
 
-	// dataModule caches the LoadLibraryExW handle used by the file fallback.
-	dataModule uintptr
+	taskbarCreated uintptr
 
-	// dashboardJSON and daemonExe feed the guarded daemon stop on Quit;
-	// New fills both for production, tests may override.
 	dashboardJSON string
 	daemonExe     string
 }
 
-// recipe mirrors the NOTIFYICONDATA fields this package fills in; it exists
-// so tests can assert the notify-icon shape without calling the API.
 type recipe struct {
 	Tooltip string
 	IconID  uintptr
 }
 
-// Recipe describes the icon the panel registers.
 func (p *Panel) Recipe() recipe {
 	return recipe{Tooltip: p.tip(), IconID: iconResource}
 }
 
-// tip is the tooltip text carried on the notify icon.
 func (p *Panel) tip() string {
 	if p == nil || p.tooltip == "" {
 		return trayTooltip
@@ -143,15 +118,10 @@ func (p *Panel) tip() string {
 	return p.tooltip
 }
 
-// New returns a Panel bound to actions with no OS calls performed.
 func New(actions Actions) *Panel {
 	return &Panel{tooltip: trayTooltip, actions: actions}
 }
 
-// Dispatch routes a tray notification or menu selection to the matching
-// action. msg/lp are the WndProc message pair (WM_APP+n with the mouse event
-// in lp, or WM_COMMAND with the menu id in lp). It is the seam the tests
-// exercise with synthetic events. Reports whether the message was handled.
 func (p *Panel) Dispatch(msg, lp uintptr) bool {
 	switch msg {
 	case wmAppTray:
@@ -170,14 +140,13 @@ func (p *Panel) Dispatch(msg, lp uintptr) bool {
 			return true
 		case cmdQuit:
 			p.actions.Quit()
+			p.PostClose()
 			return true
 		}
 	}
 	return false
 }
 
-// menuLabels returns the popup entries in display order; appendMenuItem is
-// invoked with exactly these in production.
 func menuLabels() []struct {
 	ID    uintptr
 	Label string
@@ -204,9 +173,20 @@ func (p *Panel) popupMenu() {
 	procSetForeground.Call(p.hostHwnd)
 	var pt struct{ X, Y int32 }
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
-	procTrackPopupMenuEx.Call(menu,
-		tpmRightAlign|tpmBottomAlign|tpmNonotify|tpmRightButton,
+	chosen, _, _ := procTrackPopupMenuEx.Call(menu,
+		tpmRightAlign|tpmBottomAlign|tpmRightButton|tpmReturnCmd,
 		uintptr(pt.X), uintptr(pt.Y), p.hostHwnd, 0)
+	if chosen != 0 {
+		p.dispatchMenuSelection(chosen)
+	}
+	procPostMessageW.Call(p.hostHwnd, wmNull, 0, 0)
+}
+
+func (p *Panel) dispatchMenuSelection(command uintptr) bool {
+	if command == 0 {
+		return false
+	}
+	return p.Dispatch(wmCommand, command)
 }
 
 func appendMenuItem(menu, id uintptr, label string) {
@@ -217,22 +197,42 @@ func appendMenuItem(menu, id uintptr, label string) {
 	procAppendMenuW.Call(menu, mfString, id, uintptr(unsafe.Pointer(text)))
 }
 
-// Run creates the host window, registers the tray icon and pumps messages
-// until WM_QUIT. Call it on a thread that stays alive — in the launcher that
-// is a background goroutine started alongside the panel window.
-func (p *Panel) Run() {
+func (p *Panel) Run() error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	name, _ := syscall.UTF16PtrFromString("TaskbarCreated")
+	p.taskbarCreated, _, _ = procRegisterWindowMessageW.Call(uintptr(unsafe.Pointer(name)))
 	p.hostHwnd = createHostWindow(p)
 	if p.hostHwnd == 0 {
-		return
+		return fmt.Errorf("tray: create host window failed")
 	}
-	icon := p.loadIcon()
+	icon := loadTrayIcon()
+	if icon == 0 {
+		procDestroyWindow.Call(p.hostHwnd)
+		p.hostHwnd = 0
+		return fmt.Errorf("tray: no usable icon")
+	}
 	p.icon = icon
-	addTrayIcon(p.hostHwnd, icon)
+	if !addTrayIcon(p.hostHwnd, icon) {
+		procDestroyWindow.Call(p.hostHwnd)
+		p.hostHwnd = 0
+		return fmt.Errorf("tray: Shell_NotifyIconW(NIM_ADD) failed")
+	}
+	defer func() {
+		p.removeIcon()
+		procDestroyIcon.Call(icon)
+		if p.hostHwnd != 0 {
+			procDestroyWindow.Call(p.hostHwnd)
+			p.hostHwnd = 0
+		}
+	}()
+	if ready, ok := p.actions.(interface{ TrayReady() }); ok {
+		ready.TrayReady()
+	}
 	p.messageLoop()
-	p.removeIcon()
+	return nil
 }
 
-// messageLoop drains the queue until WM_QUIT or GetMessage fails.
 func (p *Panel) messageLoop() {
 	var m struct {
 		hwnd     uintptr
@@ -245,21 +245,16 @@ func (p *Panel) messageLoop() {
 	}
 	for {
 		r, _, _ := procGetMessageW.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
-		if r == 0 || m.message == wmQuit {
+		if r == 0 || r == ^uintptr(0) {
 			return
 		}
-		// Tray and menu messages reach the WndProc via DispatchMessage in a
-		// full loop; this minimal loop only needs the quit signal because
-		// all input lands on the host window's own procedure.
-		procDefWindowProcW.Call(m.hwnd, uintptr(m.message), m.wParam, m.lParam)
+		procTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
+		procDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
 	}
 }
 
-// HostHandle returns the tray host window's HWND (0 before Run).
 func (p *Panel) HostHandle() uintptr { return p.hostHwnd }
 
-// PostClose asks the tray loop to end (WM_CLOSE to the hidden host). Safe to
-// call before Run or after it exits.
 func (p *Panel) PostClose() {
 	if h := p.HostHandle(); h != 0 {
 		procPostMessageW.Call(h, wmClose, 0, 0)
@@ -274,7 +269,6 @@ func (p *Panel) removeIcon() {
 	procShellNotifyIconW.Call(nimDelete, uintptr(unsafe.Pointer(&n)))
 }
 
-// notifyData assembles the NOTIFYICONDATAW this package fills in.
 func notifyData(wnd uintptr, icon uintptr) notifyIconDataW {
 	var n notifyIconDataW
 	n.cbSize = uint32(unsafe.Sizeof(n))
@@ -289,13 +283,12 @@ func notifyData(wnd uintptr, icon uintptr) notifyIconDataW {
 	return n
 }
 
-func addTrayIcon(wnd uintptr, icon uintptr) {
+func addTrayIcon(wnd uintptr, icon uintptr) bool {
 	n := notifyData(wnd, icon)
-	procShellNotifyIconW.Call(nimAdd, uintptr(unsafe.Pointer(&n)))
+	r, _, _ := procShellNotifyIconW.Call(nimAdd, uintptr(unsafe.Pointer(&n)))
+	return r != 0
 }
 
-// notifyIconDataW is NOTIFYICONDATAW (V2 layout, flags scoped to what the
-// tray uses). Field order and padding must match the Win32 declaration.
 type notifyIconDataW struct {
 	cbSize           uint32
 	hWnd             uintptr
@@ -314,9 +307,6 @@ type notifyIconDataW struct {
 	hBalloonIcon     uintptr
 }
 
-// createHostWindow registers the tray host class (registration is idempotent
-// within a process) and creates a hidden top-level window whose WndProc is
-// trayWndProc; the *Panel rides along as window userdata.
 func createHostWindow(p *Panel) uintptr {
 	class, err := syscall.UTF16PtrFromString(trayClassName)
 	if err != nil {
@@ -326,7 +316,7 @@ func createHostWindow(p *Panel) uintptr {
 	wc.cbSize = uint32(unsafe.Sizeof(wc))
 	wc.wndProc = syscall.NewCallback(trayWndProc)
 	wc.className = class
-	// Re-registering an existing class fails harmlessly.
+
 	procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
 
 	title, _ := syscall.UTF16PtrFromString("Yozora tray host")
@@ -336,20 +326,34 @@ func createHostWindow(p *Panel) uintptr {
 	if hwnd == 0 {
 		return 0
 	}
-	// Attach the panel pointer for WndProc lookup.
+
 	procSetWindowLongPtrW.Call(hwnd, uintptr(gwlpUserDataAsInt()), uintptr(unsafe.Pointer(p)))
 	return hwnd
 }
 
-// trayWndProc is the hidden host window's procedure. It maps tray clicks and
-// menu picks onto the Panel actions and lets everything else through.
 func trayWndProc(hwnd, msg, wp, lp uintptr) uintptr {
 	p := panelOf(hwnd)
-	if p != nil && p.Dispatch(msg, lp) {
+	if p != nil && p.taskbarCreated != 0 && msg == p.taskbarCreated && p.icon != 0 {
+		addTrayIcon(hwnd, p.icon)
 		return 0
 	}
+	if p != nil {
+		value := lp
+		if msg == wmCommand {
+			value = wp & 0xffff
+		}
+		if p.Dispatch(msg, value) {
+			return 0
+		}
+	}
 	switch msg {
-	case wmClose, wmDestroy:
+	case wmClose:
+		if p != nil {
+			p.removeIcon()
+		}
+		procDestroyWindow.Call(hwnd)
+		return 0
+	case wmDestroy:
 		procPostQuitMessage.Call(0)
 		if p != nil && p.hostHwnd == hwnd {
 			p.hostHwnd = 0
@@ -360,7 +364,6 @@ func trayWndProc(hwnd, msg, wp, lp uintptr) uintptr {
 	return r
 }
 
-// windowProps reads the *Panel attached as GWLP_USERDATA on the host window.
 func panelOf(hwnd uintptr) *Panel {
 	val, _, _ := procGetWindowLongPtrW.Call(hwnd, uintptr(gwlpUserDataAsInt()))
 	if val == 0 {
@@ -371,11 +374,8 @@ func panelOf(hwnd uintptr) *Panel {
 
 const gwlpUserData = -21
 
-// gwlpUserDataAsInt returns GWLP_USERDATA as its Win32 type: a signed index
-// into the window's metadata, negative by design.
 func gwlpUserDataAsInt() int32 { return gwlpUserData }
 
-// wndClassExW is the WNDCLASSEXW layout for RegisterClassExW.
 type wndClassExW struct {
 	cbSize     uint32
 	style      uint32

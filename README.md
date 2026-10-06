@@ -2,7 +2,7 @@
 
 _Made with love by [Maria](https://github.com/mariyaholic)._
 
-A Windows music detector that publishes Discord Rich Presence. This folder is a self-contained Go module: move the entire folder into the planned standalone repository and the build commands below still work. Internal config/storage names and the executable remain `uika-resonance` for compatibility.
+A Windows music detector that publishes Discord Rich Presence. This repository contains the standalone Go module; internal config and executable names remain `uika-resonance` for compatibility.
 
 ## Repository
 

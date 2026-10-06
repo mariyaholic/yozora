@@ -1,7 +1,5 @@
 //go:build windows
 
-// Package discordipc implements Discord's local Rich Presence IPC: the
-// discord-ipc-{n} named pipe, the handshake, SET_ACTIVITY and keepalive.
 package discordipc
 
 import (
@@ -19,7 +17,6 @@ import (
 	"github.com/Microsoft/go-winio"
 )
 
-// Opcodes per the current official RPC docs.
 const (
 	opHandshake = 0
 	opFrame     = 1
@@ -30,7 +27,6 @@ const (
 
 const ipcWriteTimeout = 2 * time.Second
 
-// Activity types.
 const (
 	TypePlaying   = 0
 	TypeStreaming = 1
@@ -80,8 +76,6 @@ type frame struct {
 	Msg2  string          `json:"message,omitempty"`
 }
 
-// Transport is the byte pipe abstraction (named pipe in production, net.Pipe
-// in tests).
 type Transport interface {
 	io.ReadWriteCloser
 }
@@ -89,13 +83,11 @@ type Transport interface {
 func pipeName(index int) string { return fmt.Sprintf(`\\.\pipe\discord-ipc-%d`, index) }
 
 func dialPipe(path string) (Transport, error) {
-	// An overlapped handle lets the read loop wait without blocking writes.
-	// os.OpenFile creates a synchronous Windows handle and stalls full-duplex IPC.
+
 	timeout := 250 * time.Millisecond
 	return winio.DialPipe(path, &timeout)
 }
 
-// Dial opens the first available Discord pipe (indices 0..9).
 func Dial() (Transport, error) {
 	var lastErr error
 	for i := 0; i < 10; i++ {
@@ -123,12 +115,10 @@ type Client struct {
 	closed atomic.Bool
 }
 
-// NewClient builds a client over an existing transport (used by tests).
 func NewClient(t Transport, clientID string) *Client {
 	return &Client{transport: t, clientID: clientID, pending: map[string]chan *frame{}}
 }
 
-// Connect dials Discord and performs the handshake.
 func Connect(clientID string) (*Client, error) {
 	t, err := Dial()
 	if err != nil {
@@ -255,7 +245,6 @@ func (c *Client) request(f *frame, timeout time.Duration) (*frame, error) {
 	}
 }
 
-// recv reads one frame from the transport with a deadline.
 func (c *Client) recvWithTimeout(timeout time.Duration) (*frame, error) {
 	type result struct {
 		f   *frame
@@ -326,7 +315,7 @@ func (c *Client) readLoop() {
 				return
 			}
 		case f.Op == opPong:
-			// keepalive ack
+
 		case f.Op == opClose:
 			c.failPending("Discord closed the IPC connection")
 			c.Close()
@@ -342,12 +331,11 @@ func (c *Client) readLoop() {
 				}
 			}
 		default:
-			// events (READY, ActivityJoin, ...) ignored for now
+
 		}
 	}
 }
 
-// SetActivity sends SET_ACTIVITY; nil clears presence.
 func (c *Client) SetActivity(a *Activity) error {
 	args := map[string]any{"pid": os.Getpid(), "activity": a}
 	resp, err := c.request(&frame{Cmd: "SET_ACTIVITY", Args: marshalArgs(args)}, 5*time.Second)
@@ -360,8 +348,7 @@ func (c *Client) SetActivity(a *Activity) error {
 	var accepted *Activity
 	if a != nil && len(resp.Data) > 0 {
 		if err := json.Unmarshal(resp.Data, &accepted); err != nil {
-			// Discord may echo button labels rather than button objects. Keep
-			// the raw readback; optional decoding must not reject an accepted send.
+
 			accepted = nil
 		}
 	}
@@ -372,7 +359,6 @@ func (c *Client) SetActivity(a *Activity) error {
 	return nil
 }
 
-// AcceptedActivity reads back the last activity echoed by Discord.
 func (c *Client) AcceptedActivity() *Activity {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -392,7 +378,6 @@ func (c *Client) AcceptedActivity() *Activity {
 	return &a
 }
 
-// AcceptedPayload returns the exact successful Discord activity readback.
 func (c *Client) AcceptedPayload() json.RawMessage {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -404,12 +389,10 @@ func marshalArgs(args map[string]any) json.RawMessage {
 	return b
 }
 
-// Ping sends the keepalive PING (op 3) per the current protocol.
 func (c *Client) Ping() error {
 	return c.writeRaw(opPing, []byte(`{"v":1}`))
 }
 
-// Alive reports whether the transport is still open.
 func (c *Client) Alive() bool { return !c.closed.Load() }
 
 func (c *Client) failPending(message string) {
@@ -424,7 +407,6 @@ func (c *Client) failPending(message string) {
 	}
 }
 
-// Close shuts the client down.
 func (c *Client) Close() {
 	if c.closed.CompareAndSwap(false, true) {
 		if c.transport != nil {

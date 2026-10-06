@@ -1,7 +1,5 @@
 //go:build windows
 
-// Package spotifyapi is the optional rich-data Spotify provider: it polls
-// the Web API with a stored refresh token (BYO developer app).
 package spotifyapi
 
 import (
@@ -24,10 +22,9 @@ const (
 	credKey       = "spotify-refresh"
 )
 
-// Provider polls the Spotify Web API.
 type Provider struct {
 	ClientID  string
-	Secret    string // client secret (BYO app)
+	Secret    string
 	Market    string
 	PollEvery time.Duration
 
@@ -48,16 +45,13 @@ func New(clientID string, poll time.Duration) *Provider {
 	}
 }
 
-// HasRefreshToken reports whether a refresh token is stored.
 func HasRefreshToken() bool {
 	_, err := credman.Get(credKey)
 	return err == nil
 }
 
-// StoreRefreshToken persists the refresh token.
 func StoreRefreshToken(tok string) error { return credman.Set(credKey, tok) }
 
-// ClearRefreshToken removes the stored token.
 func ClearRefreshToken() error { return credman.Delete(credKey) }
 
 type tokenResp struct {
@@ -65,7 +59,6 @@ type tokenResp struct {
 	ExpiresIn   int    `json:"expires_in"`
 }
 
-// Token returns a valid access token, refreshing when needed.
 func (p *Provider) Token() (string, error) {
 	if p.access != "" && time.Now().Before(p.accessExp) {
 		return p.access, nil
@@ -121,7 +114,6 @@ type npResp struct {
 	} `json:"item"`
 }
 
-// Poll fetches the current playback once.
 func (p *Provider) Poll() (*player.Track, error) {
 	tok, err := p.Token()
 	if err != nil {
@@ -140,9 +132,9 @@ func (p *Provider) Poll() (*player.Track, error) {
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusNoContent:
-		return nil, nil // nothing playing
+		return nil, nil
 	case http.StatusOK:
-		// fall through
+
 	case http.StatusUnauthorized:
 		p.access = ""
 		return nil, errors.New("spotify: unauthorized")
@@ -189,7 +181,6 @@ func firstImage(imgs []struct {
 	return best
 }
 
-// RunLoop polls forever until stop is closed.
 func (p *Provider) RunLoop(stop <-chan struct{}) {
 	last := time.Time{}
 	for {
@@ -208,7 +199,7 @@ func (p *Provider) RunLoop(stop <-chan struct{}) {
 		}
 		p.lastErr = ""
 		if t == nil {
-			// nothing playing: publish a paused empty track once
+
 			if last.IsZero() || time.Since(last) > 60*time.Second {
 				p.Out <- player.Track{Source: "spotifyapi", Player: "Spotify", Title: " ", LastUpdated: time.Now()}
 				last = time.Now()
@@ -223,5 +214,4 @@ func (p *Provider) RunLoop(stop <-chan struct{}) {
 	}
 }
 
-// Err returns the last poll error (for doctor).
 func (p *Provider) Err() string { return p.lastErr }
