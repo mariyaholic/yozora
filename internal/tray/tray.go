@@ -114,6 +114,9 @@ type Panel struct {
 	hostHwnd uintptr
 	icon     uintptr
 
+	// dataModule caches the LoadLibraryExW handle used by the file fallback.
+	dataModule uintptr
+
 	// dashboardJSON and daemonExe feed the guarded daemon stop on Quit;
 	// New fills both for production, tests may override.
 	dashboardJSON string
@@ -222,8 +225,7 @@ func (p *Panel) Run() {
 	if p.hostHwnd == 0 {
 		return
 	}
-	icon, _, _ := procLoadImageW.Call(
-		moduleHandle(), iconResource, imageIcon, 0, 0, lrShared)
+	icon := p.loadIcon()
 	p.icon = icon
 	addTrayIcon(p.hostHwnd, icon)
 	p.messageLoop()
