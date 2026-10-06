@@ -33,9 +33,6 @@ func platformURL(raw, host string) bool {
 	return err == nil && u.Scheme == "https" && strings.EqualFold(u.Hostname(), host) && u.User == nil
 }
 
-// discordAssetURL keeps only artwork Discord's image proxy can actually
-// fetch. Loopback art-server URLs render in the local dashboard but not in
-// the server-side activity, so they are omitted instead of sent broken.
 func discordAssetURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil {
@@ -48,8 +45,6 @@ func discordAssetURL(raw string) string {
 	return raw
 }
 
-// SMTC supplies text, not a canonical track URL. A service-specific search is
-// an honest fallback; never send Spotify listeners to an iTunes lookup result.
 func musicURL(t *player.Track, resolved string, spotifySearch bool) string {
 	query := strings.TrimSpace(t.Title + " " + t.Artist)
 	switch t.Source {

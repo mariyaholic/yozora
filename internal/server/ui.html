@@ -82,13 +82,20 @@
   </form>
   <p class="made-by">Made with love by <a href="https://github.com/mariyaholic" target="_blank" rel="noopener noreferrer">Maria</a>.</p>
 </div>
-<script>
+<script nonce="{{.Nonce}}">
 const t = new URLSearchParams(location.search).get("t");
 const sourceKeys = ["applemusic", "spotify", "spotifyapi", "browser", "generic"];
 const sourceFields = document.getElementById("source-fields");
 const sourceStatus = document.getElementById("source-status");
 const sourceSave = document.getElementById("source-save");
 const sourceURL = `/api/sources?t=${encodeURIComponent(t)}`;
+function safeButtonURL(raw) {
+  try {
+    const u = new URL(raw);
+    if ((u.protocol !== "http:" && u.protocol !== "https:") || u.username || u.password) return "";
+    return u.href;
+  } catch { return ""; }
+}
 function showSources(enabled) {
   for (const source of sourceKeys) document.getElementById(`source-${source}`).checked = enabled[source] === true;
 }
@@ -105,7 +112,7 @@ async function loadSources() {
 }
 const sourceLabels = { applemusic:"Apple Music", spotify:"Spotify (desktop)", spotifyapi:"Spotify (Web API)", browser:"Browser media / videos", generic:"Other media players" };
 let savedOrder = [];
-let dragFrom = -1; // set at dragstart; getData() is protected during dragover
+let dragFrom = -1;
 function showOrder(order) {
   savedOrder = order.slice();
   renderOrder();
@@ -193,8 +200,10 @@ async function tick() {
     const buttons = document.getElementById("buttons");
     buttons.replaceChildren();
     for (const b of s.published_activity?.buttons || []) {
+      const href = safeButtonURL(b.url);
+      if (!href) continue;
       const link = document.createElement("a");
-      link.className = "btn"; link.textContent = b.label; link.href = b.url;
+      link.className = "btn"; link.textContent = b.label; link.href = href;
       link.target = "_blank"; link.rel = "noopener noreferrer";
       buttons.appendChild(link);
     }

@@ -1,6 +1,5 @@
 //go:build windows
 
-// Package cli implements the command surface of Yozora.
 package cli
 
 import (
@@ -49,13 +48,14 @@ func setupLogging(dataDir string, level string) {
 	log.SetFlags(log.LstdFlags | log.LUTC)
 }
 
-func tokenOf() string {
+func tokenOf() (string, error) {
 	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate dashboard token: %w", err)
+	}
+	return hex.EncodeToString(b), nil
 }
 
-// Main dispatches argv.
 func Main(args []string) int {
 	cmd := "serve"
 	if len(args) > 0 {
@@ -109,6 +109,7 @@ Usage: uika-resonance [serve|setup|status|doctor|install|uninstall]
 func serve() int {
 	cfgPath, dataDir, cacheDir := config.Paths()
 	setupLogging(dataDir, "info")
+	capRuntimeMemory()
 	ok, done, err := sysutil.AcquireSingleInstance()
 	if err != nil {
 		log.Printf("single-instance mutex: %v", err)
@@ -134,7 +135,6 @@ func serve() int {
 	}
 	cfg := holder.Get()
 
-	// Art resolver + local art server.
 	res := art.New(cacheDir, int64(cfg.Art.CacheMB)<<20)
 	base, err := res.StartServer(cfg.Art.Port)
 	if err != nil {
@@ -147,7 +147,6 @@ func serve() int {
 	defer stop()
 	go holder.Watch(ctx.Done())
 
-	// SMTC watcher.
 	w := smtc.NewWatcher(time.Duration(cfg.Sources.PollMS) * time.Millisecond)
 	w.OnError(func(err error) { log.Printf("smtc: %v", err) })
 	go w.Run(ctx)
@@ -164,8 +163,10 @@ func serve() int {
 	eng := presence.New(holder, res, w.Out, spotifyCh, dataDir)
 
 	if cfg.Server.Enabled {
-		tok := tokenOf()
-		if base, err := server.Start(server.Deps{
+		tok, tokenErr := tokenOf()
+		if tokenErr != nil {
+			log.Printf("dashboard: %v", tokenErr)
+		} else if base, err := server.Start(server.Deps{
 			Engine: eng, Cfg: holder, CfgPath: cfgPath, Token: tok,
 			DiscordApp: cfg.Discord.AppName,
 		}, cfg.Server.Port); err == nil {
@@ -318,9 +319,13 @@ func setup() int {
 		secret := trim(line)
 		port := "8977"
 		fmt.Println("Opening browser for Spotify authorization…")
-		u := spotifyapi.AuthorizeURL(cid, port)
-		openBrowser(u)
-		code, err := spotifyapi.WaitForCode(port)
+		state, err := spotifyapi.NewOAuthState()
+		if err != nil {
+			fmt.Println("spotify setup failed:", err)
+			return 1
+		}
+		openBrowser(spotifyapi.AuthorizeURL(cid, port, state))
+		code, err := spotifyapi.WaitForCode(port, state)
 		if err != nil {
 			fmt.Println("spotify setup failed:", err)
 		} else {
@@ -355,7 +360,7 @@ func openBrowser(raw string) {
 	if _, err := url.Parse(raw); err != nil {
 		return
 	}
-	// rundll32 url.dll,FileProtocolHandler — shell-open without extra deps.
+
 	if err := exec.Command("rundll32", "url.dll,FileProtocolHandler", raw).Start(); err != nil {
 		fmt.Println("open browser failed:", err, "— visit:", raw)
 	}

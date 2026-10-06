@@ -1,7 +1,5 @@
 //go:build windows
 
-// Package template renders user-customizable presence text with a safe,
-// bounded placeholder language on top of text/template.
 package template
 
 import (
@@ -13,13 +11,11 @@ import (
 	"uika-resonance/internal/player"
 )
 
-// Limits enforced by Discord.
 const (
 	MaxTextField   = 128
 	MaxButtonLabel = 32
 )
 
-// Data is the template context for one presence render.
 type Data struct {
 	Title       string
 	Artist      string
@@ -32,7 +28,6 @@ type Data struct {
 	TrackNumber int
 }
 
-// Vars returns the placeholder map used by {{.Field}} access.
 func (d Data) ElapsedFmt() string { return fmtTime(d.Elapsed) }
 func (d Data) DurationFmt() string {
 	return fmtTime(d.Duration)
@@ -58,8 +53,6 @@ func fmtTime(s float64) string {
 	return fmt.Sprintf("%d:%02d", m, sec)
 }
 
-// Bar renders a progress bar of the given length using the fill/empty runes.
-// {{bar 12 "▰" "▱"}}
 func (d Data) Bar(n int, fill, empty string) string {
 	if n < 1 {
 		n = 1
@@ -84,7 +77,6 @@ func (d Data) Bar(n int, fill, empty string) string {
 	return strings.Repeat(fill, f) + strings.Repeat(empty, n-f)
 }
 
-// Truncate cuts s to at most max runes, appending an ellipsis when cut.
 func Truncate(s string, max int) string {
 	r := []rune(s)
 	if len(r) <= max {
@@ -96,7 +88,6 @@ func Truncate(s string, max int) string {
 	return string(r[:max-1]) + "…"
 }
 
-// Engine renders configured templates.
 type Engine struct {
 	details string
 	state   string
@@ -105,7 +96,6 @@ type Engine struct {
 	paused  string
 }
 
-// New builds an engine from template strings. Empty strings use defaults.
 func New(details, state, large, small, paused string) *Engine {
 	if details == "" {
 		details = "{{.Title}}"
@@ -134,7 +124,7 @@ func render(tpl string, d Data) string {
 		},
 	}).Parse(tpl)
 	if err != nil {
-		return Truncate(tpl, MaxTextField) // bad template: show raw, still valid
+		return Truncate(tpl, MaxTextField)
 	}
 	var b strings.Builder
 	if err := t.Execute(&b, d); err != nil {
@@ -143,7 +133,6 @@ func render(tpl string, d Data) string {
 	return b.String()
 }
 
-// Render produces the field values for a track snapshot.
 func (e *Engine) Render(t player.Track, now time.Time) (details, state, large, small string) {
 	d := Data{
 		Title:       t.Title,

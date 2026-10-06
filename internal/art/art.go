@@ -1,8 +1,5 @@
 //go:build windows
 
-// Package art resolves album artwork for the presence card: iTunes Search
-// CDN URLs (preferred — Discord fetches them directly), SMTC thumbnails
-// served from a localhost cache, or a bundled default cover.
 package art
 
 import (
@@ -24,23 +21,21 @@ import (
 	"time"
 )
 
-// Lookup is the result of resolving art for a track.
 type Lookup struct {
-	ImageURL  string // https URL (CDN) or http://127.0.0.1 local URL
-	ListenURL string // track page URL for the Listen button, may be empty
-	Via       string // "itunes", "smtc", "spotify", "default"
+	ImageURL  string
+	ListenURL string
+	Via       string
 }
 
-// Resolver resolves artwork with caching.
 type Resolver struct {
 	httpClient *http.Client
 	cacheDir   string
 	cacheMax   int64
-	baseURL    string // local art server base, set by StartServer
+	baseURL    string
 
 	mu      sync.Mutex
 	itu     map[string]ituEntry
-	files   map[string]int64 // hash -> size, for LRU trim
+	files   map[string]int64
 	insrt   sync.Once
 	defOnce sync.Once
 	defURL  string
@@ -73,7 +68,7 @@ func (r *Resolver) trimLocked() {
 	if total <= r.cacheMax {
 		return
 	}
-	// Crude trim: delete oldest files by modtime until under budget.
+
 	type ent struct {
 		name string
 		mod  time.Time
@@ -88,7 +83,7 @@ func (r *Resolver) trimLocked() {
 			delete(r.files, name)
 		}
 	}
-	// oldest first
+
 	for i := 0; i < len(ents); i++ {
 		for j := i + 1; j < len(ents); j++ {
 			if ents[j].mod.Before(ents[i].mod) {
@@ -107,26 +102,22 @@ func (r *Resolver) trimLocked() {
 	}
 }
 
-// Track is the minimal input the resolver needs.
 type Track struct {
 	Source string
 	Title  string
 	Artist string
 	Album  string
-	ArtURL string                 // known-good CDN URL (e.g. Spotify Web API)
-	Thumb  func() ([]byte, error) // SMTC thumbnail reader, may be nil
+	ArtURL string
+	Thumb  func() ([]byte, error)
 }
 
-// Resolve returns artwork per the configured preference chain.
-// prefer: "cdn" (iTunes first) or "smtc" (thumbnail first).
 func (r *Resolver) Resolve(t Track, prefer string) Lookup {
-	// 0. Known-good URL from the track itself (Spotify Web API).
+
 	if t.ArtURL != "" {
 		return Lookup{ImageURL: t.ArtURL, Via: "spotify"}
 	}
 	key := keyOf(t.Source, t.Title, t.Artist, t.Album)
-	// Browser titles identify videos/pages, not songs. Only supplied artwork
-	// is trustworthy; never infer music artwork or a listen URL from the title.
+
 	if t.Source == "browser" {
 		if l := r.localArt(t, key); l.ImageURL != "" {
 			return l
@@ -151,7 +142,6 @@ func (r *Resolver) Resolve(t Track, prefer string) Lookup {
 	return Lookup{Via: "default"}
 }
 
-// localArt stores the SMTC thumbnail in the cache and returns its URL.
 func (r *Resolver) localArt(t Track, key string) Lookup {
 	if t.Thumb == nil || r.baseURL == "" {
 		return Lookup{}
@@ -179,7 +169,6 @@ func (r *Resolver) localArt(t Track, key string) Lookup {
 	return Lookup{}
 }
 
-// itunesArt queries the public iTunes Search API for artwork + track URL.
 func (r *Resolver) itunesArt(t Track, key string) Lookup {
 	if strings.TrimSpace(t.Title) == "" {
 		return Lookup{}
@@ -225,10 +214,10 @@ func (r *Resolver) itunesArt(t Track, key string) Lookup {
 	}
 	r.mu.Lock()
 	r.itu[key] = ituEntry{l, time.Now().Add(24 * time.Hour)}
-	if len(r.itu) > 512 {
+	if len(r.itu) > 128 {
 		for k := range r.itu {
 			delete(r.itu, k)
-			if len(r.itu) <= 384 {
+			if len(r.itu) <= 96 {
 				break
 			}
 		}
@@ -237,7 +226,6 @@ func (r *Resolver) itunesArt(t Track, key string) Lookup {
 	return l
 }
 
-// StartServer serves the art cache on 127.0.0.1. Returns the base URL.
 func (r *Resolver) StartServer(port int) (string, error) {
 	_ = os.MkdirAll(r.cacheDir, 0o755)
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
@@ -263,8 +251,6 @@ func (r *Resolver) StartServer(port int) (string, error) {
 
 func itoa(n int) string { return fmt.Sprintf("%d", n) }
 
-// DefaultURL generates (once) a bundled fallback cover in the cache dir and
-// returns its URL. Returns "" when the local server is not running.
 func (r *Resolver) DefaultURL() string {
 	if r.baseURL == "" {
 		return ""
@@ -274,7 +260,7 @@ func (r *Resolver) DefaultURL() string {
 		p := filepath.Join(r.cacheDir, name)
 		if _, err := os.Stat(p); err != nil {
 			img := image.NewRGBA(image.Rect(0, 0, 512, 512))
-			// Warm gold gradient — the estate's lamp accent.
+
 			for y := 0; y < 512; y++ {
 				for x := 0; x < 512; x++ {
 					v := uint8(38 + (x+y)*90/1024)
@@ -295,5 +281,3 @@ func (r *Resolver) DefaultURL() string {
 	})
 	return r.defURL
 }
-
-var _ = log.Print

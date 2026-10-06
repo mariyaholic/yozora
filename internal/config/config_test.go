@@ -111,7 +111,7 @@ func TestNewConfigBlocksNonMusicButExistingChoicesSurvive(t *testing.T) {
 	if len(c.Sources.Blocked) != 2 || c.Sources.Blocked[0] != "browser" || c.Sources.Blocked[1] != "generic" {
 		t.Fatalf("new blocks = %v", c.Sources.Blocked)
 	}
-	// Explicit choices (including an explicit empty list from the dashboard) survive.
+
 	for _, fixture := range []string{"[sources]\nblocked = []\n", "[sources]\nblocked = [\"SPOTIFY\", \"custom.app\"]\n"} {
 		if err := os.WriteFile(path, []byte(fixture), 0600); err != nil {
 			t.Fatal(err)
@@ -124,7 +124,7 @@ func TestNewConfigBlocksNonMusicButExistingChoicesSurvive(t *testing.T) {
 			t.Fatalf("existing choices overwritten: %v", c.Sources.Blocked)
 		}
 	}
-	// A pre-existing file without the key keeps its legacy all-enabled behaviour.
+
 	if err := os.WriteFile(path, []byte("[sources]\npoll_ms = 2000\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestNewConfigBlocksNonMusicButExistingChoicesSurvive(t *testing.T) {
 	if len(c.Sources.Blocked) != 0 {
 		t.Fatalf("pre-existing config was re-blocked: %v", c.Sources.Blocked)
 	}
-	// The dashboard's explicit empty choice round-trips instead of re-defaulting.
+
 	c.Sources.Blocked = []string{}
 	if err := Save(c, path); err != nil {
 		t.Fatal(err)

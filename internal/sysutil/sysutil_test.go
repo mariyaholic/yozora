@@ -17,7 +17,7 @@ func TestAcquireNamedMutexExclusive(t *testing.T) {
 	if ok2 {
 		t.Fatal("second owner acquired an exclusive mutex")
 	}
-	release2() // releasing a failed acquire must be harmless
+	release2()
 	release()
 	ok3, release3, err3 := AcquireNamedMutex(name)
 	if err3 != nil || !ok3 {

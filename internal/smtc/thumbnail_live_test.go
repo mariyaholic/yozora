@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-// Opt-in bounded, read-only diagnostic: never logs session identifiers/titles,
-// changes playback, or publishes activity. Not part of ordinary fixture tests.
 func TestLiveBrowserThumbnail(t *testing.T) {
 	if os.Getenv("YOZORA_READONLY_THUMB_PROBE") != "1" {
 		t.Skip("read-only live probe is opt-in")
