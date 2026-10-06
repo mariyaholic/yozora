@@ -37,6 +37,14 @@
   #source-save { margin-top:10px; padding:4px 12px; border:1px solid #45474e; border-radius:5px; background:#24262b; color:#dbdee1; font:inherit; font-size:12px; cursor:pointer; }
   #source-save:disabled { opacity:.5; cursor:default; }
   #source-save:focus-visible, .source-option input:focus-visible { outline:2px solid #d4a843; outline-offset:3px; }
+  #source-order { list-style:none; margin:10px 0 0; padding:0; }
+  #source-order li { display:flex; align-items:center; gap:8px; padding:5px 8px; border:1px solid #2b2d31; border-radius:6px; margin:4px 0; background:#1a1b1e; cursor:grab; }
+  #source-order li.dragging { opacity:.45; }
+  #source-order li:focus-visible { outline:2px solid #d4a843; outline-offset:2px; }
+  #source-order .rank { font-variant-numeric:tabular-nums; color:#949ba4; min-width:1.4em; text-align:right; }
+  #source-order .move { margin-left:auto; display:flex; gap:4px; }
+  #source-order .move button { padding:0 7px; border:1px solid #45474e; border-radius:4px; background:#24262b; color:#dbdee1; font:inherit; font-size:12px; cursor:pointer; }
+  #source-order .move button:disabled { opacity:.35; cursor:default; }
 </style>
 </head>
 <body>
@@ -66,6 +74,8 @@
       <div class="source-option"><input type="checkbox" id="source-browser"><label for="source-browser">Browser media / videos</label></div>
       <div class="source-option"><input type="checkbox" id="source-generic"><label for="source-generic">Other media players</label></div>
       <div class="source-help">Checked sources may appear in your activity. Custom app filters still apply.</div>
+      <div id="order-help" class="source-help">Priority decides which source wins when several play at once. Drag rows, or use the arrow buttons; the order saves with Apply.</div>
+      <ul id="source-order" aria-describedby="order-help"></ul>
       <button type="submit" id="source-save">Apply</button>
     </fieldset>
     <p id="source-status" role="status" aria-live="polite">Loading saved sources…</p>
@@ -86,10 +96,66 @@ async function loadSources() {
   try {
     const r = await fetch(sourceURL, {cache:"no-store"});
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    showSources((await r.json()).enabled);
+    const data = await r.json();
+    showSources(data.enabled);
+    showOrder(data.order || []);
     sourceFields.disabled = false;
     sourceStatus.textContent = "Saved source settings loaded.";
   } catch (e) { sourceStatus.textContent = `Could not load sources: ${e}. Reload to retry.`; }
+}
+const sourceLabels = { applemusic:"Apple Music", spotify:"Spotify (desktop)", spotifyapi:"Spotify (Web API)", browser:"Browser media / videos", generic:"Other media players" };
+let savedOrder = [];
+function showOrder(order) {
+  savedOrder = order.slice();
+  renderOrder();
+}
+function renderOrder() {
+  const list = document.getElementById("source-order");
+  list.replaceChildren();
+  savedOrder.forEach((source, index) => {
+    const li = document.createElement("li");
+    li.draggable = true;
+    li.tabIndex = 0;
+    li.dataset.source = source;
+    li.setAttribute("aria-label", `Priority ${index + 1}: ${sourceLabels[source] || source}`);
+    const rank = document.createElement("span");
+    rank.className = "rank";
+    rank.textContent = String(index + 1);
+    const label = document.createElement("span");
+    label.textContent = sourceLabels[source] || source;
+    const move = document.createElement("span");
+    move.className = "move";
+    const up = document.createElement("button");
+    up.type = "button"; up.textContent = "↑"; up.disabled = index === 0;
+    up.setAttribute("aria-label", `Move ${sourceLabels[source] || source} up`);
+    up.addEventListener("click", () => moveSource(index, -1));
+    const down = document.createElement("button");
+    down.type = "button"; down.textContent = "↓"; down.disabled = index === savedOrder.length - 1;
+    down.setAttribute("aria-label", `Move ${sourceLabels[source] || source} down`);
+    down.addEventListener("click", () => moveSource(index, 1));
+    move.append(up, down);
+    li.append(rank, label, move);
+    li.addEventListener("dragstart", event => { li.classList.add("dragging"); event.dataTransfer.setData("text/plain", String(index)); event.dataTransfer.effectAllowed = "move"; });
+    li.addEventListener("dragend", () => li.classList.remove("dragging"));
+    li.addEventListener("dragover", event => {
+      event.preventDefault();
+      const from = Number(event.dataTransfer.getData("text/plain"));
+      if (!Number.isInteger(from) || from === index) return;
+      const [moved] = savedOrder.splice(from, 1);
+      savedOrder.splice(index, 0, moved);
+      renderOrder();
+    });
+    list.appendChild(li);
+  });
+}
+function moveSource(index, delta) {
+  const to = index + delta;
+  if (to < 0 || to >= savedOrder.length) return;
+  const [moved] = savedOrder.splice(index, 1);
+  savedOrder.splice(to, 0, moved);
+  renderOrder();
+  const items = document.getElementById("source-order").children;
+  (items[to] || items[index])?.focus?.();
 }
 document.getElementById("sources-form").addEventListener("submit", async event => {
   event.preventDefault();
@@ -97,9 +163,11 @@ document.getElementById("sources-form").addEventListener("submit", async event =
   sourceFields.disabled = true;
   sourceStatus.textContent = "Saving…";
   try {
-    const r = await fetch(sourceURL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled})});
+    const r = await fetch(sourceURL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled, order:savedOrder})});
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    showSources((await r.json()).enabled);
+    const data = await r.json();
+    showSources(data.enabled);
+    showOrder(data.order || savedOrder);
     sourceStatus.textContent = "Saved. Activity updates after the current rate limit.";
   } catch (e) { sourceStatus.textContent = `Save failed: ${e}. Your changes were not confirmed; try again.`; }
   finally { sourceFields.disabled = false; }

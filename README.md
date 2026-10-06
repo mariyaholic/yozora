@@ -42,11 +42,19 @@ Commands: `serve`, `status`, `doctor`, `setup`, `install`, `uninstall`. `install
 
 ## Source switches (Yozora.exe)
 
-Double-click **Yozora.exe** to open the control panel in its own native window (WebView2; falls back to your default browser if WebView2 is unavailable). The "Detected sources" checkboxes save on Apply — no config file editing.
+Double-click **Yozora.exe** to open the control panel in its own native window (WebView2; falls back to your default browser if WebView2 is unavailable). The "Detected sources" checkboxes save on Apply — no config file editing. A second press while the panel is open simply brings the existing window to the front.
 
 - New installations default to **Browser media / videos** and **Other media players** off; the music sources are on. Existing configs keep their explicit choices until you change them.
 - Disabling a source stops new detections and clears an activity that source was driving at the next rate step.
 - Saved through the existing `sources.blocked` list in `cadence.toml`; custom per-app filters are preserved.
+
+## Source priority
+
+When more than one detected source is playing at once, the **priority list** decides which one appears. The panel shows drag handles (or ↑/↓ buttons for keyboard users); the order saves with Apply into `sources.order` in `cadence.toml`.
+
+- The list is a total order over the five canonical sources; the top entry wins whenever it is playing.
+- If the top source stops playing or disappears, the next white-listed source takes over automatically — the hierarchy itself is stable and never reshuffles.
+- Files/order validation is strict: all five sources, each exactly once, canonical spelling (the API rejects anything else).
 
 The bundled Discord application ID is public, not a credential. For this local Rich Presence path, desktop Discord must be running; no Discord client secret is required. A custom application ID is supported by `discord.client_id`.
 

@@ -124,9 +124,16 @@ func TestDashboardSourceControls(t *testing.T) {
 			t.Errorf("missing accessible checkbox for %s", source)
 		}
 	}
-	for _, marker := range []string{`type="checkbox"`, `id="source-save"`, `role="status"`, `/api/sources`, `method:"POST"`, `JSON.stringify({enabled})`} {
+	for _, marker := range []string{`type="checkbox"`, `id="source-save"`, `role="status"`, `/api/sources`, `method:"POST"`, `JSON.stringify({enabled, order:savedOrder})`} {
 		if !strings.Contains(page, marker) {
 			t.Errorf("missing working control %s", marker)
+		}
+	}
+	// Hierarchy controls: draggable priority list with keyboard fallback.
+	for _, marker := range []string{`id="source-order"`, `draggable`, `data.order || []`, `order:savedOrder`, "Priority ",
+		"Priority decides which source wins when several play at once"} {
+		if !strings.Contains(page, marker) {
+			t.Errorf("missing hierarchy control %q", marker)
 		}
 	}
 }

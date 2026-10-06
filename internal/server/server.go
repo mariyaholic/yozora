@@ -8,6 +8,7 @@ import (
 	"crypto/subtle"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -34,6 +35,30 @@ type Deps struct {
 	DiscordApp string
 }
 
+// validateSourceOrder enforces the hierarchy invariant: an exact set of the
+// canonical sources, no duplicates, no case games. A missing or extra entry
+// would otherwise silently drop or invent priorities on save.
+func validateSourceOrder(order, canonical []string) error {
+	if len(order) != len(canonical) {
+		return errors.New("order must contain every source exactly once")
+	}
+	seen := make(map[string]bool, len(order))
+	for _, source := range order {
+		known := false
+		for _, c := range canonical {
+			if source == c {
+				known = true
+				break
+			}
+		}
+		if !known || seen[source] {
+			return errors.New("order must contain every canonical source exactly once")
+		}
+		seen[source] = true
+	}
+	return nil
+}
+
 // constantTimeEqual keeps the session-token check from leaking through
 // comparison timing (defense-in-depth; the dashboard listens on loopback).
 func constantTimeEqual(a, b string) bool {
@@ -44,14 +69,15 @@ func constantTimeEqual(a, b string) bool {
 func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	var configMu sync.Mutex
-	sources := []string{"applemusic", "spotify", "spotifyapi", "browser", "generic"}
+	sources := canonicalSources
 	writeSources := func(w http.ResponseWriter) {
+		cfg := d.Cfg.Get()
 		enabled := make(map[string]bool, len(sources))
 		for _, source := range sources {
-			enabled[source] = !player.IsBlocked(player.Track{Source: source}, d.Cfg.Get().Sources.Blocked)
+			enabled[source] = !player.IsBlocked(player.Track{Source: source}, cfg.Sources.Blocked)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"name": "Yozora", "enabled": enabled})
+		_ = json.NewEncoder(w).Encode(map[string]any{"name": "Yozora", "enabled": enabled, "order": cfg.Sources.Order})
 	}
 	auth := func(h http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -113,6 +139,7 @@ func Handler(d Deps) http.Handler {
 		case http.MethodPost:
 			var payload struct {
 				Enabled map[string]*bool `json:"enabled"`
+				Order   []string         `json:"order"`
 			}
 			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 4096))
 			if err != nil {
@@ -121,24 +148,36 @@ func Handler(d Deps) http.Handler {
 			}
 			decoder := json.NewDecoder(strings.NewReader(string(body)))
 			decoder.DisallowUnknownFields()
-			if err := decoder.Decode(&payload); err != nil || payload.Enabled == nil {
+			if err := decoder.Decode(&payload); err != nil {
 				http.Error(w, "invalid sources", 400)
+				return
+			}
+			if payload.Enabled == nil && payload.Order == nil {
+				http.Error(w, "empty sources payload", 400)
 				return
 			}
 			if err := decoder.Decode(new(any)); err != io.EOF {
 				http.Error(w, "trailing source payload", 400)
 				return
 			}
-			for key, enabled := range payload.Enabled {
-				known := false
-				for _, source := range sources {
-					if key == source {
-						known = true
-						break
+			if payload.Enabled != nil {
+				for key, enabled := range payload.Enabled {
+					known := false
+					for _, source := range sources {
+						if key == source {
+							known = true
+							break
+						}
+					}
+					if !known || enabled == nil {
+						http.Error(w, "unknown source or non-boolean switch", 400)
+						return
 					}
 				}
-				if !known || enabled == nil {
-					http.Error(w, "unknown source or non-boolean switch", 400)
+			}
+			if payload.Order != nil {
+				if err := validateSourceOrder(payload.Order, sources); err != nil {
+					http.Error(w, err.Error(), 400)
 					return
 				}
 			}
@@ -147,18 +186,23 @@ func Handler(d Deps) http.Handler {
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			blocked := make([]string, 0, len(current.Sources.Blocked)+len(payload.Enabled))
-			for _, block := range current.Sources.Blocked {
-				if _, changed := payload.Enabled[strings.ToLower(strings.TrimSpace(block))]; !changed {
-					blocked = append(blocked, block)
+			if payload.Enabled != nil {
+				blocked := make([]string, 0, len(current.Sources.Blocked)+len(payload.Enabled))
+				for _, block := range current.Sources.Blocked {
+					if _, changed := payload.Enabled[strings.ToLower(strings.TrimSpace(block))]; !changed {
+						blocked = append(blocked, block)
+					}
 				}
-			}
-			for _, source := range sources {
-				if enabled, changed := payload.Enabled[source]; changed && !*enabled {
-					blocked = append(blocked, source)
+				for _, source := range sources {
+					if enabled, changed := payload.Enabled[source]; changed && !*enabled {
+						blocked = append(blocked, source)
+					}
 				}
+				current.Sources.Blocked = blocked
 			}
-			current.Sources.Blocked = blocked
+			if payload.Order != nil {
+				current.Sources.Order = payload.Order
+			}
 			if err := config.Save(current, d.CfgPath); err != nil {
 				http.Error(w, err.Error(), 500)
 				return
