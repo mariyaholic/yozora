@@ -4,8 +4,9 @@ package player
 
 import "testing"
 
-// REDsuite for the priority-hierarchy feature (Maria: drag-up/down ordering
-// that persists when higher items disappear).
+// Priority-hierarchy semantics: earlier entries in `order` win when several
+// sources play; a vanished higher-ranked entry promotes the rest without
+// reshuffling.
 func TestArbitrateHonorsPriorityHierarchy(t *testing.T) {
 	tracks := []Track{
 		{Source: "browser", AppID: "MSEdge", Title: "video", Playing: true},

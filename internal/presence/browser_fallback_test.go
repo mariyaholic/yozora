@@ -11,10 +11,10 @@ import (
 	"uika-resonance/internal/player"
 )
 
-// Reproduction for Maria's report: while a YouTube video plays in the
-// browser (browser thumbnails are loopback-only since the Discord proxy
-// cannot fetch them), the Discord card must not fall back to the app's
-// bundled default artwork. Omitting the image entirely is the correct
+// When a YouTube video plays in the browser, its SMTC thumbnail is
+// loopback-only (the Discord proxy cannot fetch it), so the Discord card
+// must not fall back to the app's bundled default artwork. Omitting the
+// image entirely is the correct
 // rendering; the substituted Yozora icon looks like a broken cover.
 func TestBrowserLoopbackArtworkDoesNotFallbackToDefaultImage(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {

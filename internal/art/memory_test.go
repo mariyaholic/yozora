@@ -13,10 +13,10 @@ import (
 	"testing"
 )
 
-// Baseline memory-profile sanity for Maria's "super cheap relay" request:
-// the resolver must not balloon when resolving a burst of tracks. Runs the
-// real Resolver's full chain against local fixtures and reports the peak
-// in-use heap via runtime.ReadMemStats (no live network; the_ART_ fixture
+// Baseline memory-profile sanity: the resolver must stay modest when
+// resolving a burst of tracks. Runs the real Resolver's full chain against
+// local fixtures and reports the peak in-use heap via runtime.ReadMemStats
+// (no live network; the_art_ fixture
 // transport is injected).
 func TestResolverMemoryStaysModestBeyondCacheBudget(t *testing.T) {
 	dir := t.TempDir()

@@ -10,10 +10,10 @@ import (
 	"uika-resonance/internal/config"
 )
 
-// Maria's hierarchy request: the dashboard must expose the saved source
-// priority (drag order) just like the on/off switches, with identical
-// strictness. Default saves the canonical order explicitly so future
-// reshuffles of Defaults() never silently rewrite a user's list.
+// The dashboard must expose the saved source priority (drag order) exactly
+// like the on/off switches, with identical strictness. Defaults set the
+// canonical order explicitly so reshuffles of Defaults() never silently
+// rewrite a user's list.
 func TestSourcesOrderRoundTrip(t *testing.T) {
 	h, cfg := fixtureHandlerForOrderTest(t)
 

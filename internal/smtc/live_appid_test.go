@@ -8,10 +8,10 @@ import (
 	"testing"
 )
 
-// Opt-in live diagnostic for Maria's YouTube-thumbnail question: prints the
-// SourceAppUserModelId of every SMTC session (and whether a thumbnail entry
-// exists) without logging thumbnails or identifiers. Skipped unless
-// YOZORA_READONLY_SMTC_PROBE=1 is set; never touches playback.
+// Opt-in live diagnostic: prints the SourceAppUserModelId of every SMTC
+// session (and whether a thumbnail entry exists) without logging thumbnails
+// or identifiers. Skipped unless YOZORA_READONLY_SMTC_PROBE=1 is set; never
+// touches playback.
 func TestLiveSessionAppIDDump(t *testing.T) {
 	if os.Getenv("YOZORA_READONLY_SMTC_PROBE") != "1" {
 		t.Skip("set YOZORA_READONLY_SMTC_PROBE=1 to run")
