@@ -55,7 +55,7 @@ const (
 	nifTip     = 0x00000004
 
 	imageIcon = 2      // IMAGE_ICON
-	lrDefault = 0x3000 // LR_DEFAULTCOLOR | LR_SHARED
+	lrShared  = 0x8000 // LR_SHARED
 
 	// iconResource is the resource id under which both binaries'
 	// .syso embeds assets/yozora.ico.
@@ -223,7 +223,7 @@ func (p *Panel) Run() {
 		return
 	}
 	icon, _, _ := procLoadImageW.Call(
-		moduleHandle(), iconResource, imageIcon, 0, 0, lrDefault)
+		moduleHandle(), iconResource, imageIcon, 0, 0, lrShared)
 	p.icon = icon
 	addTrayIcon(p.hostHwnd, icon)
 	p.messageLoop()
