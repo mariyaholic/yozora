@@ -4,13 +4,9 @@ _Made with love by [Maria](https://github.com/mariyaholic)._
 
 A Windows music detector that publishes Discord Rich Presence. This folder is a self-contained Go module: move the entire folder into the planned standalone repository and the build commands below still work. Internal config/storage names and the executable remain `uika-resonance` for compatibility.
 
-## Public repository placeholder — change at release
+## Repository
 
-The second Discord button is **Yozora**. Its current destination is deliberately a placeholder:
-
-`https://github.com/mariyaholic/yozora`
-
-**The repository has not been published by this work.** Create that public repository, or replace the URL before releasing the app. Do not mistake a working Discord button for a published destination.
+You are looking at it. The second Discord button is **Yozora**, linking here.
 
 The built-in URL lives in `internal/config/config.go`, in `Defaults()` as `Buttons.YozoraURL`. Existing installations can override it in `%APPDATA%\uika-resonance\cadence.toml`:
 
@@ -22,7 +18,7 @@ The built-in URL lives in `internal/config/config.go`, in `Defaults()` as `Butto
   yozora_url = "https://github.com/mariyaholic/yozora"
 ```
 
-No local drive path or enclosing repository name is used to build the URL. A folder move therefore needs no code change. If the final repository has a different owner/name, update the default and any existing local override.
+No local drive path or enclosing repository name is used to build the URL. A folder move therefore needs no code change. If the repository ever moves, update the default and any existing local override.
 
 ## Build and run
 
@@ -91,13 +87,6 @@ The Windows detector reads once at startup, then polls every second by default. 
 
 Private Windows named-pipe regression tests exercise simultaneous read/write using a unique `yozora-test-*` pipe, not the live Discord client. Ordinary `go test ./...` never publishes experimental activity to a Discord profile. Tests also cover slow artwork, session gaps and out-of-order lookups, coherent track/art transitions, paused clear/resume and visibility-policy reloads under the send-rate gate, label-only Discord button readback, loopback-art filtering, source-toggle API validation and concurrency, launcher endpoint validation, service names, icon placement, platform-specific links, button ordering, display enums, config bounds, and newest-snapshot retention.
 
-## Publishing
+## Release
 
-A local git repository is prepared for the first public push (branch `main`, initial commit included).
-
-```sh
-gh auth switch --user mariyaholic
-gh repo create mariyaholic/yozora --public --source . --remote origin --push
-```
-
-If the account is already active, the second command alone is enough. After the push, the in-app Yozora button's default URL (`buttons.yozora_url`) already points at this repository.
+Prebuilt Windows binaries are not attached yet; build from source with the commands above. Tag a release with `git tag v0.1.0 && git push origin v0.1.0`.
