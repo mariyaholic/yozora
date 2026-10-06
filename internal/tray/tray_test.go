@@ -3,10 +3,79 @@
 package tray
 
 import (
+	"runtime"
 	"testing"
+	"time"
 )
 
-// fakeActions records which panel actions fired, in order.
+func TestImageIconMatchesWin32Value(t *testing.T) {
+	if imageIcon != 1 {
+		t.Fatalf("IMAGE_ICON = %d, want 1", imageIcon)
+	}
+}
+
+func TestWindowMessagePumpDispatchesTrayNotification(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	p, actions := newTestPanel()
+	hwnd := createHostWindow(p)
+	if hwnd == 0 {
+		t.Fatal("createHostWindow failed")
+	}
+	p.hostHwnd = hwnd
+	defer procDestroyWindow.Call(hwnd)
+
+	threadID, _, _ := modKernel32.NewProc("GetCurrentThreadId").Call()
+	postThreadMessage := modUser32.NewProc("PostThreadMessageW")
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		procPostMessageW.Call(hwnd, wmAppTray, 0, wmLButtonUp)
+		time.Sleep(50 * time.Millisecond)
+		postThreadMessage.Call(threadID, wmQuit, 0, 0)
+	}()
+	p.messageLoop()
+	if len(actions.fired) != 1 || actions.fired[0] != "show" {
+		t.Fatalf("tray callback dispatched %v, want [show]", actions.fired)
+	}
+}
+
+func TestWindowProcReadsMenuCommandFromWParam(t *testing.T) {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	p, actions := newTestPanel()
+	hwnd := createHostWindow(p)
+	if hwnd == 0 {
+		t.Fatal("createHostWindow failed")
+	}
+	p.hostHwnd = hwnd
+	defer procDestroyWindow.Call(hwnd)
+	modUser32.NewProc("SendMessageW").Call(hwnd, wmCommand, cmdOpenPanel, 0)
+	if len(actions.fired) != 1 || actions.fired[0] != "show" {
+		t.Fatalf("WM_COMMAND dispatched %v, want [show]", actions.fired)
+	}
+}
+
+func TestPopupMenuReturnCommandDispatches(t *testing.T) {
+	p, actions := newTestPanel()
+	if !p.dispatchMenuSelection(cmdQuit) {
+		t.Fatal("popup command was not dispatched")
+	}
+	if len(actions.fired) != 1 || actions.fired[0] != "quit" {
+		t.Fatalf("popup command dispatched %v, want [quit]", actions.fired)
+	}
+	if p.dispatchMenuSelection(0) {
+		t.Fatal("dismissed popup was dispatched")
+	}
+}
+
+func TestTrackPopupReturnsCommandFlag(t *testing.T) {
+	if tpmReturnCmd != 0x0100 {
+		t.Fatalf("TPM_RETURNCMD = %#x", tpmReturnCmd)
+	}
+}
+
 type fakeActions struct {
 	fired []string
 }
@@ -19,8 +88,6 @@ func newTestPanel() (*Panel, *fakeActions) {
 	return New(a), a
 }
 
-// TestTrayClickOpensPanel: a synthetic left-button tray notification
-// (single click and double click both lift the panel) triggers ShowPanel.
 func TestTrayClickOpensPanel(t *testing.T) {
 	for _, ev := range []uintptr{wmLButtonUp, wmLButtonDblClk} {
 		p, a := newTestPanel()
@@ -33,7 +100,6 @@ func TestTrayClickOpensPanel(t *testing.T) {
 	}
 }
 
-// TestTrayMenuQuitStopsPanel: selecting "Quit Yozora" dispatches Quit.
 func TestTrayMenuQuitStopsPanel(t *testing.T) {
 	p, a := newTestPanel()
 	if !p.Dispatch(wmCommand, cmdQuit) {
@@ -44,7 +110,6 @@ func TestTrayMenuQuitStopsPanel(t *testing.T) {
 	}
 }
 
-// TestTrayMenuOpenPanel: selecting "Open control panel" dispatches ShowPanel.
 func TestTrayMenuOpenPanel(t *testing.T) {
 	p, a := newTestPanel()
 	if !p.Dispatch(wmCommand, cmdOpenPanel) {
@@ -55,10 +120,9 @@ func TestTrayMenuOpenPanel(t *testing.T) {
 	}
 }
 
-// TestTrayIgnoresUnknownMessages: unrelated messages fall through untouched.
 func TestTrayIgnoresUnknownMessages(t *testing.T) {
 	p, a := newTestPanel()
-	if p.Dispatch(0x0084 /*WM_NCHITTEST*/, 0) {
+	if p.Dispatch(0x0084, 0) {
 		t.Fatal("WM_NCHITTEST should not be intercepted")
 	}
 	if len(a.fired) != 0 {
@@ -66,8 +130,6 @@ func TestTrayIgnoresUnknownMessages(t *testing.T) {
 	}
 }
 
-// TestTrayTooltipShape: the notify icon this package registers carries the
-// expected tooltip and the shared icon resource.
 func TestTrayTooltipShape(t *testing.T) {
 	p, _ := newTestPanel()
 	r := p.Recipe()
@@ -79,8 +141,6 @@ func TestTrayTooltipShape(t *testing.T) {
 	}
 }
 
-// TestMenuLabelsShape: the right-click popup lists exactly the two entries,
-// in the expected order with the expected wording.
 func TestMenuLabelsShape(t *testing.T) {
 	items := menuLabels()
 	if len(items) != 2 {

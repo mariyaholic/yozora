@@ -15,17 +15,10 @@ import (
 	"uika-resonance/internal/sysutil"
 )
 
-// dashboardLaunchTimeout bounds waiting for a freshly spawned daemon.
 const dashboardLaunchTimeout = 25 * time.Second
 
-// launcherSingletonName marks the process currently showing the panel
-// window; a second double-click activates that window instead of stacking
-// another one.
 const launcherSingletonName = `Local\uika-resonance-control-panel`
 
-// Dashboard is the double-click entry point: it ensures the control panel is
-// available (starting the daemon when needed) and shows it in a native
-// WebView2 window, falling back to the default browser.
 func Dashboard() int {
 	hideLauncherConsole()
 	owner, release, err := sysutil.AcquireNamedMutex(launcherSingletonName)
@@ -86,9 +79,6 @@ func openDashboard(endpoint dashboardEndpoint) int {
 	return 0
 }
 
-// daemonExecutable finds the daemon next to the launcher, preferring the same
-// machine's current binary. When missing, plain `Yozora.exe serve` still
-// works because this binary can serve too.
 func daemonExecutable() (string, error) {
 	self, err := os.Executable()
 	if err != nil {
@@ -110,7 +100,7 @@ func spawnDaemon(exe string) error {
 	cmd.Dir = filepath.Dir(exe)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		HideWindow:    true,
-		CreationFlags: 0x08000000, // CREATE_NO_WINDOW: no console flash
+		CreationFlags: 0x08000000,
 	}
 	if err := cmd.Start(); err != nil {
 		return err

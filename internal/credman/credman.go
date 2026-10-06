@@ -1,6 +1,5 @@
 //go:build windows
 
-// Package credman stores small secrets in the Windows Credential Manager.
 package credman
 
 import (
@@ -37,7 +36,6 @@ var (
 
 func targetName(key string) string { return "uika-resonance:" + key }
 
-// Set stores a secret.
 func Set(key, secret string) error {
 	target, err := syscall.UTF16PtrFromString(targetName(key))
 	if err != nil {
@@ -52,7 +50,7 @@ func Set(key, secret string) error {
 		Type:               credTypeGeneric,
 		TargetName:         target,
 		Comment:            nil,
-		Persist:            2, // CRED_PERSIST_LOCAL_MACHINE
+		Persist:            2,
 		CredentialBlobSize: uint32(len(blob) * 2),
 		CredentialBlob:     uintptr(unsafe.Pointer(&blob[0])),
 	}
@@ -63,7 +61,6 @@ func Set(key, secret string) error {
 	return nil
 }
 
-// Get reads a secret.
 func Get(key string) (string, error) {
 	target, err := syscall.UTF16PtrFromString(targetName(key))
 	if err != nil {
@@ -87,7 +84,6 @@ func Get(key string) (string, error) {
 	return string(runes), nil
 }
 
-// Delete removes a secret.
 func Delete(key string) error {
 	target, err := syscall.UTF16PtrFromString(targetName(key))
 	if err != nil {

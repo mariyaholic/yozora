@@ -11,8 +11,6 @@ import (
 	"github.com/Microsoft/go-winio"
 )
 
-// Unlike net.Pipe, a real Windows pipe exposes synchronous-handle stalls.
-// This uses a private pipe only: no Discord connection or public activity.
 func TestNamedPipePublishesWhileReaderIsPending(t *testing.T) {
 	path := fmt.Sprintf(`\\.\pipe\yozora-test-%d-%d`, os.Getpid(), time.Now().UnixNano())
 	listener, err := winio.ListenPipe(path, nil)
@@ -40,7 +38,7 @@ func TestNamedPipePublishesWhileReaderIsPending(t *testing.T) {
 		if err == nil || time.Now().After(deadline) {
 			break
 		}
-		// Accept creates an instance asynchronously after ListenPipe returns.
+
 		time.Sleep(5 * time.Millisecond)
 	}
 	if err != nil {
@@ -54,7 +52,7 @@ func TestNamedPipePublishesWhileReaderIsPending(t *testing.T) {
 	if err := client.handshake(); err != nil {
 		t.Fatal(err)
 	}
-	// Let readLoop enter its blocking native Read before starting Write.
+
 	time.Sleep(50 * time.Millisecond)
 	start := time.Now()
 	if err := client.SetActivity(&Activity{Details: "private fixture track"}); err != nil {

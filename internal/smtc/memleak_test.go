@@ -9,11 +9,6 @@ import (
 	"time"
 )
 
-// Opt-in leak probe (YOZORA_MEMLEAK_PROBE=1): polls the real SMTC manager
-// repeatedly and reports Go heap growth. Read-only; no playback changes.
-// Reveals whether the COM session walk leaks through Go's heap (visible)
-// or only inside the COM apartment (invisible to Go's heap but visible in
-// process private bytes).
 func TestSMTCRepeatedPollMemory(t *testing.T) {
 	if os.Getenv("YOZORA_MEMLEAK_PROBE") != "1" {
 		t.Skip("opt-in via YOZORA_MEMLEAK_PROBE=1")
