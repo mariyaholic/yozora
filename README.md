@@ -38,7 +38,7 @@ Commands: `serve`, `status`, `doctor`, `setup`, `install`, `uninstall`. `install
 
 ## Source switches (Yozora.exe)
 
-Double-click **Yozora.exe** to open the control panel in its own native window (WebView2; falls back to your default browser if WebView2 is unavailable). The "Detected sources" checkboxes save on Apply — no config file editing. A second press while the panel is open simply brings the existing window to the front.
+Double-click **Yozora.exe** to open the control panel in its own native window. The "Detected sources" checkboxes save on Apply. A second press while the panel is open simply brings the existing window to the front.
 
 - New installations default to **Browser media / videos** and **Other media players** off; the music sources are on. Existing configs keep their explicit choices until you change them.
 - Disabling a source stops new detections and clears an activity that source was driving at the next rate step.
@@ -49,10 +49,10 @@ Double-click **Yozora.exe** to open the control panel in its own native window (
 When more than one detected source is playing at once, the **priority list** decides which one appears. The panel shows drag handles (or ↑/↓ buttons for keyboard users); the order saves with Apply into `sources.order` in `cadence.toml`.
 
 - The list is a total order over the five canonical sources; the top entry wins whenever it is playing.
-- If the top source stops playing or disappears, the next white-listed source takes over automatically — the hierarchy itself is stable and never reshuffles.
+- If the top source stops playing or disappears, the next white-listed source takes over automatically.
 - Files/order validation is strict: all five sources, each exactly once, canonical spelling (the API rejects anything else).
 
-The bundled Discord application ID is public, not a credential. For this local Rich Presence path, desktop Discord must be running; no Discord client secret is required. A custom application ID is supported by `discord.client_id`.
+For this local Rich Presence path, desktop Discord must be running; no Discord client secret is required.
 
 ## Card layout
 
@@ -62,26 +62,9 @@ The bundled Discord application ID is public, not a credential. For this local R
 - First button: **Listen on [service]**. A custom `buttons.label` is preserved; the legacy/default `Listen along` label becomes the service-specific label.
 - Second button: **Yozora**, using `buttons.yozora_url`.
 
-Spotify's Windows media controls expose song text but not the canonical Spotify URL. In system mode the button opens a Spotify search for title + artist; optional Spotify API mode supplies the exact track URL. Apple Music uses the resolved Apple Music track link when available and an Apple Music search before lookup completes. Music links never use an Apple Music lookup result for Spotify. Unknown sources need a genuine source-provided URL; the app does not fabricate a platform link.
-
 Browser videos use only the thumbnail the browser itself supplies through Windows media controls, and browser titles are never matched against music catalogs. YouTube pages usually expose no public thumbnail URL to this API, and Discord's servers cannot fetch the local dashboard's `127.0.0.1` art cache — so a browser card shows whatever artwork is available in the local dashboard, while its Discord presence may appear without a large image (text, timestamps, and the Yozora button still show).
 
-## Responsive polling
-
-```toml
-[sources]
-  poll_ms = 1000
-
-[presence]
-  type = "listening"
-  status_display = "name"
-  min_update_secs = 5
-  track_debounce_ms = 500
-```
-
 The Windows detector reads once at startup, then polls every second by default. Its one-slot queue retains the newest snapshot, not a stale queued one. The presence engine checks every 250 ms; the brief debounce suppresses rapid skip bursts. Discord sends remain spaced by at least five seconds, so fast detection is not a promise of an immediate Discord-visible update. Artwork can arrive as a later enriched update.
-
-`poll_ms` is read when the daemon starts; restart after changing it. Local polling is separate from `spotify.poll_secs`, which applies only to the optional network/API provider.
 
 ## Verification
 
