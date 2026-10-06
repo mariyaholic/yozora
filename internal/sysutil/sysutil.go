@@ -33,6 +33,28 @@ const (
 	runKeySubkey       = `Software\Microsoft\Windows\CurrentVersion\Run`
 )
 
+// AcquireNamedMutex creates-or-opens a named mutex and reports whether this
+// process became its initial owner. The returned release closes the handle
+// and is safe to call even when acquisition failed.
+func AcquireNamedMutex(name string) (bool, func(), error) {
+	namePtr, err := syscall.UTF16PtrFromString(name)
+	if err != nil {
+		return false, func() {}, err
+	}
+	h, _, callErr := procCreateMut.Call(0, 0, uintptr(unsafe.Pointer(namePtr)))
+	if h == 0 {
+		if errno, ok := callErr.(syscall.Errno); ok && errno != 0 {
+			return false, func() {}, fmt.Errorf("sysutil: create mutex %s: %w", name, errno)
+		}
+		return false, func() {}, fmt.Errorf("sysutil: CreateMutexW %s returned a null handle", name)
+	}
+	if callErr == syscall.ERROR_ALREADY_EXISTS {
+		procCloseHandle.Call(h)
+		return false, func() {}, nil
+	}
+	return true, func() { procCloseHandle.Call(h) }, nil
+}
+
 // AcquireSingleInstance tries to create the process mutex. Returns false
 // when another instance is running. The returned release function closes the
 // handle owned by this process.

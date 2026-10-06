@@ -12,16 +12,31 @@ import (
 	"time"
 
 	"uika-resonance/internal/config"
+	"uika-resonance/internal/sysutil"
 )
 
 // dashboardLaunchTimeout bounds waiting for a freshly spawned daemon.
 const dashboardLaunchTimeout = 25 * time.Second
+
+// launcherSingletonName marks the process currently showing the panel
+// window; a second double-click activates that window instead of stacking
+// another one.
+const launcherSingletonName = `Local\uika-resonance-control-panel`
 
 // Dashboard is the double-click entry point: it ensures the control panel is
 // available (starting the daemon when needed) and shows it in a native
 // WebView2 window, falling back to the default browser.
 func Dashboard() int {
 	hideLauncherConsole()
+	owner, release, err := sysutil.AcquireNamedMutex(launcherSingletonName)
+	if err != nil {
+		launcherNotify("Yozora", "Could not start: "+err.Error(), notifyError)
+		return 1
+	}
+	if !owner {
+		return activateRunningPanel()
+	}
+	defer release()
 	cfgPath, dataDir, _ := config.Paths()
 	if err := ensureDashboardConfig(cfgPath); err != nil {
 		launcherNotify("Yozora", "Could not prepare the settings file:\n"+err.Error(), notifyError)
