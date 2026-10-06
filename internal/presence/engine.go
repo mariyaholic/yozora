@@ -1,8 +1,5 @@
 //go:build windows
 
-// Package presence is the heart of Yozora: it arbitrates media
-// sources, renders templates, enforces Discord's update cadence and pushes
-// SET_ACTIVITY frames.
 package presence
 
 import (
@@ -24,7 +21,6 @@ import (
 	"uika-resonance/internal/template"
 )
 
-// Status is a snapshot for the dashboard and status command.
 type Status struct {
 	UpdatedAt    time.Time            `json:"updated_at"`
 	Connected    bool                 `json:"discord_connected"`
@@ -90,7 +86,7 @@ type Engine struct {
 	artGeneration    uint64
 	sentArtURL       string
 	published        *discordipc.Activity
-	publishedTrack   *player.Track // source/AppID of the last successful visible publication
+	publishedTrack   *player.Track
 	acknowledged     json.RawMessage
 }
 
@@ -102,11 +98,10 @@ func New(cfg *config.Holder, a *art.Resolver, smtcCh <-chan []smtc.Track, spotif
 	}
 }
 
-// Run drives the engine until ctx is done.
 func (e *Engine) Run(ctx context.Context) {
 	tick := time.NewTicker(250 * time.Millisecond)
 	defer tick.Stop()
-	// First snapshot so `status` works before any Discord send.
+
 	e.writeState()
 	for {
 		select {
@@ -126,7 +121,6 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 }
 
-// ingest adapts an SMTC snapshot into the unified model.
 func (e *Engine) ingest(tracks []smtc.Track) {
 	out := make([]player.Track, 0, len(tracks)+1)
 	for _, t := range tracks {
@@ -159,7 +153,6 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
-// pick arbitrates across SMTC sessions and the (optional) fresh Spotify API track.
 func (e *Engine) pick(now time.Time) *player.Track {
 	cfg := e.Cfg.Get()
 	e.mu.Lock()
@@ -223,7 +216,6 @@ func (e *Engine) step(now time.Time) {
 	}
 	e.lastActivity = now
 
-	// Debounce rapid track changes (fast Next-Next skips).
 	if identityChanged {
 		e.resolveArtAsync(*cur, cfg.Art.Prefer, id)
 		return
@@ -232,13 +224,11 @@ func (e *Engine) step(now time.Time) {
 		return
 	}
 
-	// Discord cadence: one update per min_update_secs.
 	minGap := time.Duration(cfg.Presence.MinUpdateSecs) * time.Second
 	if !e.lastSend.IsZero() && now.Sub(e.lastSend) < minGap {
 		return
 	}
 
-	// Send only when identity, artwork, visibility policy, or drift changes.
 	sameTrack := id == e.sentID
 	drift := false
 	if sameTrack && cur.Playing && !e.sentElapsedAt.IsZero() {
@@ -257,7 +247,6 @@ func (e *Engine) step(now time.Time) {
 	e.send(cur, now)
 }
 
-// identityOf keys a track pointer for change detection ("" for none).
 func identityOf(t *player.Track) string {
 	if t == nil {
 		return ""
@@ -349,7 +338,6 @@ func (e *Engine) setErr(s string) {
 	}
 }
 
-// clear removes the presence from Discord and records the handled selection.
 func (e *Engine) clear(now time.Time, identity string) {
 	e.mu.Lock()
 	if e.cleared {
@@ -387,7 +375,6 @@ func (e *Engine) clear(now time.Time, identity string) {
 	e.writeState()
 }
 
-// send builds and pushes the SET_ACTIVITY payload for a track.
 func (e *Engine) send(t *player.Track, now time.Time) {
 	cfg := e.Cfg.Get()
 	clientID := cfg.Discord.ClientID
@@ -420,8 +407,7 @@ func (e *Engine) send(t *player.Track, now time.Time) {
 	imageURL := e.lastArtURL
 	listenURL := e.lastListenURL
 	e.mu.Unlock()
-	// The album stays large; the app badge is always the small image.
-	// Loopback cache URLs are dashboard-only; Discord cannot fetch them.
+
 	assetImage := discordAssetURL(imageURL)
 	a.Assets = &discordipc.Assets{LargeImage: assetImage, LargeText: largeText, SmallImage: cfg.Discord.SmallImage, SmallText: cfg.Discord.AppName}
 	if cfg.Buttons.Enabled {
@@ -490,11 +476,7 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 			ArtURL: t.ArtURL, Thumb: t.Thumb,
 		}, prefer)
 		imageURL := lookup.ImageURL
-		// Preserve the resolved artwork for the local dashboard verbatim
-		// (including loopback SMTC thumbnails); the Discord asset stays
-		// empty for loopback art (send() re-strips it) or when the lookup
-		// failed, since DefaultURL() is itself loopback-hosted and Discord
-		// renders its own app-icon fallback for a missing large image.
+
 		dashboardArt := imageURL
 		discordArt := discordAssetURL(imageURL)
 		if imageURL == "" {
@@ -522,7 +504,6 @@ func (e *Engine) activityName(cfg *config.Config, t *player.Track) string {
 	return serviceName(t)
 }
 
-// Status snapshots the current engine state.
 func (e *Engine) Status() Status {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -554,12 +535,11 @@ func (e *Engine) Status() Status {
 	return s
 }
 
-// writeState persists the status for the `status` command.
 func (e *Engine) writeState() {
 	if e.StateDir == "" {
 		return
 	}
-	// Artwork completion and the engine can both persist a snapshot.
+
 	e.stateMu.Lock()
 	defer e.stateMu.Unlock()
 	s := e.Status()

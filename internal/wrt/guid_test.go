@@ -19,8 +19,7 @@ func TestParseGUIDRoundTrip(t *testing.T) {
 }
 
 func TestParameterizedIIDStable(t *testing.T) {
-	// The convention verified live against the Windows runtime (see probe):
-	// mixed-endian namespace, version nibble on byte 6.
+
 	sig := SigClass("Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager",
 		"cace8eac-e86e-504a-ab31-5ff8ff1bce49")
 	got := ParameterizedIID(BaseIAsyncOperation, sig)

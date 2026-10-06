@@ -254,7 +254,7 @@ func TestLoopbackArtworkStaysDashboardOnly(t *testing.T) {
 		now := time.Now()
 		track := player.Track{Source: "browser", Title: "fixture video", Artist: "fixture channel", Playing: true, LastUpdated: now}
 		engine, resolver := newArtworkTestEngine(t, track)
-		engine.Cfg.Get().Sources.Blocked = nil // the toggle as a user enables it
+		engine.Cfg.Get().Sources.Blocked = nil
 		client := engine.ipc.(*recordingActivityClient)
 		engine.step(now)
 		request := nextArtworkRequest(t, resolver, track.Title)
@@ -272,8 +272,7 @@ func TestLoopbackArtworkStaysDashboardOnly(t *testing.T) {
 		if got := engine.Status().ArtURL; got != local.ImageURL {
 			t.Fatalf("dashboard artwork lost: %q", got)
 		}
-		// Local artwork must not schedule redundant Discord updates: the
-		// server-side card can never gain an image it cannot fetch.
+
 		engine.step(now.Add(20 * time.Second))
 		engine.step(now.Add(40 * time.Second))
 		if len(client.activities) != 1 {
@@ -461,7 +460,6 @@ func TestPausedVisibilityPolicyChangeHonorsRateGap(t *testing.T) {
 					t.Fatal("steady visibility policy was not idempotent")
 				}
 
-				// Reversing the policy must remain retriable with unchanged metadata.
 				cfg.Presence.PausedMode = modes.from
 				client.err = errors.New("synthetic visibility rejection")
 				failedAt := changedAt.Add(3 * gap)
@@ -477,7 +475,7 @@ func TestPausedVisibilityPolicyChangeHonorsRateGap(t *testing.T) {
 					t.Fatal("failed policy publication did not preserve error and settled metadata")
 				}
 				client.err = nil
-				engine.ipc = client // Restore only the mock connection after failure.
+				engine.ipc = client
 				retriedAt := failedAt.Add(250 * time.Millisecond)
 				engine.step(retriedAt)
 				if len(client.activities) != 4 || (client.activities[3] == nil) != initiallyCleared || engine.cleared != initiallyCleared || !engine.Status().LastSend.Equal(retriedAt) || engine.Status().Published != client.activities[3] || engine.Status().LastErr != "" {
@@ -520,7 +518,7 @@ func TestFailedHiddenPauseClearRemainsRetriable(t *testing.T) {
 	}
 
 	client.err = nil
-	engine.ipc = client // Restore a mock connection after the failure disconnects it.
+	engine.ipc = client
 	retriedAt := now.Add(6250 * time.Millisecond)
 	engine.step(retriedAt)
 	if len(client.activities) != 3 || client.activities[2] != nil || !engine.cleared || !engine.lastSend.Equal(retriedAt) || engine.sentID != track.IdentityPlaying() || engine.Status().LastErr != "" {
@@ -554,7 +552,7 @@ func TestRevokedPublishedSourceClearsAtRateGateAndCanOptBackIn(t *testing.T) {
 			if len(client.activities) != 1 {
 				t.Fatal("fixture not published")
 			}
-			// The session disappears before the user revokes it: track the actual publication.
+
 			e.lastSMTCSessions = nil
 			e.step(now.Add(2 * time.Second))
 			cfg.Sources.Blocked = []string{filter}
@@ -600,7 +598,7 @@ func TestDisabledBrowserFallsBackToMusicWithoutClear(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "fixture.toml")
 	cfg := config.Defaults()
 	cfg.Sources.Blocked = []string{}
-	cfg.Sources.Order = []string{"browser", "spotify"} // browser first so the fixture starts on the video
+	cfg.Sources.Order = []string{"browser", "spotify"}
 	if err := config.Save(cfg, path); err != nil {
 		t.Fatal(err)
 	}

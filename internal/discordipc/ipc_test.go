@@ -14,7 +14,6 @@ import (
 	"time"
 )
 
-// mockDiscord implements the server side of the IPC protocol over net.Pipe.
 type mockDiscord struct {
 	t                io.ReadWriteCloser
 	gotActivity      chan Activity
@@ -183,7 +182,6 @@ func TestClientHandshakeAndSetActivity(t *testing.T) {
 	c := NewClient(b, "123456789012345678")
 	defer c.Close()
 
-	// Handshake happens on Connect; for NewClient simulate it.
 	if err := c.handshake(); err != nil {
 		t.Fatalf("handshake: %v", err)
 	}

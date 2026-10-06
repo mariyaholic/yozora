@@ -1,7 +1,5 @@
 //go:build windows
 
-// Package smtc reads system media sessions on Windows through the
-// GlobalSystemMediaTransportControls WinRT API (raw COM, no dependencies).
 package smtc
 
 import (
@@ -33,7 +31,6 @@ const (
 	iidRASWCT       = "cc254827-4b3d-438f-9232-10c76bc7e038"
 )
 
-// Playback status enum values (GlobalSystemMediaTransportControlsSessionPlaybackStatus).
 const (
 	StatusClosed = 0
 	StatusOpened = 1
@@ -43,7 +40,6 @@ const (
 	StatusPaused = 5
 )
 
-// Computed parameterized IIDs (lazily built at first use).
 var (
 	iidAsyncOpManager = sync.OnceValue(func() *wrt.GUID {
 		return wrt.AsyncOperationIID(wrt.SigClass("Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager", iidManager))
@@ -62,7 +58,6 @@ var (
 	})
 )
 
-// Track is a snapshot of one media session.
 type Track struct {
 	AppID       string
 	Title       string
@@ -74,15 +69,11 @@ type Track struct {
 	Playing     bool
 	Status      int32
 
-	// PositionSec is the playback position as of LastUpdated (when playing,
-	// extrapolate with time since LastUpdated).
 	PositionSec float64
 	StartSec    float64
 	DurationSec float64
 	LastUpdated time.Time
 
-	// Thumb, when non-nil, reads the session's artwork exactly once and
-	// releases the underlying COM reference. Returns image bytes.
 	Thumb func() ([]byte, error)
 }
 
@@ -103,13 +94,10 @@ func (t Track) StatusName() string {
 	}
 }
 
-// Manager wraps the SMTC session manager bound to one locked OS thread.
 type Manager struct {
 	mgr *wrt.Object
 }
 
-// Connect initializes COM (MTA) on the calling thread and requests the global
-// session manager.
 func Connect() (*Manager, error) {
 	runtime.LockOSThread()
 	if err := wrt.ComInit(); err != nil {
@@ -120,7 +108,7 @@ func Connect() (*Manager, error) {
 		return nil, err
 	}
 	defer statics.Release()
-	op, err := wrt.CallAsync(statics, 6 /*RequestAsync*/, 5*time.Second)
+	op, err := wrt.CallAsync(statics, 6, 5*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("smtc: RequestAsync: %w", err)
 	}
@@ -142,8 +130,6 @@ func (m *Manager) Close() {
 	}
 }
 
-// Watcher polls the manager on a dedicated locked thread and publishes the
-// newest session snapshot on a single-slot channel.
 type Watcher struct {
 	Interval time.Duration
 	Out      chan []Track
@@ -163,7 +149,7 @@ func publishLatest(out chan []Track, tracks []Track) {
 		return
 	default:
 	}
-	// There is one producer. Evict a pending old snapshot, not the new one.
+
 	select {
 	case <-out:
 	default:
@@ -174,7 +160,6 @@ func publishLatest(out chan []Track, tracks []Track) {
 	}
 }
 
-// Run blocks until ctx is canceled. It reconnects on failure.
 func (w *Watcher) Run(ctx context.Context) {
 	runtime.LockOSThread()
 	for {
@@ -200,13 +185,13 @@ func (w *Watcher) Run(ctx context.Context) {
 				if ctx.Err() != nil {
 					return
 				}
-				// Read once immediately; subsequent snapshots follow the poll tick.
+
 				tracks, err := m.Sessions()
 				if err != nil {
 					if w.onErr != nil {
 						w.onErr(err)
 					}
-					return // reconnect
+					return
 				}
 				publishLatest(w.Out, tracks)
 				select {
@@ -224,11 +209,9 @@ func (w *Watcher) Run(ctx context.Context) {
 	}
 }
 
-// ReadThumbnail reads a RandomAccessStreamReference into bytes.
-// Safe to call from any goroutine that has been COM-initialized (MTA).
 func ReadThumbnail(ref *wrt.Object) ([]byte, error) {
 	_ = wrt.ComInit()
-	op, err := wrt.CallAsync(ref, 6 /*OpenReadAsync*/, 5*time.Second)
+	op, err := wrt.CallAsync(ref, 6, 5*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("smtc thumb: open: %w", err)
 	}
@@ -249,12 +232,12 @@ func ReadThumbnail(ref *wrt.Object) ([]byte, error) {
 	}
 	defer ras.Release()
 
-	size, _ := wrt.CallU64Getter(ras, 6 /*get_Size*/)
+	size, _ := wrt.CallU64Getter(ras, 6)
 	if size == 0 || size > 16<<20 {
 		return nil, fmt.Errorf("smtc thumb: bad size %d", size)
 	}
 	var inRaw unsafe.Pointer
-	if _, err := wrt.VtCall(ras, 8 /*GetInputStreamAt*/, 0, uintptr(unsafe.Pointer(&inRaw))); err != nil || inRaw == nil {
+	if _, err := wrt.VtCall(ras, 8, 0, uintptr(unsafe.Pointer(&inRaw))); err != nil || inRaw == nil {
 		return nil, fmt.Errorf("smtc thumb: input stream: %w", err)
 	}
 	inStream := wrt.NewObject(inRaw)
@@ -265,13 +248,13 @@ func ReadThumbnail(ref *wrt.Object) ([]byte, error) {
 		return nil, err
 	}
 	var rdrRaw unsafe.Pointer
-	if _, err := wrt.VtCall(factory, 6 /*CreateDataReader*/, inStream.RawPtr(), uintptr(unsafe.Pointer(&rdrRaw))); err != nil || rdrRaw == nil {
+	if _, err := wrt.VtCall(factory, 6, inStream.RawPtr(), uintptr(unsafe.Pointer(&rdrRaw))); err != nil || rdrRaw == nil {
 		return nil, fmt.Errorf("smtc thumb: CreateDataReader: %w", err)
 	}
 	reader := wrt.NewObject(rdrRaw)
 	defer reader.Release()
 
-	op2, err := wrt.CallAsyncObj(reader, 29 /*LoadAsync(uint32)*/, uintptr(size), 5*time.Second)
+	op2, err := wrt.CallAsyncObj(reader, 29, uintptr(size), 5*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("smtc thumb: load: %w", err)
 	}
@@ -284,7 +267,7 @@ func ReadThumbnail(ref *wrt.Object) ([]byte, error) {
 		return nil, fmt.Errorf("smtc thumb: bad loaded %d", loaded)
 	}
 	buf := make([]byte, loaded)
-	if _, err := wrt.VtCall(reader, 14 /*ReadBytes*/, uintptr(loaded), uintptr(unsafe.Pointer(&buf[0]))); err != nil {
+	if _, err := wrt.VtCall(reader, 14, uintptr(loaded), uintptr(unsafe.Pointer(&buf[0]))); err != nil {
 		return nil, fmt.Errorf("smtc thumb: read: %w", err)
 	}
 	return buf, nil
@@ -303,7 +286,6 @@ func dataReaderFactory() (*wrt.Object, error) {
 	return rdrFac, rdrFacErr
 }
 
-// Classify maps an SMTC source app id to a canonical source key.
 func Classify(appID string) string {
 	a := strings.ToLower(appID)
 	switch {
@@ -321,7 +303,6 @@ func Classify(appID string) string {
 	}
 }
 
-// FriendlyName gives a human label for a session (source key wins).
 func FriendlyName(appID string) string {
 	switch Classify(appID) {
 	case "applemusic":
@@ -338,66 +319,117 @@ func FriendlyName(appID string) string {
 	}
 }
 
-// Sessions returns a snapshot of all current media sessions.
-func (m *Manager) Sessions() ([]Track, error) {
+func (m *Manager) eachSession(fn func(i uint32, sess *wrt.Object) bool) error {
 	if m == nil || m.mgr == nil {
-		return nil, fmt.Errorf("smtc: not connected")
+		return fmt.Errorf("smtc: not connected")
 	}
-	vec, err := wrt.CallObjectGetter(m.mgr, 7 /*GetSessions*/)
+	vec, err := wrt.CallObjectGetter(m.mgr, 7)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer vec.Release()
 
 	views, err := vec.QueryInterface(iidVectorSession())
 	if err != nil {
-		return nil, fmt.Errorf("smtc: QI IVectorView<Session>: %w", err)
+		return fmt.Errorf("smtc: QI IVectorView<Session>: %w", err)
 	}
 	defer views.Release()
 
-	n, err := wrt.CallU32Getter(views, 7 /*get_Size*/)
+	n, err := wrt.CallU32Getter(views, 7)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	tracks := make([]Track, 0, n)
 	for i := uint32(0); i < n; i++ {
 		var raw unsafe.Pointer
-		if _, err := wrt.VtCall(views, 6 /*GetAt*/, uintptr(i), uintptr(unsafe.Pointer(&raw))); err != nil || raw == nil {
+		if _, err := wrt.VtCall(views, 6, uintptr(i), uintptr(unsafe.Pointer(&raw))); err != nil || raw == nil {
 			continue
 		}
 		sess := wrt.NewObject(raw)
+		next := fn(i, sess)
+		sess.Release()
+		if !next {
+			break
+		}
+	}
+	return nil
+}
+
+func (m *Manager) Sessions() ([]Track, error) {
+	var tracks []Track
+	err := m.eachSession(func(i uint32, sess *wrt.Object) bool {
 		if tr, err := m.session(sess); err == nil {
 			tracks = append(tracks, tr)
 		} else {
-			sess.Release()
 			log.Printf("smtc: session %d: %v", i, err)
 		}
-	}
-	return tracks, nil
+		return true
+	})
+	return tracks, err
 }
 
-// session reads one media session into a Track.
+func (m *Manager) thumbnail(appID string) ([]byte, error) {
+	var data []byte
+	found := false
+	err := m.eachSession(func(_ uint32, sess *wrt.Object) bool {
+		id, err := wrt.CallStringGetter(sess, 6)
+		if err != nil || id != appID {
+			return true
+		}
+		found = true
+		data, err = readSessionThumbnail(sess)
+		return false
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, fmt.Errorf("smtc thumb: session %q gone", appID)
+	}
+	if len(data) == 0 {
+		return nil, fmt.Errorf("smtc thumb: empty")
+	}
+	return data, nil
+}
+
+func readSessionThumbnail(sess *wrt.Object) ([]byte, error) {
+	op, err := wrt.CallAsync(sess, 7, 3*time.Second)
+	if err != nil {
+		return nil, fmt.Errorf("media properties: %w", err)
+	}
+	defer op.Release()
+	var mpRaw unsafe.Pointer
+	if err := wrt.GetResults(op, iidAsyncOpMediaProps(), unsafe.Pointer(&mpRaw)); err != nil {
+		return nil, fmt.Errorf("media properties results: %w", err)
+	}
+	mp := wrt.NewObject(mpRaw)
+	defer mp.Release()
+	ref, err := wrt.CallObjectGetter(mp, 15)
+	if err != nil {
+		return nil, err
+	}
+	defer ref.Release()
+	return ReadThumbnail(ref)
+}
+
 func (m *Manager) session(sess *wrt.Object) (Track, error) {
-	appID, err := wrt.CallStringGetter(sess, 6 /*get_SourceAppUserModelId*/)
+	appID, err := wrt.CallStringGetter(sess, 6)
 	if err != nil {
 		return Track{}, err
 	}
 	t := Track{AppID: appID}
 
-	// Playback status.
-	if pb, err := wrt.CallObjectGetter(sess, 9 /*GetPlaybackInfo*/); err == nil {
-		t.Status, _ = wrt.CallI32Getter(pb, 7 /*get_PlaybackStatus*/)
+	if pb, err := wrt.CallObjectGetter(sess, 9); err == nil {
+		t.Status, _ = wrt.CallI32Getter(pb, 7)
 		pb.Release()
 		t.Playing = t.Status == StatusPlay
 	}
 
-	// Timeline (position/duration). These are classes with getter vtables.
-	if tp, err := wrt.CallObjectGetter(sess, 8 /*GetTimelineProperties*/); err == nil {
+	if tp, err := wrt.CallObjectGetter(sess, 8); err == nil {
 		defer tp.Release()
-		start, _ := wrt.CallI64Getter(tp, 6 /*StartTime*/)
-		end, _ := wrt.CallI64Getter(tp, 7 /*EndTime*/)
-		pos, _ := wrt.CallI64Getter(tp, 10 /*Position*/)
-		lu, _ := wrt.CallI64Getter(tp, 11 /*LastUpdatedTime*/)
+		start, _ := wrt.CallI64Getter(tp, 6)
+		end, _ := wrt.CallI64Getter(tp, 7)
+		pos, _ := wrt.CallI64Getter(tp, 10)
+		lu, _ := wrt.CallI64Getter(tp, 11)
 		t.StartSec = ticksToSecs(start)
 		t.DurationSec = ticksToSecs(end) - t.StartSec
 		if t.DurationSec < 0 {
@@ -407,8 +439,7 @@ func (m *Manager) session(sess *wrt.Object) (Track, error) {
 		t.LastUpdated = filetimeToTime(lu)
 	}
 
-	// Media properties (async in the current API).
-	op, err := wrt.CallAsync(sess, 7 /*TryGetMediaPropertiesAsync*/, 3*time.Second)
+	op, err := wrt.CallAsync(sess, 7, 3*time.Second)
 	if err != nil {
 		return t, fmt.Errorf("media properties: %w", err)
 	}
@@ -420,24 +451,17 @@ func (m *Manager) session(sess *wrt.Object) (Track, error) {
 	mp := wrt.NewObject(mpRaw)
 	defer mp.Release()
 
-	t.Title, _ = wrt.CallStringGetter(mp, 6 /*Title*/)
-	t.Subtitle, _ = wrt.CallStringGetter(mp, 7 /*Subtitle*/)
-	t.AlbumArtist, _ = wrt.CallStringGetter(mp, 8 /*AlbumArtist*/)
-	t.Artist, _ = wrt.CallStringGetter(mp, 9 /*Artist*/)
-	t.AlbumTitle, _ = wrt.CallStringGetter(mp, 10 /*AlbumTitle*/)
-	t.TrackNumber, _ = wrt.CallI32Getter(mp, 11 /*TrackNumber*/)
+	t.Title, _ = wrt.CallStringGetter(mp, 6)
+	t.Subtitle, _ = wrt.CallStringGetter(mp, 7)
+	t.AlbumArtist, _ = wrt.CallStringGetter(mp, 8)
+	t.Artist, _ = wrt.CallStringGetter(mp, 9)
+	t.AlbumTitle, _ = wrt.CallStringGetter(mp, 10)
+	t.TrackNumber, _ = wrt.CallI32Getter(mp, 11)
 
-	if ref, err := wrt.CallObjectGetter(mp, 15 /*Thumbnail*/); err == nil {
-		t.Thumb = sync.OnceValues(func() ([]byte, error) {
-			defer ref.Release()
-			return ReadThumbnail(ref)
-		})
-	}
+	t.Thumb = sync.OnceValues(func() ([]byte, error) { return m.thumbnail(appID) })
 	return t, nil
 }
 
-// Diagnose probes which parameterized-IID convention the live runtime
-// accepts for IAsyncOperation<GlobalSystemMediaTransportControlsSessionManager>.
 func Diagnose() {
 	_ = wrt.ComInit()
 	statics, err := wrt.GetActivationFactory(classManager, wrt.MustGUID(iidStatics))
@@ -466,7 +490,7 @@ func Diagnose() {
 func ticksToSecs(ticks int64) float64 { return float64(ticks) / 1e7 }
 
 func filetimeToTime(v int64) time.Time {
-	// Windows DateTime: 100ns ticks since 1601-01-01 UTC.
+
 	const epochDelta = 116444736000000000
 	if v <= epochDelta {
 		return time.Time{}

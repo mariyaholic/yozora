@@ -10,10 +10,6 @@ import (
 	"uika-resonance/internal/config"
 )
 
-// The dashboard must expose the saved source priority (drag order) exactly
-// like the on/off switches, with identical strictness. Defaults set the
-// canonical order explicitly so reshuffles of Defaults() never silently
-// rewrite a user's list.
 func TestSourcesOrderRoundTrip(t *testing.T) {
 	h, cfg := fixtureHandlerForOrderTest(t)
 
@@ -38,7 +34,6 @@ func TestSourcesOrderRoundTrip(t *testing.T) {
 	}
 	blockedBefore := blockedCfg.Sources.Blocked
 
-	// Reorder: browser to the front, then save.
 	newOrder := []string{"browser", "spotify", "applemusic", "spotifyapi", "generic"}
 	w = request(h, "POST", "/api/sources", `{"order":["browser","spotify","applemusic","spotifyapi","generic"]}`, true)
 	if w.Code != 200 {
@@ -57,7 +52,7 @@ func TestSourcesOrderRoundTrip(t *testing.T) {
 	if !reflect.DeepEqual(loaded.Sources.Order, newOrder) {
 		t.Fatalf("saved order = %v, want %v", loaded.Sources.Order, newOrder)
 	}
-	// Order-only POST must leave Blocked untouched, and vice versa.
+
 	w = request(h, "POST", "/api/sources", `{"order":["browser","spotify","applemusic","spotifyapi","generic"]}`, true)
 	if w.Code != 200 {
 		t.Fatalf("POST order status=%d body=%s", w.Code, w.Body.String())
@@ -93,10 +88,10 @@ func TestSourcesOrderRejectsInvalidLists(t *testing.T) {
 	}
 	for _, body := range []string{
 		`{"order":[]}`,
-		`{"order":["browser","browser"]}`,         // duplicates
-		`{"order":["browser","spotify","bogus"]}`, // unknown source
-		`{"order":"browser"}`,                     // wrong type
-		`{"order":["BROWSER","spotify","applemusic","spotifyapi","generic"]}`, // canonical spelling required
+		`{"order":["browser","browser"]}`,
+		`{"order":["browser","spotify","bogus"]}`,
+		`{"order":"browser"}`,
+		`{"order":["BROWSER","spotify","applemusic","spotifyapi","generic"]}`,
 		`{"order":null}`,
 	} {
 		w := request(h, "POST", "/api/sources", body, true)
@@ -118,8 +113,6 @@ func TestSourcesOrderRejectsInvalidLists(t *testing.T) {
 	}
 }
 
-// fixtureHandlerForOrderTest mirrors fixtureHandler but with every source
-// enabled so order assertions are independent of block state.
 func fixtureHandlerForOrderTest(t *testing.T) (http.Handler, *config.Holder) {
 	t.Helper()
 	path := t.TempDir() + "/order.toml"

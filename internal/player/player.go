@@ -1,7 +1,5 @@
 //go:build windows
 
-// Package player defines the unified now-playing model and source
-// arbitration across SMTC sessions and the optional Spotify Web API.
 package player
 
 import (
@@ -9,11 +7,10 @@ import (
 	"time"
 )
 
-// Track is one now-playing item from any source.
 type Track struct {
-	Source      string // applemusic|spotify|spotifyapi|browser|generic
+	Source      string
 	AppID       string
-	Player      string // friendly player label
+	Player      string
 	Title       string
 	Artist      string
 	Album       string
@@ -23,13 +20,12 @@ type Track struct {
 	DurationSec float64
 	LastUpdated time.Time
 
-	ArtURL    string // direct CDN URL when the source provides one
-	ListenURL string // button target when known
+	ArtURL    string
+	ListenURL string
 
-	Thumb func() ([]byte, error) // one-shot artwork reader (SMTC), may be nil
+	Thumb func() ([]byte, error)
 }
 
-// ElapsedSec estimates the playback position right now.
 func (t Track) ElapsedSec(now time.Time) float64 {
 	if t.Playing && !t.LastUpdated.IsZero() {
 		d := now.Sub(t.LastUpdated).Seconds()
@@ -41,12 +37,10 @@ func (t Track) ElapsedSec(now time.Time) float64 {
 	return t.PositionSec
 }
 
-// Identity identifies the track for change detection.
 func (t Track) Identity() string {
 	return strings.Join([]string{t.Source, t.Title, t.Artist, t.Album}, "\x00")
 }
 
-// IdentityPlaying includes the play/pause state.
 func (t Track) IdentityPlaying() string {
 	s := "p"
 	if t.Playing {
@@ -55,7 +49,6 @@ func (t Track) IdentityPlaying() string {
 	return t.Identity() + "\x00" + s
 }
 
-// IsBlocked applies canonical-source equality and custom AppID substring filters.
 func IsBlocked(t Track, blocked []string) bool {
 	app := strings.ToLower(t.AppID)
 	source := strings.ToLower(strings.TrimSpace(t.Source))
@@ -68,8 +61,6 @@ func IsBlocked(t Track, blocked []string) bool {
 	return false
 }
 
-// Arbitrate picks the session to show: playing sessions first, then paused,
-// by configured source priority; blocked sources are dropped.
 func Arbitrate(tracks []Track, order []string, blocked []string) *Track {
 	prio := func(src string) int {
 		for i, s := range order {
