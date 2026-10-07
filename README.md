@@ -2,7 +2,7 @@
 
 _Made with love by [Maria](https://github.com/mariyaholic)._
 
-A Windows music detector that publishes Discord Rich Presence. This repository contains the standalone Go module; internal config and executable names remain `uika-resonance` for compatibility.
+A Windows music detector that publishes Discord Rich Presence. This repository contains the standalone Go module; internal config and executable names remain `uika-resonance` for compatibility. Yozora competes with existing Rich Presence applications by completely culling every single negligible element that causes RAM and CPU bloat; on a good runtime it can go to as low as 10MB of RAM with barely any CPU seconds.
 
 ## Repository
 
