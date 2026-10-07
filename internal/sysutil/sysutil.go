@@ -31,7 +31,10 @@ const (
 	runKeySubkey       = `Software\Microsoft\Windows\CurrentVersion\Run`
 )
 
-func AcquireNamedMutex(name string) (bool, func(), error) {
+// acquireNamedMutex owns a named mutex for the life of the process. The returned
+// release func closes the handle; ok is false when another owner already holds
+// the name, which is a normal outcome rather than an error.
+func acquireNamedMutex(name string) (bool, func(), error) {
 	namePtr, err := syscall.UTF16PtrFromString(name)
 	if err != nil {
 		return false, func() {}, err
@@ -50,24 +53,11 @@ func AcquireNamedMutex(name string) (bool, func(), error) {
 	return true, func() { procCloseHandle.Call(h) }, nil
 }
 
-func AcquireSingleInstance() (bool, func(), error) {
-	name, err := syscall.UTF16PtrFromString(singleInstanceName)
-	if err != nil {
-		return false, func() {}, err
-	}
-	h, _, callErr := procCreateMut.Call(0, 0, uintptr(unsafe.Pointer(name)))
-	if h == 0 {
-		if errno, ok := callErr.(syscall.Errno); ok && errno != 0 {
-			return false, func() {}, fmt.Errorf("sysutil: create mutex: %w", errno)
-		}
-		return false, func() {}, fmt.Errorf("sysutil: CreateMutexW returned a null handle")
-	}
-	if callErr == syscall.ERROR_ALREADY_EXISTS {
-		procCloseHandle.Call(h)
-		return false, func() {}, nil
-	}
-	return true, func() { procCloseHandle.Call(h) }, nil
-}
+// AcquireNamedMutex attempts to become the sole owner of the named mutex.
+func AcquireNamedMutex(name string) (bool, func(), error) { return acquireNamedMutex(name) }
+
+// AcquireSingleInstance acquires this package's own single-instance mutex.
+func AcquireSingleInstance() (bool, func(), error) { return acquireNamedMutex(singleInstanceName) }
 
 func runKeyPath() (uintptr, error) {
 	var h uintptr

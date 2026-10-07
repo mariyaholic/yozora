@@ -27,14 +27,13 @@ Requires Windows and Go 1.27.1 or newer, matching `go.mod`.
 ```sh
 go mod download
 go test ./... -count=1
-go build -o uika-resonance.exe .
 go build -ldflags=-H=windowsgui -o Yozora.exe ./cmd/yozora
-./uika-resonance.exe serve
+./Yozora.exe serve
 ```
 
 Commands: `serve`, `status`, `doctor`, `setup`, `install`, `uninstall`. `install` opts into Windows login startup; building and serving do not install autostart.
 
-`Yozora.exe` with no arguments opens the control panel (below); with any argument it behaves like `uika-resonance.exe` (`Yozora.exe status`, `Yozora.exe serve`, ...). The `-H=windowsgui` linker flag keeps double-click launches free of a console window; the executable's icon comes from `cmd/yozora/rsrc_windows_amd64.syso`, generated from `assets/yozora.ico` with `go-winres simply --arch amd64 --icon ../../assets/yozora.ico --manifest gui`.
+`Yozora.exe` with no arguments opens the control panel (below); with any argument it acts as the command line (`Yozora.exe status`, `Yozora.exe serve`, ...). It is the only executable: the control panel starts the background daemon by re-launching itself with `serve`. The `-H=windowsgui` linker flag keeps double-click launches free of a console window; the executable's icon comes from `cmd/yozora/rsrc_windows_amd64.syso`, generated from `assets/yozora.ico` with `go-winres simply --arch amd64 --icon ../../assets/yozora.ico --manifest gui`.
 
 ## Source switches (Yozora.exe)
 
@@ -73,3 +72,11 @@ Private Windows named-pipe regression tests exercise simultaneous read/write usi
 ## Release
 
 Prebuilt Windows binaries are not attached yet; build from source with the commands above. Tag a release with `git tag v0.1.0 && git push origin v0.1.0`.
+
+## Installing (no terminal needed)
+
+Download `Yozora-Setup.exe` from the latest release and run it. It installs for your user only (no admin prompt) and adds a Start menu entry. Open Yozora, and tick "Start Yozora when I sign in to Windows" in the panel if you want it to run on its own. A portable `Yozora.exe` is also attached to each release.
+
+Windows may show a SmartScreen warning because the build is not code-signed yet: choose "More info", then "Run anyway". Checksums are in `SHA256SUMS.txt`.
+
+Maintainers: pushing a tag like `v1.0.0` builds the installer and publishes the release (`.github/workflows/release.yml`).

@@ -5,3 +5,6 @@
 dashboard.json
 launcher.log
 state.json
+
+dist/
+*.exe~

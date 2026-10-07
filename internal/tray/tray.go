@@ -5,6 +5,7 @@ package tray
 import (
 	"fmt"
 	"runtime"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -14,26 +15,24 @@ var (
 	modShell    = syscall.NewLazyDLL("shell32.dll")
 	modKernel32 = syscall.NewLazyDLL("kernel32.dll")
 
-	procRegisterClassExW  = modUser32.NewProc("RegisterClassExW")
-	procCreateWindowExW   = modUser32.NewProc("CreateWindowExW")
-	procDefWindowProcW    = modUser32.NewProc("DefWindowProcW")
-	procDestroyWindow     = modUser32.NewProc("DestroyWindow")
-	procPostQuitMessage   = modUser32.NewProc("PostQuitMessage")
-	procLoadImageW        = modUser32.NewProc("LoadImageW")
-	procCreatePopupMenuW  = modUser32.NewProc("CreatePopupMenu")
-	procAppendMenuW       = modUser32.NewProc("AppendMenuW")
-	procTrackPopupMenuEx  = modUser32.NewProc("TrackPopupMenuEx")
-	procDestroyMenu       = modUser32.NewProc("DestroyMenu")
-	procSetForeground     = modUser32.NewProc("SetForegroundWindow")
-	procGetCursorPos      = modUser32.NewProc("GetCursorPos")
-	procGetModuleHandleW  = modKernel32.NewProc("GetModuleHandleW")
-	procShellNotifyIconW  = modShell.NewProc("Shell_NotifyIconW")
-	procPostMessageW      = modUser32.NewProc("PostMessageW")
-	procGetMessageW       = modUser32.NewProc("GetMessageW")
-	procTranslateMessage  = modUser32.NewProc("TranslateMessage")
-	procDispatchMessageW  = modUser32.NewProc("DispatchMessageW")
-	procSetWindowLongPtrW = modUser32.NewProc("SetWindowLongPtrW")
-	procGetWindowLongPtrW = modUser32.NewProc("GetWindowLongPtrW")
+	procRegisterClassExW = modUser32.NewProc("RegisterClassExW")
+	procCreateWindowExW  = modUser32.NewProc("CreateWindowExW")
+	procDefWindowProcW   = modUser32.NewProc("DefWindowProcW")
+	procDestroyWindow    = modUser32.NewProc("DestroyWindow")
+	procPostQuitMessage  = modUser32.NewProc("PostQuitMessage")
+	procLoadImageW       = modUser32.NewProc("LoadImageW")
+	procCreatePopupMenuW = modUser32.NewProc("CreatePopupMenu")
+	procAppendMenuW      = modUser32.NewProc("AppendMenuW")
+	procTrackPopupMenuEx = modUser32.NewProc("TrackPopupMenuEx")
+	procDestroyMenu      = modUser32.NewProc("DestroyMenu")
+	procSetForeground    = modUser32.NewProc("SetForegroundWindow")
+	procGetCursorPos     = modUser32.NewProc("GetCursorPos")
+	procGetModuleHandleW = modKernel32.NewProc("GetModuleHandleW")
+	procShellNotifyIconW = modShell.NewProc("Shell_NotifyIconW")
+	procPostMessageW     = modUser32.NewProc("PostMessageW")
+	procGetMessageW      = modUser32.NewProc("GetMessageW")
+	procTranslateMessage = modUser32.NewProc("TranslateMessage")
+	procDispatchMessageW = modUser32.NewProc("DispatchMessageW")
 )
 
 const (
@@ -327,7 +326,7 @@ func createHostWindow(p *Panel) uintptr {
 		return 0
 	}
 
-	procSetWindowLongPtrW.Call(hwnd, uintptr(gwlpUserDataAsInt()), uintptr(unsafe.Pointer(p)))
+	panels.Store(hwnd, p)
 	return hwnd
 }
 
@@ -354,6 +353,7 @@ func trayWndProc(hwnd, msg, wp, lp uintptr) uintptr {
 		procDestroyWindow.Call(hwnd)
 		return 0
 	case wmDestroy:
+		panels.Delete(hwnd)
 		procPostQuitMessage.Call(0)
 		if p != nil && p.hostHwnd == hwnd {
 			p.hostHwnd = 0
@@ -364,17 +364,17 @@ func trayWndProc(hwnd, msg, wp, lp uintptr) uintptr {
 	return r
 }
 
+// panels maps a host window handle to its panel. Storing the *Panel in
+// GWLP_USERDATA would need a uintptr -> unsafe.Pointer round-trip that the GC
+// cannot see and checkptr rejects; a Go-side map keeps the same lookup safely.
+var panels sync.Map // map[uintptr]*Panel
+
 func panelOf(hwnd uintptr) *Panel {
-	val, _, _ := procGetWindowLongPtrW.Call(hwnd, uintptr(gwlpUserDataAsInt()))
-	if val == 0 {
-		return nil
+	if p, ok := panels.Load(hwnd); ok {
+		return p.(*Panel)
 	}
-	return (*Panel)(unsafe.Pointer(val))
+	return nil
 }
-
-const gwlpUserData = -21
-
-func gwlpUserDataAsInt() int32 { return gwlpUserData }
 
 type wndClassExW struct {
 	cbSize     uint32

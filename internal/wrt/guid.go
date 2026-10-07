@@ -59,30 +59,40 @@ var pinterfaceNamespaceMixed = [16]byte{
 	0xab, 0xae, 0x87, 0x8b, 0x1e, 0x16, 0xad, 0xee,
 }
 
+// ParameterizedIID returns the canonical parameterized IID for a base GUID and
+// argument signature: the mixed namespace at version index 6. The other three
+// variants exist only for Diagnose to probe on builds that disagree, so the hot
+// path no longer hashes them just to discard three.
 func ParameterizedIID(baseGUID, argSignature string) string {
-	return ParameterizedIIDVariants(baseGUID, argSignature)[0]
+	return hashParameterizedIID(pinterfaceNamespaceMixed, 6, parameterizedSignature(baseGUID, argSignature))
 }
 
 func ParameterizedIIDVariants(baseGUID, argSignature string) []string {
-	sig := fmt.Sprintf("pinterface({%s};%s)", strings.ToLower(baseGUID), argSignature)
-	mk := func(ns [16]byte, verIdx int) string {
-		h := sha1.New()
-		h.Write(ns[:])
-		h.Write([]byte(sig))
-		b := h.Sum(nil)[:16]
-		b[verIdx] = (b[verIdx] & 0x0f) | 0x50
-		b[8] = (b[8] & 0x3f) | 0x80
-		return fmt.Sprintf("%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-			b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
-			b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15])
-	}
-
+	sig := parameterizedSignature(baseGUID, argSignature)
 	return []string{
-		mk(pinterfaceNamespaceMixed, 6),
-		mk(pinterfaceNamespace, 6),
-		mk(pinterfaceNamespaceMixed, 7),
-		mk(pinterfaceNamespace, 7),
+		hashParameterizedIID(pinterfaceNamespaceMixed, 6, sig),
+		hashParameterizedIID(pinterfaceNamespace, 6, sig),
+		hashParameterizedIID(pinterfaceNamespaceMixed, 7, sig),
+		hashParameterizedIID(pinterfaceNamespace, 7, sig),
 	}
+}
+
+func parameterizedSignature(baseGUID, argSignature string) string {
+	return fmt.Sprintf("pinterface({%s};%s)", strings.ToLower(baseGUID), argSignature)
+}
+
+// hashParameterizedIID derives one parameterized IID by hashing a namespace and
+// version index together with the signature, per the WinRT pinterface rule.
+func hashParameterizedIID(ns [16]byte, verIdx int, sig string) string {
+	h := sha1.New()
+	h.Write(ns[:])
+	h.Write([]byte(sig))
+	b := h.Sum(nil)[:16]
+	b[verIdx] = (b[verIdx] & 0x0f) | 0x50
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+		b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+		b[8], b[9], b[10], b[11], b[12], b[13], b[14], b[15])
 }
 
 func ParameterizedGUID(baseGUID, argSignature string) *GUID {
