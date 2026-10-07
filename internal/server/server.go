@@ -21,6 +21,7 @@ import (
 	"uika-resonance/internal/config"
 	"uika-resonance/internal/player"
 	"uika-resonance/internal/presence"
+	"uika-resonance/internal/sysutil"
 )
 
 //go:embed ui.html
@@ -216,6 +217,32 @@ func Handler(d Deps) http.Handler {
 		default:
 			http.Error(w, "method", 405)
 		}
+	}))
+	mux.HandleFunc("/api/autostart", auth(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+		case http.MethodPost:
+			var payload struct {
+				Enabled bool `json:"enabled"`
+			}
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256)).Decode(&payload); err != nil {
+				http.Error(w, "invalid autostart payload", 400)
+				return
+			}
+			apply := sysutil.RemoveAutostart
+			if payload.Enabled {
+				apply = sysutil.InstallAutostart
+			}
+			if err := apply(); err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+		default:
+			http.Error(w, "method", 405)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]bool{"enabled": sysutil.AutostartEnabled()})
 	}))
 	return mux
 }

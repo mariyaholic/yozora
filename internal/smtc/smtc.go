@@ -98,16 +98,52 @@ type Manager struct {
 	mgr *wrt.Object
 }
 
+// factoryCache memoizes a WinRT activation-factory lookup. RoGetActivationFactory
+// builds an HSTRING and crosses into the WinRT activation layer on every call,
+// while a class's factory is process-stable, so resolving it more than once only
+// costs time. Only success is cached: a transient activation failure is still
+// retried by the next Connect, exactly as it was before.
+//
+// It is a named type so the memoization can be tested without invoking WinRT.
+type factoryCache struct {
+	mu   sync.Mutex
+	obj  *wrt.Object
+	done bool
+}
+
+func (c *factoryCache) get(load func() (*wrt.Object, error)) (*wrt.Object, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.done {
+		return c.obj, nil
+	}
+	obj, err := load()
+	if err != nil {
+		return nil, err
+	}
+	c.obj, c.done = obj, true
+	return obj, nil
+}
+
+// managerStatics holds the SMTC manager activation factory for the life of the
+// process, so it is deliberately never released.
+var managerStatics factoryCache
+
+func managerFactory() (*wrt.Object, error) {
+	return managerStatics.get(func() (*wrt.Object, error) {
+		return wrt.GetActivationFactory(classManager, wrt.MustGUID(iidStatics))
+	})
+}
+
 func Connect() (*Manager, error) {
 	runtime.LockOSThread()
 	if err := wrt.ComInit(); err != nil {
 		return nil, err
 	}
-	statics, err := wrt.GetActivationFactory(classManager, wrt.MustGUID(iidStatics))
+	statics, err := managerFactory()
 	if err != nil {
 		return nil, err
 	}
-	defer statics.Release()
 	op, err := wrt.CallAsync(statics, 6, 5*time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("smtc: RequestAsync: %w", err)

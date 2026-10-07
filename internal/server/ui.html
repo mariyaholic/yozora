@@ -80,6 +80,8 @@
     </fieldset>
     <p id="source-status" role="status" aria-live="polite">Loading saved sources…</p>
   </form>
+  <div class="source-option"><input type="checkbox" id="autostart" disabled><label for="autostart">Start Yozora when I sign in to Windows</label></div>
+  <p id="autostart-status" role="status" aria-live="polite"></p>
   <p class="made-by">Made with love by <a href="https://github.com/mariyaholic" target="_blank" rel="noopener noreferrer">Maria</a>.</p>
 </div>
 <script nonce="{{.Nonce}}">
@@ -183,6 +185,24 @@ document.getElementById("sources-form").addEventListener("submit", async event =
   finally { sourceFields.disabled = false; }
 });
 loadSources();
+const autostartBox = document.getElementById("autostart");
+const autostartStatus = document.getElementById("autostart-status");
+const autostartURL = `/api/autostart?t=${encodeURIComponent(t)}`;
+async function autostartCall(init) {
+  const r = await fetch(autostartURL, {cache:"no-store", ...init});
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  autostartBox.checked = (await r.json()).enabled === true;
+}
+autostartCall().then(() => { autostartBox.disabled = false; }).catch(e => { autostartStatus.textContent = `Could not read startup setting: ${e}`; });
+autostartBox.addEventListener("change", async () => {
+  const want = autostartBox.checked;
+  autostartBox.disabled = true;
+  try {
+    await autostartCall({method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled:want})});
+    autostartStatus.textContent = autostartBox.checked ? "Yozora will start with Windows." : "Yozora will not start with Windows.";
+  } catch (e) { autostartBox.checked = !want; autostartStatus.textContent = `Could not change startup setting: ${e}`; }
+  finally { autostartBox.disabled = false; }
+});
 const fmt = s => { s = Math.max(0, Math.round(s||0)); const m = Math.floor(s/60);
   return m >= 60 ? `${Math.floor(m/60)}:${String(m%60).padStart(2,"0")}:${String(s%60).padStart(2,"0")}` : `${m}:${String(s%60).padStart(2,"0")}`; };
 async function tick() {

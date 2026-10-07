@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"strconv"
 	"sync"
@@ -80,6 +81,29 @@ type Transport interface {
 	io.ReadWriteCloser
 }
 
+// deadlineSetter is implemented by transports that can bound a single read or
+// write. Windows named pipes (winio's *win32Pipe) and net.Pipe both do. Where
+// it is available the client enforces its timeouts with deadlines instead of a
+// supervising goroutine, so a stalled peer cannot leak one.
+type deadlineSetter interface {
+	SetReadDeadline(t time.Time) error
+	SetWriteDeadline(t time.Time) error
+}
+
+// isTimeout reports whether err is a deadline expiry. winio returns its own
+// ErrTimeout while net.Pipe returns os.ErrDeadlineExceeded; both satisfy
+// net.Error, so a single Timeout() check covers them.
+func isTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		return true
+	}
+	var ne net.Error
+	return errors.As(err, &ne) && ne.Timeout()
+}
+
 func pipeName(index int) string { return fmt.Sprintf(`\\.\pipe\discord-ipc-%d`, index) }
 
 func dialPipe(path string) (Transport, error) {
@@ -148,6 +172,28 @@ func (c *Client) writeRawTimeout(op int, payload []byte, timeout time.Duration) 
 		return errors.New("discordipc: client closed")
 	}
 
+	// Preferred path: bound the write with a pipe deadline. Nothing outlives
+	// the call, so a blocked peer can never strand a goroutine.
+	if ds, ok := c.transport.(deadlineSetter); ok {
+		if err := ds.SetWriteDeadline(time.Now().Add(timeout)); err == nil {
+			n, err := c.transport.Write(packet)
+			_ = ds.SetWriteDeadline(time.Time{})
+			if err != nil {
+				if isTimeout(err) {
+					c.Close()
+					return fmt.Errorf("discordipc: write timed out after %s", timeout)
+				}
+				return err
+			}
+			if n != len(packet) {
+				return io.ErrShortWrite
+			}
+			return nil
+		}
+	}
+
+	// Fallback for transports without deadline support (custom readers, test
+	// doubles): supervise the blocking write with a bounded goroutine.
 	type result struct {
 		n   int
 		err error
@@ -246,6 +292,23 @@ func (c *Client) request(f *frame, timeout time.Duration) (*frame, error) {
 }
 
 func (c *Client) recvWithTimeout(timeout time.Duration) (*frame, error) {
+	// Preferred path: bound the read with a pipe deadline instead of a
+	// goroutine that would outlive the timeout.
+	if ds, ok := c.transport.(deadlineSetter); ok {
+		if err := ds.SetReadDeadline(time.Now().Add(timeout)); err == nil {
+			f, err := c.recv()
+			_ = ds.SetReadDeadline(time.Time{})
+			if err != nil {
+				if isTimeout(err) {
+					c.Close()
+					return nil, fmt.Errorf("read timed out after %s", timeout)
+				}
+				return nil, err
+			}
+			return f, nil
+		}
+	}
+
 	type result struct {
 		f   *frame
 		err error
