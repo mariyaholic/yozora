@@ -75,8 +75,8 @@ Prebuilt Windows binaries are not attached yet; build from source with the comma
 
 ## Installing (no terminal needed)
 
-Download `Yozora-Setup.exe` from the latest release and run it. It installs for your user only (no admin prompt) and adds a Start menu entry. Open Yozora, and tick "Start Yozora when I sign in to Windows" in the panel if you want it to run on its own. A portable `Yozora.exe` is also attached to each release.
+**[Download Yozora-Setup.exe](https://github.com/mariyaholic/yozora/releases/latest/download/Yozora-Setup.exe)**, then open it. It installs for your user only (no admin prompt) and adds a Start menu entry. In the panel, tick "Start Yozora when I sign in to Windows" if you want it to run on its own. A portable [Yozora.exe](https://github.com/mariyaholic/yozora/releases/latest/download/Yozora.exe) is also available.
 
-Windows may show a SmartScreen warning because the build is not code-signed yet: choose "More info", then "Run anyway". Checksums are in `SHA256SUMS.txt`.
+Windows may show a SmartScreen warning because the build is not code-signed yet: choose "More info", then "Run anyway". Checksums are in `SHA256SUMS.txt` on the release page.
 
-Maintainers: pushing a tag like `v1.0.0` builds the installer and publishes the release (`.github/workflows/release.yml`).
+Maintainers: every merge to `main` builds, tests and publishes a new release automatically (`.github/workflows/release.yml`), so the links above always point at the newest build.
