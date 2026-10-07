@@ -1,0 +1,34 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test
+        run: go test ./...
+      - name: Build
+        run: go build -trimpath -ldflags "-s -w -H=windowsgui" -o Yozora.exe ./cmd/yozora
+      - name: Installer
+        run: |
+          choco install innosetup -y --no-progress
+          $v = "${{ github.ref_name }}".TrimStart("v")
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$v" installer\yozora.iss
+      - name: Checksums
+        run: |
+          Copy-Item Yozora.exe dist\Yozora.exe
+          Get-ChildItem dist | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Set-Content dist\SHA256SUMS.txt
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" dist/Yozora-Setup.exe dist/Yozora.exe dist/SHA256SUMS.txt --title "Yozora ${{ github.ref_name }}" --generate-notes

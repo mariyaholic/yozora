@@ -72,3 +72,11 @@ Private Windows named-pipe regression tests exercise simultaneous read/write usi
 ## Release
 
 Prebuilt Windows binaries are not attached yet; build from source with the commands above. Tag a release with `git tag v0.1.0 && git push origin v0.1.0`.
+
+## Installing (no terminal needed)
+
+Download `Yozora-Setup.exe` from the latest release and run it. It installs for your user only (no admin prompt) and adds a Start menu entry. Open Yozora, and tick "Start Yozora when I sign in to Windows" in the panel if you want it to run on its own. A portable `Yozora.exe` is also attached to each release.
+
+Windows may show a SmartScreen warning because the build is not code-signed yet: choose "More info", then "Run anyway". Checksums are in `SHA256SUMS.txt`.
+
+Maintainers: pushing a tag like `v1.0.0` builds the installer and publishes the release (`.github/workflows/release.yml`).
