@@ -4,6 +4,16 @@ _Made with love by [Maria](https://github.com/mariyaholic)._
 
 A Windows music detector that publishes Discord Rich Presence. This repository contains the standalone Go module; internal config and executable names remain `uika-resonance` for compatibility. Yozora competes with existing Rich Presence applications by completely culling every single negligible element that causes RAM and CPU bloat; on a good runtime it can go to as low as 10MB of RAM with barely any CPU seconds.
 
+## Installing (no terminal needed)
+
+**[Download Yozora-Setup.exe](https://github.com/mariyaholic/yozora/releases/latest/download/Yozora-Setup.exe)** (download this one), then open it. It installs for your user only (no admin prompt) and adds a Start menu entry. In the panel, tick "Start Yozora when I sign in to Windows" if you want it to run on its own.
+
+Yozora is not code-signed yet, so Windows SmartScreen may say "Windows protected your PC": choose **More info**, then **Run anyway**. Checksums are in `SHA256SUMS.txt` on the [release page](https://github.com/mariyaholic/yozora/releases/latest).
+
+Coming from v0.1.1? Its separate `yozora-daemon-...exe` and `yozora-panel-...exe` files are replaced by the installer; the old daemon file opens a console window when double-clicked, so delete it.
+
+Advanced: a portable [Yozora.exe](https://github.com/mariyaholic/yozora/releases/latest/download/Yozora.exe) is attached to the same release.
+
 ## Repository
 
 You are looking at it. The second Discord button is **Yozora**, linking here.
@@ -71,12 +81,8 @@ Private Windows named-pipe regression tests exercise simultaneous read/write usi
 
 ## Release
 
-Prebuilt Windows binaries are not attached yet; build from source with the commands above. Tag a release with `git tag v0.1.0 && git push origin v0.1.0`.
+Every merge to `main` tests, builds and publishes a release automatically (`.github/workflows/release.yml`). The version is the latest `v0.1.N` tag plus one, so the download links above always point at the newest build. Use the "Run workflow" button on the release workflow to republish without a code change.
 
-## Installing (no terminal needed)
+## Notes
 
-**[Download Yozora-Setup.exe](https://github.com/mariyaholic/yozora/releases/latest/download/Yozora-Setup.exe)**, then open it. It installs for your user only (no admin prompt) and adds a Start menu entry. In the panel, tick "Start Yozora when I sign in to Windows" if you want it to run on its own. A portable [Yozora.exe](https://github.com/mariyaholic/yozora/releases/latest/download/Yozora.exe) is also available.
-
-Windows may show a SmartScreen warning because the build is not code-signed yet: choose "More info", then "Run anyway". Checksums are in `SHA256SUMS.txt` on the release page.
-
-Maintainers: every merge to `main` builds, tests and publishes a new release automatically (`.github/workflows/release.yml`), so the links above always point at the newest build.
+Yozora is not affiliated with or endorsed by Discord, Spotify, or Apple.

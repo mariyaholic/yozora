@@ -8,23 +8,46 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Version
+        id: version
+        run: |
+          # Next release = highest v0.1.N tag + 1. Using the run number collided with the hand-made v0.1.1 tag.
+          git fetch --tags --force
+          $n = git tag --list 'v0.1.*' | ForEach-Object { if ($_ -match '^v0\.1\.(\d+)$') { [int]$Matches[1] } } | Sort-Object | Select-Object -Last 1
+          if ($null -eq $n) { $n = -1 }
+          $v = "0.1.$($n + 1)"
+          Write-Host "Next version: v$v"
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
       - name: Test
         run: go test ./...
       - name: Build
         run: go build -trimpath -ldflags "-s -w -H=windowsgui" -o Yozora.exe ./cmd/yozora
+      - name: Check GUI subsystem
+        run: |
+          # A console-subsystem exe opens a terminal window on double-click (the v0.1.1 daemon did). Require GUI (2).
+          $b = [IO.File]::ReadAllBytes("Yozora.exe")
+          $pe = [BitConverter]::ToInt32($b, 0x3C)
+          $sub = [BitConverter]::ToUInt16($b, $pe + 24 + 68)
+          if ($sub -ne 2) { throw "Yozora.exe PE subsystem is $sub, expected 2 (Windows GUI)" }
+          Write-Host "Yozora.exe PE subsystem: $sub (Windows GUI)"
       - name: Installer
         run: |
           choco install innosetup -y --no-progress
-          $v = "0.1.${{ github.run_number }}"
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$v" installer\yozora.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.version.outputs.version }}" installer\yozora.iss
       - name: Checksums
         run: |
           Copy-Item Yozora.exe dist\Yozora.exe
@@ -32,4 +55,4 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "v0.1.${{ github.run_number }}" dist/Yozora-Setup.exe dist/Yozora.exe dist/SHA256SUMS.txt --target "${{ github.sha }}" --title "Yozora 0.1.${{ github.run_number }}" --generate-notes --latest
+        run: gh release create "v${{ steps.version.outputs.version }}" dist/Yozora-Setup.exe dist/Yozora.exe dist/SHA256SUMS.txt --target "${{ github.sha }}" --title "Yozora ${{ steps.version.outputs.version }}" --generate-notes --latest
