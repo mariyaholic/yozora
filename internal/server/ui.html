@@ -74,8 +74,9 @@
       <div class="source-option"><input type="checkbox" id="source-youtubemusic"><label for="source-youtubemusic">YouTube Music</label></div>
       <div class="source-option"><input type="checkbox" id="source-browser"><label for="source-browser">Browser media / videos</label></div>
       <div class="source-option"><input type="checkbox" id="source-youtube"><label for="source-youtube">YouTube (browser tab; needs Browser media)</label></div>
+      <div class="source-option"><input type="checkbox" id="source-youtube_tabs"><label for="source-youtube_tabs">Detect YouTube in background Edge tabs (symbol only)</label></div>
       <div class="source-option"><input type="checkbox" id="source-generic"><label for="source-generic">Other media players</label></div>
-      <div class="source-help">Checked sources may appear in your activity. YouTube is off by default and needs Browser media. An exact Edge or Chrome window title match shows Watching YouTube with the video thumbnail (or the symbol) and a watch button when a video ID is available, or the symbol (and the media thumbnail here) without a button otherwise; the check runs when the browser track or its play/pause state changes, or while it is not yet classified. When YouTube is off, a matching track is hidden, even if several windows match. When YouTube is on and exactly one window matches, Yozora reads that window’s address bar through Windows UI Automation to get the video ID (active tab only, best effort), and keeps only the ID. Custom app filters such as msedge still block the YouTube Music PWA; its toggle cannot override them.</div>
+      <div class="source-help">Checked sources may appear in your activity. YouTube is off by default and needs Browser media. An exact Edge or Chrome window title match shows Watching YouTube with the video thumbnail (or the symbol) and a watch button when a video ID is available, or the symbol (and the media thumbnail here) without a button otherwise; the check runs when the browser track or its play/pause state changes, or while it is not yet classified. When YouTube is off, a matching track is hidden, even if several windows match. When YouTube is on and exactly one window matches, Yozora reads that window’s address bar through Windows UI Automation to get the video ID (active tab only, best effort), and keeps only the ID. Background tab detection is off by default; when no window title matches, it reads the tab names of up to 8 browser windows (designed for Edge) through UI Automation at the same moments, shows the symbol only (never a thumbnail or button), and with YouTube off is used only to hide tracks. Custom app filters such as msedge still block the YouTube Music PWA; its toggle cannot override them.</div>
       <div id="order-help" class="source-help">Priority decides which source wins when several play at once. Drag rows, or use the arrow buttons; the order saves with Apply.</div>
       <ul id="source-order" aria-describedby="order-help"></ul>
       <button type="submit" id="source-save">Apply</button>
@@ -89,7 +90,7 @@
 <script nonce="{{.Nonce}}">
 const t = new URLSearchParams(location.search).get("t");
 const sourceKeys = ["applemusic", "spotify", "spotifyapi", "youtubemusic", "browser", "generic"];
-const toggleKeys = [...sourceKeys, "youtube"];
+const toggleKeys = [...sourceKeys, "youtube", "youtube_tabs"];
 const sourceFields = document.getElementById("source-fields");
 const sourceStatus = document.getElementById("source-status");
 const sourceSave = document.getElementById("source-save");

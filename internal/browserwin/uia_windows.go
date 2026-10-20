@@ -30,6 +30,7 @@ var (
 	coCreate        = ole32.NewProc("CoCreateInstance")
 	variantClear    = oleaut32.NewProc("VariantClear")
 	allocString     = oleaut32.NewProc("SysAllocString")
+	freeString      = oleaut32.NewProc("SysFreeString")
 	stringLen       = oleaut32.NewProc("SysStringLen")
 	automationCLSID = wrt.MustGUID("ff48dba4-60ef-4201-aa87-54103eef594e")
 	automationIID   = wrt.MustGUID("30cbe57d-d9d0-452a-ab13-7ac5ac4825ee")
@@ -47,26 +48,31 @@ func uiaCall(o *wrt.Object, slot int, args ...uintptr) (uintptr, error) {
 	return hr, err
 }
 
-// ReadAddressBar reads only the matched window's unfocused omnibox. Callers
-// must discard the raw URL after parsing; errors never contain its contents.
-func ReadAddressBar(hwnd uintptr) (string, error) {
-	if !uiaBusy.CompareAndSwap(false, true) {
-		return "", errors.New("UIA busy")
+// openUIA shares the one-in-flight guard and COM lifetime for bounded reads.
+func openUIA(hwnd uintptr) (*wrt.Object, *wrt.Object, func(), error) {
+	var cleanups []func()
+	cleanup := func() {
+		for i := len(cleanups) - 1; i >= 0; i-- {
+			cleanups[i]()
+		}
 	}
-	defer uiaBusy.Store(false)
+	if !uiaBusy.CompareAndSwap(false, true) {
+		return nil, nil, cleanup, errors.New("UIA busy")
+	}
+	cleanups = append(cleanups, func() { uiaBusy.Store(false) })
 	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
+	cleanups = append(cleanups, runtime.UnlockOSThread)
 	hr, _, _ := coInit.Call(0, 0) // COINIT_MULTITHREADED
 	if int32(hr) < 0 {
-		return "", errors.New("UIA COM initialization failed")
+		return nil, nil, cleanup, errors.New("UIA COM initialization failed")
 	}
-	defer coUninit.Call()
+	cleanups = append(cleanups, func() { coUninit.Call() })
 	var p unsafe.Pointer
 	hr, _, _ = coCreate.Call(uintptr(unsafe.Pointer(automationCLSID)), 0, 1, uintptr(unsafe.Pointer(automationIID)), uintptr(unsafe.Pointer(&p)))
 	automation := wrt.NewObject(p)
-	defer automation.Release()
+	cleanups = append(cleanups, automation.Release)
 	if int32(hr) < 0 || !automation.Valid() {
-		return "", errors.New("UIA activation failed")
+		return nil, nil, cleanup, errors.New("UIA activation failed")
 	}
 	var a2Ptr unsafe.Pointer
 	_, qiErr := uiaCall(automation, 0, uintptr(unsafe.Pointer(automation2IID)), uintptr(unsafe.Pointer(&a2Ptr)))
@@ -79,9 +85,21 @@ func ReadAddressBar(hwnd uintptr) (string, error) {
 	var rootPtr unsafe.Pointer
 	_, err := uiaCall(automation, 6, hwnd, uintptr(unsafe.Pointer(&rootPtr)))
 	root := wrt.NewObject(rootPtr)
-	defer root.Release()
+	cleanups = append(cleanups, root.Release)
 	if err != nil || !root.Valid() {
-		return "", errors.New("UIA window unavailable")
+		return nil, nil, cleanup, errors.New("UIA window unavailable")
+	}
+
+	return automation, root, cleanup, nil
+}
+
+// ReadAddressBar reads only the matched window's unfocused omnibox. Callers
+// must discard the raw URL after parsing; errors never contain its contents.
+func ReadAddressBar(hwnd uintptr) (string, error) {
+	automation, root, cleanup, err := openUIA(hwnd)
+	defer cleanup()
+	if err != nil {
+		return "", err
 	}
 
 	// Each condition owns its own reference, including composite conditions.
@@ -176,4 +194,77 @@ func ReadAddressBar(hwnd uintptr) (string, error) {
 		return "", errors.New("UIA omnibox value too long")
 	}
 	return syscall.UTF16ToString(unsafe.Slice((*uint16)(*(*unsafe.Pointer)(unsafe.Pointer(&value.Data))), int(n))), nil
+}
+
+// ReadTabNames reads at most limit tab names (capped at 200) from this window, never the desktop.
+func ReadTabNames(hwnd uintptr, limit int) ([]string, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	automation, root, cleanup, err := openUIA(hwnd)
+	defer cleanup()
+	if err != nil {
+		return nil, err
+	}
+	value := uiaVariant{VT: 3, Data: 50019}
+	var conditionPtr unsafe.Pointer
+	_, err = uiaCall(automation, 23, 30003, uintptr(unsafe.Pointer(&value)), uintptr(unsafe.Pointer(&conditionPtr)))
+	condition := wrt.NewObject(conditionPtr)
+	defer condition.Release()
+	if err != nil || !condition.Valid() {
+		return nil, errors.New("UIA tab condition unavailable")
+	}
+	var arrayPtr unsafe.Pointer
+	_, err = uiaCall(root, 6, 4, condition.RawPtr(), uintptr(unsafe.Pointer(&arrayPtr)))
+	array := wrt.NewObject(arrayPtr)
+	defer array.Release()
+	if err != nil || !array.Valid() {
+		return nil, errors.New("UIA tabs unavailable")
+	}
+	var count int32
+	if _, err = uiaCall(array, 3, uintptr(unsafe.Pointer(&count))); err != nil || count < 0 {
+		return nil, errors.New("UIA tab count unavailable")
+	}
+	if count > int32(limit) {
+		count = int32(limit)
+	}
+	names := make([]string, 0, int(count))
+	for i := int32(0); i < count; i++ {
+		name, err := readTabName(array, i)
+		if err != nil {
+			// Preserve the attempted-name count for the caller's scan budget.
+			return append(names, ""), err
+		}
+		names = append(names, name)
+	}
+	return names, nil
+}
+
+func readTabName(array *wrt.Object, index int32) (string, error) {
+	var elemPtr unsafe.Pointer
+	_, err := uiaCall(array, 4, uintptr(index), uintptr(unsafe.Pointer(&elemPtr)))
+	elem := wrt.NewObject(elemPtr)
+	defer elem.Release()
+	if err != nil || !elem.Valid() {
+		return "", errors.New("UIA tab unavailable")
+	}
+	var name unsafe.Pointer
+	_, err = uiaCall(elem, 23, uintptr(unsafe.Pointer(&name)))
+	if name != nil {
+		defer freeString.Call(uintptr(name))
+	}
+	if err != nil {
+		return "", errors.New("UIA tab name unavailable")
+	}
+	if name == nil {
+		return "", nil
+	}
+	n, _, _ := stringLen.Call(uintptr(name))
+	if n > 1024 {
+		return "", nil
+	}
+	return syscall.UTF16ToString(unsafe.Slice((*uint16)(name), int(n))), nil
 }

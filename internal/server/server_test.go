@@ -210,7 +210,7 @@ func TestSourcesPersistPartialChangesWithoutMutatingSnapshot(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.Name != "Yozora" || len(response.Enabled) != 7 || response.Enabled["browser"] || response.Enabled["spotify"] || !response.Enabled["applemusic"] {
+	if response.Name != "Yozora" || len(response.Enabled) != 8 || response.Enabled["browser"] || response.Enabled["spotify"] || !response.Enabled["applemusic"] {
 		t.Fatalf("state=%+v", response)
 	}
 	w = request(h, "POST", "/api/sources", `{"enabled":{"browser":true,"generic":false}}`, true)
@@ -241,7 +241,7 @@ func TestSourcesPersistPartialChangesWithoutMutatingSnapshot(t *testing.T) {
 func TestYouTubeToggleAcceptedButNotPriority(t *testing.T) {
 	h, cfg := fixtureHandler(t)
 	for _, enabled := range []string{"true", "false"} {
-		w := request(h, "POST", "/api/sources", `{"enabled":{"youtube":`+enabled+`}}`, true)
+		w := request(h, "POST", "/api/sources", `{"enabled":{"youtube":`+enabled+`,"youtube_tabs":`+enabled+`}}`, true)
 		if w.Code != 200 {
 			t.Fatalf("toggle: %d %s", w.Code, w.Body.String())
 		}

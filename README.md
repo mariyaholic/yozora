@@ -73,6 +73,8 @@ For this local Rich Presence path, desktop Discord must be running; no Discord c
 - First button: **Listen on [service]**. A custom `buttons.label` is preserved; the legacy/default `Listen along` label becomes the service-specific label.
 - Second button: **Yozora**, using `buttons.yozora_url`.
 
+Background tab detection has its own toggle, off by default. When no window title matches, it reads the tab names of up to 8 browser windows (designed for Edge) through Windows UI Automation at the same moments as the title check, and looks for a `<title> - YouTube - Audio playing` tab; any match, even several, counts as YouTube. It shows the symbol only (never a thumbnail or button), and with YouTube off it is used only to hide the track.
+
 Browser videos use only the thumbnail the browser itself supplies through Windows media controls, and browser titles are never matched against music catalogs. YouTube pages usually expose no public thumbnail URL to this API, and Discord's servers cannot fetch the local dashboard's `127.0.0.1` art cache — so a browser card shows whatever artwork is available in the local dashboard, while its Discord presence may appear without a large image (text, timestamps, and the Yozora button still show).
 
 The Windows detector reads once at startup, then polls every second by default. Its one-slot queue retains the newest snapshot, not a stale queued one. The presence engine checks every 250 ms; the brief debounce suppresses rapid skip bursts. Discord sends remain spaced by at least five seconds, so fast detection is not a promise of an immediate Discord-visible update. Artwork can arrive as a later enriched update.

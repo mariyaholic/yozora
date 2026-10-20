@@ -155,7 +155,7 @@ func newArtworkTestEngine(t *testing.T, track player.Track) (*Engine, *queuedArt
 	}
 	resolver := &queuedArtwork{requests: make(chan artworkRequest, 4), release: make(chan struct{})}
 	t.Cleanup(func() { close(resolver.release) })
-	return &Engine{ReadAddressBar: func(uintptr) (string, error) { return "", nil }, EnumerateWindows: func() []browserwin.Window { return nil }, Cfg: holder, Art: resolver, ipc: &recordingActivityClient{}, lastSMTCSessions: []player.Track{track}}, resolver
+	return &Engine{ReadTabNames: func(uintptr, int) ([]string, error) { return nil, nil }, ReadAddressBar: func(uintptr) (string, error) { return "", nil }, EnumerateWindows: func() []browserwin.Window { return nil }, Cfg: holder, Art: resolver, ipc: &recordingActivityClient{}, lastSMTCSessions: []player.Track{track}}, resolver
 }
 
 func nextArtworkRequest(t *testing.T, resolver *queuedArtwork, title string) artworkRequest {
