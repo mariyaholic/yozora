@@ -82,3 +82,7 @@ Private Windows named-pipe regression tests exercise simultaneous read/write usi
 ## Release
 
 Every merge to `main` tests, builds and publishes a release automatically (`.github/workflows/release.yml`). The version is the latest `v0.1.N` tag plus one, so the download links above always point at the newest build. Use the "Run workflow" button on the release workflow to republish without a code change.
+
+## Notes
+
+Yozora is not affiliated with or endorsed by Discord, Spotify, or Apple.
