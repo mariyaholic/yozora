@@ -74,3 +74,50 @@ func (d *defaultingArtwork) Resolve(track art.Track, prefer string) art.Lookup {
 }
 
 func (d *defaultingArtwork) DefaultURL() string { return d.queued.DefaultURL() }
+
+func TestYouTubeMusicPresentation(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		now := time.Now()
+		track := player.Track{Source: "youtubemusic", Title: "song", Playing: true, LastUpdated: now, ListenURL: "https://example.test/song"}
+		engine, resolver := newArtworkTestEngine(t, track)
+		engine.Cfg.Get().Presence.Type = "watching"
+		client := engine.ipc.(*recordingActivityClient)
+		engine.step(now)
+		request := nextArtworkRequest(t, resolver, track.Title)
+		request.result <- art.Lookup{ImageURL: "http://127.0.0.1:49152/art/thumb.jpg", DiscordURL: art.YouTubeMusicSymbolURL, Via: "smtc"}
+		synctest.Wait()
+		engine.step(now.Add(2 * time.Second))
+		if len(client.activities) != 1 {
+			t.Fatalf("frames: %d", len(client.activities))
+		}
+		a := client.activities[0]
+		if a.Name != "YouTube Music" || a.Type != 2 || a.Assets.LargeImage != art.YouTubeMusicSymbolURL {
+			t.Fatalf("activity: %+v", a)
+		}
+		if len(a.Buttons) != 1 || a.Buttons[0].Label != "Yozora" {
+			t.Fatalf("buttons: %+v", a.Buttons)
+		}
+		status := engine.Status()
+		if status.ArtURL != "http://127.0.0.1:49152/art/thumb.jpg" || status.ActivityType != "listening" || status.Service != "YouTube Music" {
+			t.Fatalf("status: %+v", status)
+		}
+	})
+}
+
+func TestTrackActivityType(t *testing.T) {
+	for _, tc := range []struct{ source, service, cfg, want string }{
+		{"browser", "youtube", "listening", "watching"},
+		{"youtubemusic", "", "watching", "listening"},
+		{"spotify", "", "playing", "playing"},
+		{"browser", "", "watching", "watching"},
+		{"generic", "", "invalid", "listening"},
+	} {
+		track := &player.Track{Source: tc.source, Service: tc.service}
+		if got := trackActivityType(track, tc.cfg); got != tc.want {
+			t.Errorf("%+v: %s", tc, got)
+		}
+	}
+	if serviceName(&player.Track{Source: "browser", Service: "youtube"}) != "YouTube" {
+		t.Fatal("youtube service name")
+	}
+}

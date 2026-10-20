@@ -5,6 +5,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -165,5 +167,136 @@ func TestReloadReportsUnchangedConfig(t *testing.T) {
 	}
 	if changed {
 		t.Fatal("Reload() reported an unchanged config as changed")
+	}
+}
+
+func TestSourceMigration(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.toml")
+	if err := os.WriteFile(path, []byte("[sources]\norder = [\"generic\", \"spotifyapi\", \"browser\", \"spotify\", \"applemusic\"]\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"generic", "spotifyapi", "youtubemusic", "browser", "spotify", "applemusic"}
+	if !reflect.DeepEqual(c.Sources.Order, want) || !reflect.DeepEqual(c.Sources.Known, ToggleKeys) || len(c.Sources.Blocked) != 0 {
+		t.Fatalf("migration: %+v", c.Sources)
+	}
+	before := c.Sources
+	c.normalize()
+	c.normalize()
+	if !reflect.DeepEqual(before, c.Sources) {
+		t.Fatalf("not idempotent: %+v", c.Sources)
+	}
+	c.Sources.Blocked = nil
+	if err := Save(c, path); err != nil {
+		t.Fatal(err)
+	}
+	c, err = Load(path)
+	if err != nil || len(c.Sources.Blocked) != 0 {
+		t.Fatalf("re-enabled source blocked: %v %v", c, err)
+	}
+	if !reflect.DeepEqual(Defaults().Sources.Known, ToggleKeys) {
+		t.Fatal("defaults missing known keys")
+	}
+	for _, tc := range []struct{ order, want []string }{
+		{[]string{"spotify", "generic", "custom"}, []string{"spotify", "generic", "applemusic", "spotifyapi", "youtubemusic", "browser"}}, // unknown entries are dropped
+		{[]string{"youtubemusic", "browser"}, []string{"youtubemusic", "browser", "applemusic", "spotify", "spotifyapi", "generic"}},
+	} {
+		c := Defaults()
+		c.Sources.Known = nil
+		c.Sources.Order = tc.order
+		c.normalize()
+		if !reflect.DeepEqual(c.Sources.Order, tc.want) {
+			t.Fatalf("insertion without browser: %v", c.Sources.Order)
+		}
+	}
+}
+
+func TestSourceMigrationReviewFixtures(t *testing.T) {
+	for _, tc := range []struct {
+		name, fixture  string
+		order, blocked []string
+	}{
+		{
+			name: "legacy custom order and explicit blocks",
+			fixture: `order = ["generic", "spotifyapi", "browser", "spotify", "applemusic"]
+blocked = ["SPOTIFY", "custom.app"]`,
+			order:   []string{"generic", "spotifyapi", "youtubemusic", "browser", "spotify", "applemusic"},
+			blocked: []string{"SPOTIFY", "custom.app"},
+		},
+		{
+			name: "existing duplicates are not multiplied",
+			fixture: `order = ["applemusic", "spotify", "spotifyapi", "youtubemusic", "youtubemusic", "browser", "generic"]
+blocked = ["browser", "browser"]
+known = ["applemusic", "spotify", "spotifyapi", "youtubemusic", "youtubemusic", "browser", "generic"]`,
+			order:   []string{"applemusic", "spotify", "spotifyapi", "youtubemusic", "browser", "generic"},
+			blocked: []string{"browser", "browser"},
+		},
+		{
+			name: "unknown order entry",
+			fixture: `order = ["generic", "spotifyapi", "custom", "browser", "spotify", "applemusic"]
+blocked = []`,
+			order:   []string{"generic", "spotifyapi", "youtubemusic", "browser", "spotify", "applemusic"},
+			blocked: []string{},
+		},
+		{
+			name: "case and space order variant",
+			fixture: `order = ["generic", " Spotify ", "browser", "spotify", "applemusic", "spotifyapi"]
+blocked = []`,
+			order:   []string{"generic", "spotify", "youtubemusic", "browser", "applemusic", "spotifyapi"},
+			blocked: []string{},
+		},
+		{
+			name: "only unknown order entries",
+			fixture: `order = ["custom", "other"]
+blocked = []`,
+			order:   OrderSources,
+			blocked: []string{},
+		},
+		{
+			name: "known music missing from order",
+			fixture: `order = ["generic", "spotifyapi", "browser", "spotify", "applemusic"]
+blocked = []
+known = ["applemusic", "spotify", "spotifyapi", "youtubemusic", "browser", "generic"]`,
+			order:   []string{"generic", "spotifyapi", "youtubemusic", "browser", "spotify", "applemusic"},
+			blocked: []string{},
+		},
+		{
+			name: "case variant legacy blocks",
+			fixture: `order = ["applemusic", "spotify", "spotifyapi", "browser", "generic"]
+blocked = ["YouTube", " Browser ", "GENERIC"]
+known = []`,
+			order:   []string{"applemusic", "spotify", "spotifyapi", "youtubemusic", "browser", "generic"},
+			blocked: []string{"YouTube", " Browser ", "GENERIC"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "legacy.toml")
+			if err := os.WriteFile(path, []byte("[sources]\n"+tc.fixture+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			c, err := Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := 0; i < 3; i++ {
+				seen := make(map[string]bool, len(OrderSources))
+				if len(c.Sources.Order) != len(OrderSources) {
+					t.Fatalf("normalization %d: order length = %d", i, len(c.Sources.Order))
+				}
+				for _, source := range c.Sources.Order {
+					if !slices.Contains(OrderSources, source) || seen[source] {
+						t.Fatalf("normalization %d: invalid order %v", i, c.Sources.Order)
+					}
+					seen[source] = true
+				}
+				if !reflect.DeepEqual(c.Sources.Order, tc.order) || !reflect.DeepEqual(c.Sources.Blocked, tc.blocked) || !reflect.DeepEqual(c.Sources.Known, ToggleKeys) {
+					t.Fatalf("normalization %d: %+v", i, c.Sources)
+				}
+				c.normalize()
+			}
+		})
 	}
 }

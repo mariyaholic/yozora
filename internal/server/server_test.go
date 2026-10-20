@@ -129,7 +129,7 @@ func TestDashboardSourceControls(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 	page := w.Body.String()
-	for _, source := range []string{"applemusic", "spotify", "spotifyapi", "browser", "generic"} {
+	for _, source := range config.ToggleKeys {
 		if !strings.Contains(page, `id="source-`+source+`"`) || !strings.Contains(page, `for="source-`+source+`"`) {
 			t.Errorf("missing accessible checkbox for %s", source)
 		}
@@ -210,7 +210,7 @@ func TestSourcesPersistPartialChangesWithoutMutatingSnapshot(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.Name != "Yozora" || len(response.Enabled) != 5 || response.Enabled["browser"] || response.Enabled["spotify"] || !response.Enabled["applemusic"] {
+	if response.Name != "Yozora" || len(response.Enabled) != 6 || response.Enabled["browser"] || response.Enabled["spotify"] || !response.Enabled["applemusic"] {
 		t.Fatalf("state=%+v", response)
 	}
 	w = request(h, "POST", "/api/sources", `{"enabled":{"browser":true,"generic":false}}`, true)

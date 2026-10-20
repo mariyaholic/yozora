@@ -322,8 +322,23 @@ func dataReaderFactory() (*wrt.Object, error) {
 	return rdrFac, rdrFacErr
 }
 
+var youtubeMusicIDs = []struct {
+	value  string
+	prefix bool
+}{
+	{"_crx_cinhimbnkkaeohfgghhklpknlkffjgod", false},
+	{"music.youtube.com-5929f88e_vezhnr0wkvrcy", true},
+	{"com.github.th-ch.youtube-music", false},
+	{"com.squirrel.youtube_music_desktop_app.youtube-music-desktop-app", false},
+}
+
 func Classify(appID string) string {
 	a := strings.ToLower(appID)
+	for _, id := range youtubeMusicIDs {
+		if (id.prefix && strings.HasPrefix(a, id.value)) || (!id.prefix && strings.Contains(a, id.value)) {
+			return "youtubemusic"
+		}
+	}
 	switch {
 	case strings.Contains(a, "apple"):
 		return "applemusic"
@@ -341,6 +356,8 @@ func Classify(appID string) string {
 
 func FriendlyName(appID string) string {
 	switch Classify(appID) {
+	case "youtubemusic":
+		return "YouTube Music"
 	case "applemusic":
 		return "Apple Music"
 	case "spotify":

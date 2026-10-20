@@ -22,6 +22,7 @@ import (
 )
 
 type Status struct {
+	ActivityType string               `json:"activity_type"`
 	UpdatedAt    time.Time            `json:"updated_at"`
 	Connected    bool                 `json:"discord_connected"`
 	Playing      bool                 `json:"playing"`
@@ -63,31 +64,32 @@ type Engine struct {
 	smtcCh    <-chan []smtc.Track
 	spotifyCh <-chan player.Track
 
-	mu               sync.Mutex
-	stateMu          sync.Mutex
-	ipc              activityClient
-	cur              *player.Track
-	spotify          *player.Track
-	lastSMTCSessions []player.Track
-	identityAt       time.Time
-	lastIdentity     string
-	lastSend         time.Time
-	sentID           string
-	sentElapsedAt    time.Time
-	sentElapsedSec   float64
-	lastActivity     time.Time
-	cleared          bool
-	nextDial         atomic.Int64
-	sends            int64
-	lastErr          string
-	lastArtURL       string
-	lastListenURL    string
-	lastVia          string
-	artGeneration    uint64
-	sentArtURL       string
-	published        *discordipc.Activity
-	publishedTrack   *player.Track
-	acknowledged     json.RawMessage
+	mu                sync.Mutex
+	stateMu           sync.Mutex
+	ipc               activityClient
+	cur               *player.Track
+	spotify           *player.Track
+	lastSMTCSessions  []player.Track
+	identityAt        time.Time
+	lastIdentity      string
+	lastSend          time.Time
+	sentID            string
+	sentElapsedAt     time.Time
+	sentElapsedSec    float64
+	lastActivity      time.Time
+	cleared           bool
+	nextDial          atomic.Int64
+	sends             int64
+	lastErr           string
+	lastArtURL        string
+	lastDiscordArtURL string
+	lastListenURL     string
+	lastVia           string
+	artGeneration     uint64
+	sentArtURL        string
+	published         *discordipc.Activity
+	publishedTrack    *player.Track
+	acknowledged      json.RawMessage
 }
 
 func New(cfg *config.Holder, a *art.Resolver, smtcCh <-chan []smtc.Track, spotifyCh <-chan player.Track, stateDir string) *Engine {
@@ -185,6 +187,7 @@ func (e *Engine) step(now time.Time) {
 		e.lastIdentity = id
 		e.identityAt = now
 		e.lastArtURL = ""
+		e.lastDiscordArtURL = ""
 		e.lastListenURL = ""
 		e.lastVia = ""
 	}
@@ -238,7 +241,7 @@ func (e *Engine) step(now time.Time) {
 	}
 	wantsClear := !cur.Playing && (cfg.Presence.PausedMode == "hide" || cfg.Presence.PausedMode == "clear")
 	e.mu.Lock()
-	artChanged := discordAssetURL(e.lastArtURL) != e.sentArtURL
+	artChanged := discordAssetURL(e.lastDiscordArtURL) != e.sentArtURL
 	visibilityChanged := e.cleared != wantsClear
 	e.mu.Unlock()
 	if sameTrack && !drift && !artChanged && !visibilityChanged {
@@ -269,6 +272,21 @@ func activityType(cfgType string) int {
 		return discordipc.TypeWatching
 	default:
 		return discordipc.TypeListening
+	}
+}
+
+func trackActivityType(t *player.Track, cfgType string) string {
+	if t.Service == "youtube" {
+		return "watching"
+	}
+	if t.Source == "youtubemusic" {
+		return "listening"
+	}
+	switch cfgType {
+	case "watching", "playing":
+		return cfgType
+	default:
+		return "listening"
 	}
 }
 
@@ -342,7 +360,7 @@ func (e *Engine) clear(now time.Time, identity string) {
 	e.mu.Lock()
 	if e.cleared {
 		e.sentID = identity
-		e.sentArtURL = discordAssetURL(e.lastArtURL)
+		e.sentArtURL = discordAssetURL(e.lastDiscordArtURL)
 		e.mu.Unlock()
 		return
 	}
@@ -365,7 +383,7 @@ func (e *Engine) clear(now time.Time, identity string) {
 	e.mu.Lock()
 	e.cleared = true
 	e.sentID = identity
-	e.sentArtURL = discordAssetURL(e.lastArtURL)
+	e.sentArtURL = discordAssetURL(e.lastDiscordArtURL)
 	e.lastSend = now
 	e.published = nil
 	e.publishedTrack = nil
@@ -400,11 +418,11 @@ func (e *Engine) send(t *player.Track, now time.Time) {
 		}
 	}
 
-	a := buildActivity(e.activityName(cfg, t), activityType(cfg.Presence.Type), statusDisplayType(cfg.Presence.StatusDisplay), details, state, t, now)
+	a := buildActivity(e.activityName(cfg, t), activityType(trackActivityType(t, cfg.Presence.Type)), statusDisplayType(cfg.Presence.StatusDisplay), details, state, t, now)
 
 	e.mu.Lock()
 	ipc := e.ipc
-	imageURL := e.lastArtURL
+	imageURL := e.lastDiscordArtURL
 	listenURL := e.lastListenURL
 	e.mu.Unlock()
 
@@ -435,7 +453,7 @@ func (e *Engine) send(t *player.Track, now time.Time) {
 	e.sentID = identity
 	e.sentArtURL = assetImage
 	e.published = a
-	e.publishedTrack = &player.Track{Source: t.Source, AppID: t.AppID}
+	e.publishedTrack = &player.Track{Source: t.Source, Service: t.Service, AppID: t.AppID}
 	e.acknowledged = ipc.AcceptedPayload()
 	e.sentElapsedAt = now
 	e.sentElapsedSec = t.ElapsedSec(now)
@@ -478,15 +496,21 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 		imageURL := lookup.ImageURL
 
 		dashboardArt := imageURL
-		discordArt := discordAssetURL(imageURL)
+		discordArt := lookup.DiscordURL
+		if discordArt == "" {
+			discordArt = discordAssetURL(imageURL)
+		}
 		if imageURL == "" {
-			discordArt = e.Art.DefaultURL()
-			dashboardArt = discordArt
+			dashboardArt = e.Art.DefaultURL()
+			if discordArt == "" {
+				discordArt = discordAssetURL(dashboardArt)
+			}
 		}
 		e.mu.Lock()
 		current := e.artGeneration == generation && e.cur != nil && e.cur.IdentityPlaying() == identity
 		if current {
 			e.lastArtURL = dashboardArt
+			e.lastDiscordArtURL = discordArt
 			e.lastListenURL = lookup.ListenURL
 			e.lastVia = lookup.Via
 		}
@@ -526,6 +550,11 @@ func (e *Engine) Status() Status {
 		s.Playing = e.cur.Playing
 		s.Source = e.cur.Source
 		s.Service = serviceName(e.cur)
+		cfgType := ""
+		if e.Cfg != nil {
+			cfgType = e.Cfg.Get().Presence.Type
+		}
+		s.ActivityType = trackActivityType(e.cur, cfgType)
 		s.Title = e.cur.Title
 		s.Artist = e.cur.Artist
 		s.Album = e.cur.Album

@@ -10,7 +10,12 @@ import (
 )
 
 func serviceName(t *player.Track) string {
+	if t.Service == "youtube" {
+		return "YouTube"
+	}
 	switch t.Source {
+	case "youtubemusic":
+		return "YouTube Music"
 	case "spotify", "spotifyapi":
 		return "Spotify"
 	case "applemusic":
@@ -48,6 +53,8 @@ func discordAssetURL(raw string) string {
 func musicURL(t *player.Track, resolved string, spotifySearch bool) string {
 	query := strings.TrimSpace(t.Title + " " + t.Artist)
 	switch t.Source {
+	case "youtubemusic":
+		return ""
 	case "spotify", "spotifyapi":
 		if platformURL(t.ListenURL, "open.spotify.com") {
 			return t.ListenURL
