@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -62,6 +63,7 @@ type browserClassification struct{ Service, VideoID string }
 type Engine struct {
 	EnumerateWindows func() []browserwin.Window
 	ReadAddressBar   func(uintptr) (string, error)
+	ReadTabNames     func(uintptr, int) ([]string, error)
 	browserCache     map[string]browserClassification
 	classifyPending  bool
 	Cfg              *config.Holder
@@ -543,9 +545,17 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 	if readAddress == nil {
 		readAddress = browserwin.ReadAddressBar
 	}
+	readTabs := e.ReadTabNames
+	if readTabs == nil {
+		readTabs = browserwin.ReadTabNames
+	}
+	tabsEnabled := !slices.ContainsFunc(e.Cfg.Get().Sources.Blocked, func(blocked string) bool {
+		return strings.ToLower(strings.TrimSpace(blocked)) == "youtube_tabs"
+	})
 	e.mu.Unlock()
 	go func() {
 		classification := browserClassification{}
+		tabMatch := false
 		if t.Source == "browser" {
 			windows := enumerate()
 			titles := make([]string, len(windows))
@@ -573,6 +583,23 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 						}
 					}
 				}
+			} else if tabsEnabled {
+				remaining := 200
+				for i, window := range windows {
+					if i >= 8 || remaining <= 0 {
+						break
+					}
+					names, err := readTabs(window.HWND, remaining)
+					if len(names) > remaining {
+						names = names[:remaining]
+					}
+					remaining -= len(names)
+					if err == nil && browserwin.MatchYouTubeTabName(names, t.Title) {
+						classification.Service = "youtube"
+						tabMatch = true
+						break
+					}
+				}
 			}
 		}
 		lookup := e.Art.Resolve(art.Track{
@@ -586,6 +613,9 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 				lookup.ImageURL = art.YouTubeSymbolURL
 				lookup.Via = "symbol"
 			}
+		}
+		if tabMatch {
+			lookup.ImageURL, lookup.DiscordURL, lookup.Via = art.YouTubeSymbolURL, art.YouTubeSymbolURL, "symbol"
 		}
 		if classification.VideoID != "" {
 			image, via := art.YouTubeSymbolURL, "symbol"

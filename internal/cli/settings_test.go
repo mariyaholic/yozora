@@ -67,7 +67,7 @@ func TestDashboardEndpointRoundTripAndAuthenticatedProbe(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"name":"Yozora","enabled":{"applemusic":true,"spotify":true,"spotifyapi":true,"youtubemusic":true,"youtube":false,"browser":false,"generic":false}}`))
+		_, _ = w.Write([]byte(`{"name":"Yozora","enabled":{"applemusic":true,"spotify":true,"spotifyapi":true,"youtubemusic":true,"youtube":false,"youtube_tabs":false,"browser":false,"generic":false}}`))
 	}))
 	defer server.Close()
 	endpoint := dashboardEndpoint{BaseURL: server.URL, Token: fixtureDashboardToken, PID: 1}
@@ -133,5 +133,15 @@ func TestProbeRequiresYouTubeToggle(t *testing.T) {
 	defer server.Close()
 	if probeDashboard(context.Background(), dashboardEndpoint{BaseURL: server.URL, Token: fixtureDashboardToken, PID: 1}) {
 		t.Fatal("accepted source list missing YouTube toggle")
+	}
+}
+
+func TestProbeRequiresYouTubeTabsToggle(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"name":"Yozora","enabled":{"applemusic":true,"spotify":true,"spotifyapi":true,"youtubemusic":true,"youtube":false,"browser":false,"generic":false}}`))
+	}))
+	defer server.Close()
+	if probeDashboard(context.Background(), dashboardEndpoint{BaseURL: server.URL, Token: fixtureDashboardToken, PID: 1}) {
+		t.Fatal("accepted source list missing background-tab toggle")
 	}
 }
