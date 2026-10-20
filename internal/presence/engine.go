@@ -61,6 +61,7 @@ type browserClassification struct{ Service, VideoID string }
 
 type Engine struct {
 	EnumerateWindows func() []browserwin.Window
+	ReadAddressBar   func(uintptr) (string, error)
 	browserCache     map[string]browserClassification
 	classifyPending  bool
 	Cfg              *config.Holder
@@ -538,6 +539,10 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 	if enumerate == nil {
 		enumerate = browserwin.Enumerate
 	}
+	readAddress := e.ReadAddressBar
+	if readAddress == nil {
+		readAddress = browserwin.ReadAddressBar
+	}
 	e.mu.Unlock()
 	go func() {
 		classification := browserClassification{}
@@ -548,8 +553,26 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 				titles[i] = w.Title
 			}
 			// Ambiguous YouTube matches must still be classified to prevent blocked browser cards leaking.
-			if _, count := browserwin.MatchYouTubeTitle(titles, t.Title); count >= 1 {
+			if index, count := browserwin.MatchYouTubeTitle(titles, t.Title); count >= 1 {
 				classification.Service = "youtube"
+				candidate := t
+				candidate.Service = "youtube"
+				// The address bar is read only for a unique match while YouTube is enabled.
+				if count == 1 && !player.IsBlocked(candidate, e.Cfg.Get().Sources.Blocked) {
+					hwnd := windows[index].HWND
+					if raw, err := readAddress(hwnd); err == nil {
+						if id, valid := browserwin.ParseYouTubeWatchID(raw); valid {
+							again := enumerate()
+							titles = titles[:0]
+							for _, w := range again {
+								titles = append(titles, w.Title)
+							}
+							if i, n := browserwin.MatchYouTubeTitle(titles, t.Title); n == 1 && again[i].HWND == hwnd {
+								classification.VideoID = id
+							}
+						}
+					}
+				}
 			}
 		}
 		lookup := e.Art.Resolve(art.Track{
@@ -563,6 +586,13 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 				lookup.ImageURL = art.YouTubeSymbolURL
 				lookup.Via = "symbol"
 			}
+		}
+		if classification.VideoID != "" {
+			image, via := art.YouTubeSymbolURL, "symbol"
+			if thumbnails, ok := e.Art.(interface{ YouTubeThumbnail(string) (string, string) }); ok {
+				image, via = thumbnails.YouTubeThumbnail(classification.VideoID)
+			}
+			lookup.ImageURL, lookup.DiscordURL, lookup.Via = image, image, via
 		}
 		imageURL := lookup.ImageURL
 
