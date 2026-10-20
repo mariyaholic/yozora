@@ -71,9 +71,10 @@
       <div class="source-option"><input type="checkbox" id="source-applemusic"><label for="source-applemusic">Apple Music</label></div>
       <div class="source-option"><input type="checkbox" id="source-spotify"><label for="source-spotify">Spotify (desktop)</label></div>
       <div class="source-option"><input type="checkbox" id="source-spotifyapi"><label for="source-spotifyapi">Spotify (Web API, if configured)</label></div>
+      <div class="source-option"><input type="checkbox" id="source-youtubemusic"><label for="source-youtubemusic">YouTube Music</label></div>
       <div class="source-option"><input type="checkbox" id="source-browser"><label for="source-browser">Browser media / videos</label></div>
       <div class="source-option"><input type="checkbox" id="source-generic"><label for="source-generic">Other media players</label></div>
-      <div class="source-help">Checked sources may appear in your activity. Custom app filters still apply.</div>
+      <div class="source-help">Checked sources may appear in your activity. Custom app filters such as msedge still block the YouTube Music PWA; its toggle cannot override them.</div>
       <div id="order-help" class="source-help">Priority decides which source wins when several play at once. Drag rows, or use the arrow buttons; the order saves with Apply.</div>
       <ul id="source-order" aria-describedby="order-help"></ul>
       <button type="submit" id="source-save">Apply</button>
@@ -86,7 +87,8 @@
 </div>
 <script nonce="{{.Nonce}}">
 const t = new URLSearchParams(location.search).get("t");
-const sourceKeys = ["applemusic", "spotify", "spotifyapi", "browser", "generic"];
+const sourceKeys = ["applemusic", "spotify", "spotifyapi", "youtubemusic", "browser", "generic"];
+const toggleKeys = [...sourceKeys];
 const sourceFields = document.getElementById("source-fields");
 const sourceStatus = document.getElementById("source-status");
 const sourceSave = document.getElementById("source-save");
@@ -99,7 +101,7 @@ function safeButtonURL(raw) {
   } catch { return ""; }
 }
 function showSources(enabled) {
-  for (const source of sourceKeys) document.getElementById(`source-${source}`).checked = enabled[source] === true;
+  for (const source of toggleKeys) document.getElementById(`source-${source}`).checked = enabled[source] === true;
 }
 async function loadSources() {
   try {
@@ -112,7 +114,7 @@ async function loadSources() {
     sourceStatus.textContent = "Saved source settings loaded.";
   } catch (e) { sourceStatus.textContent = `Could not load sources: ${e}. Reload to retry.`; }
 }
-const sourceLabels = { applemusic:"Apple Music", spotify:"Spotify (desktop)", spotifyapi:"Spotify (Web API)", browser:"Browser media / videos", generic:"Other media players" };
+const sourceLabels = { applemusic:"Apple Music", spotify:"Spotify (desktop)", spotifyapi:"Spotify (Web API)", youtubemusic:"YouTube Music", browser:"Browser media / videos", generic:"Other media players" };
 let savedOrder = [];
 let dragFrom = -1;
 function showOrder(order) {
@@ -171,7 +173,7 @@ function moveSource(index, delta) {
 }
 document.getElementById("sources-form").addEventListener("submit", async event => {
   event.preventDefault();
-  const enabled = Object.fromEntries(sourceKeys.map(source => [source, document.getElementById(`source-${source}`).checked]));
+  const enabled = Object.fromEntries(toggleKeys.map(source => [source, document.getElementById(`source-${source}`).checked]));
   sourceFields.disabled = true;
   sourceStatus.textContent = "Saving…";
   try {
@@ -209,7 +211,7 @@ async function tick() {
   try {
     const r = await fetch(`/api/state?t=${encodeURIComponent(t)}`, {cache:"no-store"});
     const s = await r.json();
-    head.textContent = s.playing ? `Listening to ${s.service || "Media Player"}` : `Paused — ${s.service || "Media Player"}`;
+    head.textContent = s.playing ? `${s.activity_type === "watching" ? "Watching" : s.activity_type === "playing" ? "Playing" : "Listening to"} ${s.service || "Media Player"}` : `Paused — ${s.service || "Media Player"}`;
     det.textContent = s.title || "— nothing playing —";
     st.textContent = s.artist ? `${s.artist}${s.album ? " — " + s.album : ""}` : "";
     art.src = s.art_url || "";

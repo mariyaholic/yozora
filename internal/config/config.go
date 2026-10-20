@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -48,7 +50,14 @@ type Buttons struct {
 	YozoraURL     string `toml:"yozora_url"`
 }
 
+var OrderSources = []string{"applemusic", "spotify", "spotifyapi", "youtubemusic", "browser", "generic"}
+
+var ToggleKeys = append([]string(nil), OrderSources...)
+
+var defaultBlocked = []string{"browser", "generic"}
+
 type Sources struct {
+	Known   []string `toml:"known"`
 	PollMS  int      `toml:"poll_ms"`
 	Order   []string `toml:"order"`
 	Blocked []string `toml:"blocked"`
@@ -111,8 +120,9 @@ func Defaults() *Config {
 
 	c.Buttons.YozoraURL = "https://github.com/mariyaholic/yozora"
 	c.Sources.PollMS = 1000
-	c.Sources.Order = []string{"applemusic", "spotify", "spotifyapi", "browser", "generic"}
-	c.Sources.Blocked = []string{"browser", "generic"}
+	c.Sources.Order = slices.Clone(OrderSources)
+	c.Sources.Blocked = slices.Clone(defaultBlocked)
+	c.Sources.Known = slices.Clone(ToggleKeys)
 	c.Spotify.Mode = "system"
 	c.Spotify.PollSecs = 12
 	c.Spotify.Market = "from_token"
@@ -142,6 +152,7 @@ func Load(path string) (*Config, error) {
 	if b, err := os.ReadFile(path); err == nil {
 
 		c.Sources.Blocked = nil
+		c.Sources.Known = nil
 		if err := toml.Unmarshal(b, c); err != nil {
 			return nil, err
 		}
@@ -203,9 +214,40 @@ func (c *Config) normalize() {
 	if c.Spotify.PollSecs < 5 {
 		c.Spotify.PollSecs = 12
 	}
-	if len(c.Sources.Order) == 0 {
-		c.Sources.Order = []string{"applemusic", "spotify", "spotifyapi", "browser", "generic"}
+	order := make([]string, 0, len(OrderSources))
+	for _, source := range c.Sources.Order {
+		source = strings.ToLower(strings.TrimSpace(source))
+		if slices.Contains(OrderSources, source) && !slices.Contains(order, source) {
+			order = append(order, source)
+		}
 	}
+	c.Sources.Order = order
+	if len(c.Sources.Order) == 0 {
+		c.Sources.Order = slices.Clone(OrderSources)
+	}
+	if c.Sources.Known == nil {
+		c.Sources.Known = []string{"applemusic", "spotify", "spotifyapi", "browser", "generic"}
+	}
+	for _, key := range ToggleKeys {
+		if slices.Contains(OrderSources, key) && !slices.Contains(c.Sources.Order, key) {
+			index := len(c.Sources.Order)
+			if key == "youtubemusic" {
+				if i := slices.Index(c.Sources.Order, "browser"); i >= 0 {
+					index = i
+				}
+			}
+			c.Sources.Order = slices.Insert(c.Sources.Order, index, key)
+		}
+		if slices.Contains(c.Sources.Known, key) {
+			continue
+		}
+		if slices.Contains(defaultBlocked, key) && !slices.ContainsFunc(c.Sources.Blocked, func(blocked string) bool {
+			return strings.ToLower(strings.TrimSpace(blocked)) == key
+		}) {
+			c.Sources.Blocked = append(c.Sources.Blocked, key)
+		}
+	}
+	c.Sources.Known = slices.Clone(ToggleKeys)
 }
 
 type Holder struct {

@@ -57,9 +57,9 @@ Double-click **Yozora.exe** to open the control panel in its own native window. 
 
 When more than one detected source is playing at once, the **priority list** decides which one appears. The panel shows drag handles (or ↑/↓ buttons for keyboard users); the order saves with Apply into `sources.order` in `cadence.toml`.
 
-- The list is a total order over the five canonical sources; the top entry wins whenever it is playing.
+- The list is a total order over the six canonical sources (`applemusic`, `spotify`, `spotifyapi`, `youtubemusic`, `browser`, `generic`); the top entry wins whenever it is playing.
 - If the top source stops playing or disappears, the next white-listed source takes over automatically.
-- Files/order validation is strict: all five sources, each exactly once, canonical spelling (the API rejects anything else).
+- API order validation is strict: every source, each exactly once, canonical spelling; unknown or duplicate file entries are dropped on load.
 
 For this local Rich Presence path, desktop Discord must be running; no Discord client secret is required.
 
@@ -86,3 +86,5 @@ Every merge to `main` tests, builds and publishes a release automatically (`.git
 ## Notes
 
 Yozora is not affiliated with or endorsed by Discord, Spotify, or Apple.
+
+YouTube Music is a dedicated source, enabled by default, for its browser PWA and supported desktop apps. It always uses Listening activity, shows the Windows media thumbnail in the dashboard, and uses a fixed YouTube Music symbol on Discord without catalog lookups or a listen button. Custom app filters such as `msedge` still block the YouTube Music PWA; its source toggle cannot override them.

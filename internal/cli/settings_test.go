@@ -67,7 +67,7 @@ func TestDashboardEndpointRoundTripAndAuthenticatedProbe(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"name":"Yozora","enabled":{"applemusic":true,"spotify":true,"spotifyapi":true,"browser":false,"generic":false}}`))
+		_, _ = w.Write([]byte(`{"name":"Yozora","enabled":{"applemusic":true,"spotify":true,"spotifyapi":true,"youtubemusic":true,"browser":false,"generic":false}}`))
 	}))
 	defer server.Close()
 	endpoint := dashboardEndpoint{BaseURL: server.URL, Token: fixtureDashboardToken, PID: 1}
@@ -113,5 +113,15 @@ func TestDashboardURLRejectsUnsafeEndpoints(t *testing.T) {
 	endpoint.Token = "not-a-session-token"
 	if _, err := dashboardURL(endpoint); err == nil {
 		t.Fatal("accepted malformed session token")
+	}
+}
+
+func TestProbeRequiresYouTubeMusic(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"name":"Yozora","enabled":{"applemusic":true,"spotify":true,"spotifyapi":true,"browser":false,"generic":false}}`))
+	}))
+	defer server.Close()
+	if probeDashboard(context.Background(), dashboardEndpoint{BaseURL: server.URL, Token: fixtureDashboardToken, PID: 1}) {
+		t.Fatal("accepted obsolete source list")
 	}
 }

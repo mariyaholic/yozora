@@ -22,9 +22,10 @@ import (
 )
 
 type Lookup struct {
-	ImageURL  string
-	ListenURL string
-	Via       string
+	DiscordURL string
+	ImageURL   string
+	ListenURL  string
+	Via        string
 }
 
 type Resolver struct {
@@ -113,6 +114,14 @@ type Track struct {
 
 func (r *Resolver) Resolve(t Track, prefer string) Lookup {
 
+	if t.Source == "youtubemusic" {
+		l := r.localArt(t, keyOf(t.Source, t.Title, t.Artist, t.Album))
+		l.DiscordURL = YouTubeMusicSymbolURL
+		if l.ImageURL == "" {
+			l.Via = "symbol"
+		}
+		return l
+	}
 	if t.ArtURL != "" {
 		return Lookup{ImageURL: t.ArtURL, Via: "spotify"}
 	}
