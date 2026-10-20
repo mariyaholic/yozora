@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"uika-resonance/internal/art"
+	"uika-resonance/internal/browserwin"
 	"uika-resonance/internal/config"
 	"uika-resonance/internal/discordipc"
 	"uika-resonance/internal/player"
@@ -56,10 +57,15 @@ type activityClient interface {
 	Close()
 }
 
+type browserClassification struct{ Service, VideoID string }
+
 type Engine struct {
-	Cfg      *config.Holder
-	Art      artworkResolver
-	StateDir string
+	EnumerateWindows func() []browserwin.Window
+	browserCache     map[string]browserClassification
+	classifyPending  bool
+	Cfg              *config.Holder
+	Art              artworkResolver
+	StateDir         string
 
 	smtcCh    <-chan []smtc.Track
 	spotifyCh <-chan player.Track
@@ -160,6 +166,12 @@ func (e *Engine) pick(now time.Time) *player.Track {
 	e.mu.Lock()
 	sessions := make([]player.Track, len(e.lastSMTCSessions))
 	copy(sessions, e.lastSMTCSessions)
+	for i := range sessions {
+		if sessions[i].Source == "browser" {
+			c := e.browserCache[sessions[i].Identity()]
+			sessions[i].Service, sessions[i].VideoID = c.Service, c.VideoID
+		}
+	}
 	sp := e.spotify
 	e.mu.Unlock()
 	if sp != nil && time.Since(sp.LastUpdated) < 30*time.Second {
@@ -196,17 +208,24 @@ func (e *Engine) step(now time.Time) {
 		e.writeState()
 	}
 
-	if cur == nil {
-		e.mu.Lock()
-		revoked := e.publishedTrack != nil && player.IsBlocked(*e.publishedTrack, cfg.Sources.Blocked)
-		lastSend := e.lastSend
-		e.mu.Unlock()
-		if revoked {
-			if lastSend.IsZero() || now.Sub(lastSend) >= time.Duration(cfg.Presence.MinUpdateSecs)*time.Second {
-				e.clear(now, "")
-			}
-			return
+	e.mu.Lock()
+	if e.publishedTrack != nil && e.publishedTrack.Source == "browser" {
+		if c, ok := e.browserCache[e.publishedTrack.Identity()]; ok {
+			e.publishedTrack.Service = c.Service
 		}
+	}
+	e.mu.Unlock()
+	e.mu.Lock()
+	revoked := e.publishedTrack != nil && player.IsBlocked(*e.publishedTrack, cfg.Sources.Blocked)
+	lastSend := e.lastSend
+	e.mu.Unlock()
+	if cur == nil && revoked {
+		if lastSend.IsZero() || now.Sub(lastSend) >= time.Duration(cfg.Presence.MinUpdateSecs)*time.Second {
+			e.clear(now, "")
+		}
+		return
+	}
+	if cur == nil {
 		idle := cfg.Presence.IdleClearSecs
 		if !e.lastActivity.IsZero() && time.Since(e.lastActivity) > time.Duration(idle)*time.Second {
 			if !e.cleared {
@@ -219,8 +238,27 @@ func (e *Engine) step(now time.Time) {
 	}
 	e.lastActivity = now
 
-	if identityChanged {
+	e.mu.Lock()
+	_, classified := e.browserCache[cur.Identity()]
+	needsClassification := e.Art != nil && cur.Source == "browser" && !classified && !e.classifyPending
+	e.mu.Unlock()
+	if identityChanged || needsClassification {
+		// A browser replacement is about to be classified; do not leave a revoked card up meanwhile.
+		if revoked && cur.Source == "browser" && (lastSend.IsZero() || now.Sub(lastSend) >= time.Duration(cfg.Presence.MinUpdateSecs)*time.Second) {
+			e.clear(now, "")
+		}
 		e.resolveArtAsync(*cur, cfg.Art.Prefer, id)
+		return
+	}
+	e.mu.Lock()
+	classification := e.browserCache[cur.Identity()]
+	pending := cur.Source == "browser" && (e.classifyPending || classification.Service != cur.Service || classification.VideoID != cur.VideoID)
+	e.mu.Unlock()
+	if pending {
+		// A replacement awaiting browser classification cannot safely be published yet.
+		if revoked && (lastSend.IsZero() || now.Sub(lastSend) >= time.Duration(cfg.Presence.MinUpdateSecs)*time.Second) {
+			e.clear(now, "")
+		}
 		return
 	}
 	if now.Sub(e.identityAt) < time.Duration(cfg.Presence.TrackDebounceMS)*time.Millisecond {
@@ -395,6 +433,9 @@ func (e *Engine) clear(now time.Time, identity string) {
 
 func (e *Engine) send(t *player.Track, now time.Time) {
 	cfg := e.Cfg.Get()
+	if player.IsBlocked(*t, cfg.Sources.Blocked) {
+		return
+	}
 	clientID := cfg.Discord.ClientID
 	if override := cfg.Discord.Apps[t.Source]; override != "" {
 		clientID = override
@@ -433,6 +474,9 @@ func (e *Engine) send(t *player.Track, now time.Time) {
 			label := cfg.Buttons.Label
 			if label == "" || label == "Listen along" {
 				label = "Listen on " + serviceName(t)
+				if t.Service == "youtube" {
+					label = "Watch on YouTube"
+				}
 			}
 			a.Buttons = append(a.Buttons, discordipc.Button{Label: template.Truncate(label, template.MaxButtonLabel), URL: target})
 		}
@@ -453,7 +497,9 @@ func (e *Engine) send(t *player.Track, now time.Time) {
 	e.sentID = identity
 	e.sentArtURL = assetImage
 	e.published = a
-	e.publishedTrack = &player.Track{Source: t.Source, Service: t.Service, AppID: t.AppID}
+	publishedTrack := *t
+	publishedTrack.Thumb = nil
+	e.publishedTrack = &publishedTrack
 	e.acknowledged = ipc.AcceptedPayload()
 	e.sentElapsedAt = now
 	e.sentElapsedSec = t.ElapsedSec(now)
@@ -487,12 +533,37 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 	}
 	e.mu.Lock()
 	generation := e.artGeneration
+	e.classifyPending = t.Source == "browser"
+	enumerate := e.EnumerateWindows
+	if enumerate == nil {
+		enumerate = browserwin.Enumerate
+	}
 	e.mu.Unlock()
 	go func() {
+		classification := browserClassification{}
+		if t.Source == "browser" {
+			windows := enumerate()
+			titles := make([]string, len(windows))
+			for i, w := range windows {
+				titles[i] = w.Title
+			}
+			// Ambiguous YouTube matches must still be classified to prevent blocked browser cards leaking.
+			if _, count := browserwin.MatchYouTubeTitle(titles, t.Title); count >= 1 {
+				classification.Service = "youtube"
+			}
+		}
 		lookup := e.Art.Resolve(art.Track{
 			Source: t.Source, Title: t.Title, Artist: t.Artist, Album: t.Album,
 			ArtURL: t.ArtURL, Thumb: t.Thumb,
 		}, prefer)
+		if classification.Service == "youtube" {
+			lookup.DiscordURL = art.YouTubeSymbolURL
+			lookup.ListenURL = ""
+			if lookup.ImageURL == "" {
+				lookup.ImageURL = art.YouTubeSymbolURL
+				lookup.Via = "symbol"
+			}
+		}
 		imageURL := lookup.ImageURL
 
 		dashboardArt := imageURL
@@ -509,6 +580,13 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 		e.mu.Lock()
 		current := e.artGeneration == generation && e.cur != nil && e.cur.IdentityPlaying() == identity
 		if current {
+			if t.Source == "browser" {
+				if e.browserCache == nil || len(e.browserCache) >= 16 {
+					e.browserCache = make(map[string]browserClassification)
+				}
+				e.browserCache[t.Identity()] = classification
+				e.classifyPending = false
+			}
 			e.lastArtURL = dashboardArt
 			e.lastDiscordArtURL = discordArt
 			e.lastListenURL = lookup.ListenURL
@@ -522,7 +600,11 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 }
 
 func (e *Engine) activityName(cfg *config.Config, t *player.Track) string {
-	if n := cfg.Discord.Names[t.Source]; n != "" {
+	key := t.Source
+	if t.Service == "youtube" {
+		key = "youtube"
+	}
+	if n := cfg.Discord.Names[key]; n != "" {
 		return n
 	}
 	return serviceName(t)

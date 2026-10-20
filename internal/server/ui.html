@@ -73,8 +73,9 @@
       <div class="source-option"><input type="checkbox" id="source-spotifyapi"><label for="source-spotifyapi">Spotify (Web API, if configured)</label></div>
       <div class="source-option"><input type="checkbox" id="source-youtubemusic"><label for="source-youtubemusic">YouTube Music</label></div>
       <div class="source-option"><input type="checkbox" id="source-browser"><label for="source-browser">Browser media / videos</label></div>
+      <div class="source-option"><input type="checkbox" id="source-youtube"><label for="source-youtube">YouTube (browser tab; needs Browser media)</label></div>
       <div class="source-option"><input type="checkbox" id="source-generic"><label for="source-generic">Other media players</label></div>
-      <div class="source-help">Checked sources may appear in your activity. Custom app filters such as msedge still block the YouTube Music PWA; its toggle cannot override them.</div>
+      <div class="source-help">Checked sources may appear in your activity. YouTube is off by default and needs Browser media. An exact Edge or Chrome window title match shows Watching YouTube with a symbol on Discord, the media thumbnail (or symbol) here, and no video button; the check runs when the browser track or its play/pause state changes. When YouTube is off, a matching track is hidden, even if several windows match. Custom app filters such as msedge still block the YouTube Music PWA; its toggle cannot override them.</div>
       <div id="order-help" class="source-help">Priority decides which source wins when several play at once. Drag rows, or use the arrow buttons; the order saves with Apply.</div>
       <ul id="source-order" aria-describedby="order-help"></ul>
       <button type="submit" id="source-save">Apply</button>
@@ -88,7 +89,7 @@
 <script nonce="{{.Nonce}}">
 const t = new URLSearchParams(location.search).get("t");
 const sourceKeys = ["applemusic", "spotify", "spotifyapi", "youtubemusic", "browser", "generic"];
-const toggleKeys = [...sourceKeys];
+const toggleKeys = [...sourceKeys, "youtube"];
 const sourceFields = document.getElementById("source-fields");
 const sourceStatus = document.getElementById("source-status");
 const sourceSave = document.getElementById("source-save");

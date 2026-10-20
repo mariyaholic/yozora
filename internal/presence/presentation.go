@@ -4,6 +4,7 @@ package presence
 
 import (
 	"net/url"
+	"regexp"
 	"strings"
 
 	"uika-resonance/internal/player"
@@ -50,7 +51,15 @@ func discordAssetURL(raw string) string {
 	return raw
 }
 
+var videoIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
+
 func musicURL(t *player.Track, resolved string, spotifySearch bool) string {
+	if t.Service == "youtube" {
+		if videoIDPattern.MatchString(t.VideoID) {
+			return "https://www.youtube.com/watch?v=" + t.VideoID
+		}
+		return ""
+	}
 	query := strings.TrimSpace(t.Title + " " + t.Artist)
 	switch t.Source {
 	case "youtubemusic":
