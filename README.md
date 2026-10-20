@@ -53,7 +53,7 @@ Double-click **Yozora.exe** to open the control panel in its own native window. 
 - Disabling a source stops new detections and clears an activity that source was driving at the next rate step.
 - Saved through the existing `sources.blocked` list in `cadence.toml`; custom per-app filters are preserved.
 
-YouTube has a separate toggle, off by default, and requires Browser media. Detection matches only an exact Edge or Chrome window title (the active tab), checked when the browser track or its play/pause state changes, and again if a track has not been classified yet. When enabled, it shows Watching YouTube with a symbol on Discord and the SMTC thumbnail (or symbol) on the dashboard, without a video button. When disabled, a browser track matching a YouTube window title is hidden instead of shown as a browser card, even if several windows match.
+YouTube has a separate toggle, off by default, and requires Browser media. Detection matches only an exact Edge or Chrome window title (the active tab), checked when the browser track or its play/pause state changes, and again if a track has not been classified yet. When enabled and a video ID is available, it shows Watching YouTube with the video thumbnail (or symbol) and a Watch on YouTube button; otherwise it shows the symbol on Discord and the SMTC thumbnail (or symbol) on the dashboard, without a video button. When disabled, a browser track matching a YouTube window title is hidden instead of shown as a browser card, even if several windows match. When YouTube is on and exactly one window matches, Yozora reads that window’s address bar once through Windows UI Automation at each of those checks to get the video ID (active tab only, best effort), and keeps only the ID.
 
 ## Source priority
 
