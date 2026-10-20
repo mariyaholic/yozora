@@ -52,9 +52,9 @@ type Buttons struct {
 
 var OrderSources = []string{"applemusic", "spotify", "spotifyapi", "youtubemusic", "browser", "generic"}
 
-var ToggleKeys = append([]string(nil), OrderSources...)
+var ToggleKeys = append(append([]string(nil), OrderSources...), "youtube")
 
-var defaultBlocked = []string{"browser", "generic"}
+var defaultBlocked = []string{"browser", "generic", "youtube"}
 
 type Sources struct {
 	Known   []string `toml:"known"`

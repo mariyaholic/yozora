@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"uika-resonance/internal/art"
+	"uika-resonance/internal/browserwin"
 	"uika-resonance/internal/config"
 	"uika-resonance/internal/discordipc"
 	"uika-resonance/internal/player"
@@ -154,7 +155,7 @@ func newArtworkTestEngine(t *testing.T, track player.Track) (*Engine, *queuedArt
 	}
 	resolver := &queuedArtwork{requests: make(chan artworkRequest, 4), release: make(chan struct{})}
 	t.Cleanup(func() { close(resolver.release) })
-	return &Engine{Cfg: holder, Art: resolver, ipc: &recordingActivityClient{}, lastSMTCSessions: []player.Track{track}}, resolver
+	return &Engine{EnumerateWindows: func() []browserwin.Window { return nil }, Cfg: holder, Art: resolver, ipc: &recordingActivityClient{}, lastSMTCSessions: []player.Track{track}}, resolver
 }
 
 func nextArtworkRequest(t *testing.T, resolver *queuedArtwork, title string) artworkRequest {
@@ -645,5 +646,53 @@ func TestSetErrPersistsFailureForStatusCommand(t *testing.T) {
 	}
 	if status.LastErr == "" {
 		t.Fatal("persisted status has no last_error")
+	}
+}
+
+func TestBlockedPublishedMusicDirectReplacement(t *testing.T) {
+	now := time.Now()
+	old := player.Track{Source: "spotify", Title: "old", Playing: true, LastUpdated: now}
+	replacement := player.Track{Source: "generic", Title: "replacement", Playing: true, LastUpdated: now}
+	e, _ := newArtworkTestEngine(t, old)
+	e.Art = nil
+	client := e.ipc.(*recordingActivityClient)
+	e.step(now)
+	e.step(now.Add(time.Second))
+	if len(client.activities) != 1 {
+		t.Fatal("fixture not published")
+	}
+	e.Cfg.Get().Sources.Blocked = []string{"spotify"}
+	e.lastSMTCSessions = []player.Track{old, replacement}
+	e.step(now.Add(2 * time.Second))
+	e.step(now.Add(6 * time.Second))
+	if len(client.activities) != 2 || client.activities[1] == nil || client.activities[1].Details != replacement.Title {
+		t.Fatalf("blocked published music must be replaced without a clear: %+v", client.activities)
+	}
+}
+
+func TestRevokedPublishedSourceClearsWhileBrowserClassificationPending(t *testing.T) {
+	now := time.Now()
+	old := player.Track{Source: "spotify", Title: "old", Playing: true, LastUpdated: now}
+	browser := player.Track{Source: "browser", Title: "pending", Playing: true, LastUpdated: now}
+	e, _ := newArtworkTestEngine(t, old)
+	e.Art = nil
+	client := e.ipc.(*recordingActivityClient)
+	e.step(now)
+	e.step(now.Add(time.Second))
+	if len(client.activities) != 1 {
+		t.Fatal("fixture not published")
+	}
+	e.Cfg.Get().Sources.Blocked = []string{"spotify"}
+	e.lastSMTCSessions = []player.Track{browser}
+	// Model an outstanding browser classification without starting a worker.
+	e.classifyPending = true
+	e.step(now.Add(2 * time.Second))
+	e.step(now.Add(5999 * time.Millisecond))
+	if len(client.activities) != 1 {
+		t.Fatal("cleared before rate gate")
+	}
+	e.step(now.Add(6 * time.Second))
+	if len(client.activities) != 2 || client.activities[1] != nil {
+		t.Fatalf("revoked publication retained during pending classification: %+v", client.activities)
 	}
 }

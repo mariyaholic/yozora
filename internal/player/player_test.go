@@ -60,3 +60,16 @@ func TestReservedSourceFilters(t *testing.T) {
 		t.Fatalf("no fallthrough: %+v", got)
 	}
 }
+
+func TestYouTubeServiceBlockingAndFallback(t *testing.T) {
+	youtube := Track{Source: "browser", Service: "youtube", Title: "video", Playing: true}
+	plain := Track{Source: "browser", Title: "plain", Playing: true}
+	music := Track{Source: "youtubemusic", AppID: "com.github.th-ch.youtube-music", Title: "song", Playing: true}
+	if !IsBlocked(youtube, []string{"youtube"}) || !IsBlocked(youtube, []string{"browser"}) || IsBlocked(plain, []string{"youtube"}) || IsBlocked(music, []string{"youtube"}) {
+		t.Fatal("incorrect service blocking")
+	}
+	got := Arbitrate([]Track{youtube, music}, []string{"browser", "youtubemusic"}, []string{"youtube"})
+	if got == nil || got.Source != "youtubemusic" {
+		t.Fatal("blocked YouTube did not fall through")
+	}
+}

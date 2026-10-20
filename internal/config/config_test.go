@@ -110,7 +110,7 @@ func TestNewConfigBlocksNonMusicButExistingChoicesSurvive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c.Sources.Blocked) != 2 || c.Sources.Blocked[0] != "browser" || c.Sources.Blocked[1] != "generic" {
+	if len(c.Sources.Blocked) != 3 || c.Sources.Blocked[0] != "browser" || c.Sources.Blocked[1] != "generic" {
 		t.Fatalf("new blocks = %v", c.Sources.Blocked)
 	}
 
@@ -122,7 +122,7 @@ func TestNewConfigBlocksNonMusicButExistingChoicesSurvive(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(c.Sources.Blocked) > 0 && c.Sources.Blocked[0] != "SPOTIFY" {
+		if !reflect.DeepEqual(c.Sources.Blocked, []string{"youtube"}) && !reflect.DeepEqual(c.Sources.Blocked, []string{"SPOTIFY", "custom.app", "youtube"}) {
 			t.Fatalf("existing choices overwritten: %v", c.Sources.Blocked)
 		}
 	}
@@ -134,7 +134,7 @@ func TestNewConfigBlocksNonMusicButExistingChoicesSurvive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c.Sources.Blocked) != 0 {
+	if !reflect.DeepEqual(c.Sources.Blocked, []string{"youtube"}) {
 		t.Fatalf("pre-existing config was re-blocked: %v", c.Sources.Blocked)
 	}
 
@@ -180,7 +180,7 @@ func TestSourceMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{"generic", "spotifyapi", "youtubemusic", "browser", "spotify", "applemusic"}
-	if !reflect.DeepEqual(c.Sources.Order, want) || !reflect.DeepEqual(c.Sources.Known, ToggleKeys) || len(c.Sources.Blocked) != 0 {
+	if !reflect.DeepEqual(c.Sources.Order, want) || !reflect.DeepEqual(c.Sources.Known, ToggleKeys) || !reflect.DeepEqual(c.Sources.Blocked, []string{"youtube"}) {
 		t.Fatalf("migration: %+v", c.Sources)
 	}
 	before := c.Sources
@@ -224,7 +224,7 @@ func TestSourceMigrationReviewFixtures(t *testing.T) {
 			fixture: `order = ["generic", "spotifyapi", "browser", "spotify", "applemusic"]
 blocked = ["SPOTIFY", "custom.app"]`,
 			order:   []string{"generic", "spotifyapi", "youtubemusic", "browser", "spotify", "applemusic"},
-			blocked: []string{"SPOTIFY", "custom.app"},
+			blocked: []string{"SPOTIFY", "custom.app", "youtube"},
 		},
 		{
 			name: "existing duplicates are not multiplied",
@@ -232,28 +232,28 @@ blocked = ["SPOTIFY", "custom.app"]`,
 blocked = ["browser", "browser"]
 known = ["applemusic", "spotify", "spotifyapi", "youtubemusic", "youtubemusic", "browser", "generic"]`,
 			order:   []string{"applemusic", "spotify", "spotifyapi", "youtubemusic", "browser", "generic"},
-			blocked: []string{"browser", "browser"},
+			blocked: []string{"browser", "browser", "youtube"},
 		},
 		{
 			name: "unknown order entry",
 			fixture: `order = ["generic", "spotifyapi", "custom", "browser", "spotify", "applemusic"]
 blocked = []`,
 			order:   []string{"generic", "spotifyapi", "youtubemusic", "browser", "spotify", "applemusic"},
-			blocked: []string{},
+			blocked: []string{"youtube"},
 		},
 		{
 			name: "case and space order variant",
 			fixture: `order = ["generic", " Spotify ", "browser", "spotify", "applemusic", "spotifyapi"]
 blocked = []`,
 			order:   []string{"generic", "spotify", "youtubemusic", "browser", "applemusic", "spotifyapi"},
-			blocked: []string{},
+			blocked: []string{"youtube"},
 		},
 		{
 			name: "only unknown order entries",
 			fixture: `order = ["custom", "other"]
 blocked = []`,
 			order:   OrderSources,
-			blocked: []string{},
+			blocked: []string{"youtube"},
 		},
 		{
 			name: "known music missing from order",
@@ -261,7 +261,7 @@ blocked = []`,
 blocked = []
 known = ["applemusic", "spotify", "spotifyapi", "youtubemusic", "browser", "generic"]`,
 			order:   []string{"generic", "spotifyapi", "youtubemusic", "browser", "spotify", "applemusic"},
-			blocked: []string{},
+			blocked: []string{"youtube"},
 		},
 		{
 			name: "case variant legacy blocks",

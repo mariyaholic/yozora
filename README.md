@@ -53,6 +53,8 @@ Double-click **Yozora.exe** to open the control panel in its own native window. 
 - Disabling a source stops new detections and clears an activity that source was driving at the next rate step.
 - Saved through the existing `sources.blocked` list in `cadence.toml`; custom per-app filters are preserved.
 
+YouTube has a separate toggle, off by default, and requires Browser media. Detection matches only an exact Edge or Chrome window title (the active tab), checked when the browser track or its play/pause state changes, and again if a track has not been classified yet. When enabled, it shows Watching YouTube with a symbol on Discord and the SMTC thumbnail (or symbol) on the dashboard, without a video button. When disabled, a browser track matching a YouTube window title is hidden instead of shown as a browser card, even if several windows match.
+
 ## Source priority
 
 When more than one detected source is playing at once, the **priority list** decides which one appears. The panel shows drag handles (or ↑/↓ buttons for keyboard users); the order saves with Apply into `sources.order` in `cadence.toml`.
