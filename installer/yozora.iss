@@ -9,6 +9,7 @@ AppId={{6B0C1D52-5E0A-4C8E-9C57-3F0D7B6A21E4}
 AppName=Yozora
 AppVersion={#AppVersion}
 AppPublisher=Maria
+AppCopyright=Copyright (c) 2026 Maria (mariyaholic)
 DefaultDirName={localappdata}\Programs\Yozora
 DefaultGroupName=Yozora
 PrivilegesRequired=lowest
