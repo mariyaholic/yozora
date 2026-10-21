@@ -92,3 +92,7 @@ Every merge to `main` tests, builds and publishes a release automatically (`.git
 Yozora is not affiliated with or endorsed by Discord, Spotify, or Apple.
 
 YouTube Music is a dedicated source, enabled by default, for its browser PWA and supported desktop apps. It always uses Listening activity, shows the Windows media thumbnail in the dashboard, and uses a fixed YouTube Music symbol on Discord without catalog lookups or a listen button. Custom app filters such as `msedge` still block the YouTube Music PWA; its source toggle cannot override them.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
