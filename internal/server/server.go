@@ -63,7 +63,7 @@ func constantTimeEqual(a, b string) bool {
 func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	var configMu sync.Mutex
-	sources := canonicalSources
+	sources := config.ToggleKeys
 	writeSources := func(w http.ResponseWriter) {
 		cfg := d.Cfg.Get()
 		enabled := make(map[string]bool, len(sources))
@@ -178,7 +178,7 @@ func Handler(d Deps) http.Handler {
 				}
 			}
 			if payload.Order != nil {
-				if err := validateSourceOrder(payload.Order, sources); err != nil {
+				if err := validateSourceOrder(payload.Order, canonicalSources); err != nil {
 					http.Error(w, err.Error(), 400)
 					return
 				}

@@ -8,12 +8,14 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"uika-resonance/internal/art"
+	"uika-resonance/internal/browserwin"
 	"uika-resonance/internal/config"
 	"uika-resonance/internal/discordipc"
 	"uika-resonance/internal/player"
@@ -22,6 +24,7 @@ import (
 )
 
 type Status struct {
+	ActivityType string               `json:"activity_type"`
 	UpdatedAt    time.Time            `json:"updated_at"`
 	Connected    bool                 `json:"discord_connected"`
 	Playing      bool                 `json:"playing"`
@@ -55,39 +58,47 @@ type activityClient interface {
 	Close()
 }
 
+type browserClassification struct{ Service, VideoID string }
+
 type Engine struct {
-	Cfg      *config.Holder
-	Art      artworkResolver
-	StateDir string
+	EnumerateWindows func() []browserwin.Window
+	ReadAddressBar   func(uintptr) (string, error)
+	ReadTabNames     func(uintptr, int) ([]string, error)
+	browserCache     map[string]browserClassification
+	classifyPending  bool
+	Cfg              *config.Holder
+	Art              artworkResolver
+	StateDir         string
 
 	smtcCh    <-chan []smtc.Track
 	spotifyCh <-chan player.Track
 
-	mu               sync.Mutex
-	stateMu          sync.Mutex
-	ipc              activityClient
-	cur              *player.Track
-	spotify          *player.Track
-	lastSMTCSessions []player.Track
-	identityAt       time.Time
-	lastIdentity     string
-	lastSend         time.Time
-	sentID           string
-	sentElapsedAt    time.Time
-	sentElapsedSec   float64
-	lastActivity     time.Time
-	cleared          bool
-	nextDial         atomic.Int64
-	sends            int64
-	lastErr          string
-	lastArtURL       string
-	lastListenURL    string
-	lastVia          string
-	artGeneration    uint64
-	sentArtURL       string
-	published        *discordipc.Activity
-	publishedTrack   *player.Track
-	acknowledged     json.RawMessage
+	mu                sync.Mutex
+	stateMu           sync.Mutex
+	ipc               activityClient
+	cur               *player.Track
+	spotify           *player.Track
+	lastSMTCSessions  []player.Track
+	identityAt        time.Time
+	lastIdentity      string
+	lastSend          time.Time
+	sentID            string
+	sentElapsedAt     time.Time
+	sentElapsedSec    float64
+	lastActivity      time.Time
+	cleared           bool
+	nextDial          atomic.Int64
+	sends             int64
+	lastErr           string
+	lastArtURL        string
+	lastDiscordArtURL string
+	lastListenURL     string
+	lastVia           string
+	artGeneration     uint64
+	sentArtURL        string
+	published         *discordipc.Activity
+	publishedTrack    *player.Track
+	acknowledged      json.RawMessage
 }
 
 func New(cfg *config.Holder, a *art.Resolver, smtcCh <-chan []smtc.Track, spotifyCh <-chan player.Track, stateDir string) *Engine {
@@ -158,6 +169,12 @@ func (e *Engine) pick(now time.Time) *player.Track {
 	e.mu.Lock()
 	sessions := make([]player.Track, len(e.lastSMTCSessions))
 	copy(sessions, e.lastSMTCSessions)
+	for i := range sessions {
+		if sessions[i].Source == "browser" {
+			c := e.browserCache[sessions[i].Identity()]
+			sessions[i].Service, sessions[i].VideoID = c.Service, c.VideoID
+		}
+	}
 	sp := e.spotify
 	e.mu.Unlock()
 	if sp != nil && time.Since(sp.LastUpdated) < 30*time.Second {
@@ -185,6 +202,7 @@ func (e *Engine) step(now time.Time) {
 		e.lastIdentity = id
 		e.identityAt = now
 		e.lastArtURL = ""
+		e.lastDiscordArtURL = ""
 		e.lastListenURL = ""
 		e.lastVia = ""
 	}
@@ -193,17 +211,24 @@ func (e *Engine) step(now time.Time) {
 		e.writeState()
 	}
 
-	if cur == nil {
-		e.mu.Lock()
-		revoked := e.publishedTrack != nil && player.IsBlocked(*e.publishedTrack, cfg.Sources.Blocked)
-		lastSend := e.lastSend
-		e.mu.Unlock()
-		if revoked {
-			if lastSend.IsZero() || now.Sub(lastSend) >= time.Duration(cfg.Presence.MinUpdateSecs)*time.Second {
-				e.clear(now, "")
-			}
-			return
+	e.mu.Lock()
+	if e.publishedTrack != nil && e.publishedTrack.Source == "browser" {
+		if c, ok := e.browserCache[e.publishedTrack.Identity()]; ok {
+			e.publishedTrack.Service = c.Service
 		}
+	}
+	e.mu.Unlock()
+	e.mu.Lock()
+	revoked := e.publishedTrack != nil && player.IsBlocked(*e.publishedTrack, cfg.Sources.Blocked)
+	lastSend := e.lastSend
+	e.mu.Unlock()
+	if cur == nil && revoked {
+		if lastSend.IsZero() || now.Sub(lastSend) >= time.Duration(cfg.Presence.MinUpdateSecs)*time.Second {
+			e.clear(now, "")
+		}
+		return
+	}
+	if cur == nil {
 		idle := cfg.Presence.IdleClearSecs
 		if !e.lastActivity.IsZero() && time.Since(e.lastActivity) > time.Duration(idle)*time.Second {
 			if !e.cleared {
@@ -216,8 +241,27 @@ func (e *Engine) step(now time.Time) {
 	}
 	e.lastActivity = now
 
-	if identityChanged {
+	e.mu.Lock()
+	_, classified := e.browserCache[cur.Identity()]
+	needsClassification := e.Art != nil && cur.Source == "browser" && !classified && !e.classifyPending
+	e.mu.Unlock()
+	if identityChanged || needsClassification {
+		// A browser replacement is about to be classified; do not leave a revoked card up meanwhile.
+		if revoked && cur.Source == "browser" && (lastSend.IsZero() || now.Sub(lastSend) >= time.Duration(cfg.Presence.MinUpdateSecs)*time.Second) {
+			e.clear(now, "")
+		}
 		e.resolveArtAsync(*cur, cfg.Art.Prefer, id)
+		return
+	}
+	e.mu.Lock()
+	classification := e.browserCache[cur.Identity()]
+	pending := cur.Source == "browser" && (e.classifyPending || classification.Service != cur.Service || classification.VideoID != cur.VideoID)
+	e.mu.Unlock()
+	if pending {
+		// A replacement awaiting browser classification cannot safely be published yet.
+		if revoked && (lastSend.IsZero() || now.Sub(lastSend) >= time.Duration(cfg.Presence.MinUpdateSecs)*time.Second) {
+			e.clear(now, "")
+		}
 		return
 	}
 	if now.Sub(e.identityAt) < time.Duration(cfg.Presence.TrackDebounceMS)*time.Millisecond {
@@ -238,7 +282,7 @@ func (e *Engine) step(now time.Time) {
 	}
 	wantsClear := !cur.Playing && (cfg.Presence.PausedMode == "hide" || cfg.Presence.PausedMode == "clear")
 	e.mu.Lock()
-	artChanged := discordAssetURL(e.lastArtURL) != e.sentArtURL
+	artChanged := discordAssetURL(e.lastDiscordArtURL) != e.sentArtURL
 	visibilityChanged := e.cleared != wantsClear
 	e.mu.Unlock()
 	if sameTrack && !drift && !artChanged && !visibilityChanged {
@@ -269,6 +313,21 @@ func activityType(cfgType string) int {
 		return discordipc.TypeWatching
 	default:
 		return discordipc.TypeListening
+	}
+}
+
+func trackActivityType(t *player.Track, cfgType string) string {
+	if t.Service == "youtube" {
+		return "watching"
+	}
+	if t.Source == "youtubemusic" {
+		return "listening"
+	}
+	switch cfgType {
+	case "watching", "playing":
+		return cfgType
+	default:
+		return "listening"
 	}
 }
 
@@ -342,7 +401,7 @@ func (e *Engine) clear(now time.Time, identity string) {
 	e.mu.Lock()
 	if e.cleared {
 		e.sentID = identity
-		e.sentArtURL = discordAssetURL(e.lastArtURL)
+		e.sentArtURL = discordAssetURL(e.lastDiscordArtURL)
 		e.mu.Unlock()
 		return
 	}
@@ -365,7 +424,7 @@ func (e *Engine) clear(now time.Time, identity string) {
 	e.mu.Lock()
 	e.cleared = true
 	e.sentID = identity
-	e.sentArtURL = discordAssetURL(e.lastArtURL)
+	e.sentArtURL = discordAssetURL(e.lastDiscordArtURL)
 	e.lastSend = now
 	e.published = nil
 	e.publishedTrack = nil
@@ -377,6 +436,9 @@ func (e *Engine) clear(now time.Time, identity string) {
 
 func (e *Engine) send(t *player.Track, now time.Time) {
 	cfg := e.Cfg.Get()
+	if player.IsBlocked(*t, cfg.Sources.Blocked) {
+		return
+	}
 	clientID := cfg.Discord.ClientID
 	if override := cfg.Discord.Apps[t.Source]; override != "" {
 		clientID = override
@@ -400,11 +462,11 @@ func (e *Engine) send(t *player.Track, now time.Time) {
 		}
 	}
 
-	a := buildActivity(e.activityName(cfg, t), activityType(cfg.Presence.Type), statusDisplayType(cfg.Presence.StatusDisplay), details, state, t, now)
+	a := buildActivity(e.activityName(cfg, t), activityType(trackActivityType(t, cfg.Presence.Type)), statusDisplayType(cfg.Presence.StatusDisplay), details, state, t, now)
 
 	e.mu.Lock()
 	ipc := e.ipc
-	imageURL := e.lastArtURL
+	imageURL := e.lastDiscordArtURL
 	listenURL := e.lastListenURL
 	e.mu.Unlock()
 
@@ -415,6 +477,9 @@ func (e *Engine) send(t *player.Track, now time.Time) {
 			label := cfg.Buttons.Label
 			if label == "" || label == "Listen along" {
 				label = "Listen on " + serviceName(t)
+				if t.Service == "youtube" {
+					label = "Watch on YouTube"
+				}
 			}
 			a.Buttons = append(a.Buttons, discordipc.Button{Label: template.Truncate(label, template.MaxButtonLabel), URL: target})
 		}
@@ -435,7 +500,9 @@ func (e *Engine) send(t *player.Track, now time.Time) {
 	e.sentID = identity
 	e.sentArtURL = assetImage
 	e.published = a
-	e.publishedTrack = &player.Track{Source: t.Source, AppID: t.AppID}
+	publishedTrack := *t
+	publishedTrack.Thumb = nil
+	e.publishedTrack = &publishedTrack
 	e.acknowledged = ipc.AcceptedPayload()
 	e.sentElapsedAt = now
 	e.sentElapsedSec = t.ElapsedSec(now)
@@ -469,24 +536,119 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 	}
 	e.mu.Lock()
 	generation := e.artGeneration
+	e.classifyPending = t.Source == "browser"
+	enumerate := e.EnumerateWindows
+	if enumerate == nil {
+		enumerate = browserwin.Enumerate
+	}
+	readAddress := e.ReadAddressBar
+	if readAddress == nil {
+		readAddress = browserwin.ReadAddressBar
+	}
+	readTabs := e.ReadTabNames
+	if readTabs == nil {
+		readTabs = browserwin.ReadTabNames
+	}
+	tabsEnabled := !slices.ContainsFunc(e.Cfg.Get().Sources.Blocked, func(blocked string) bool {
+		return strings.ToLower(strings.TrimSpace(blocked)) == "youtube_tabs"
+	})
 	e.mu.Unlock()
 	go func() {
+		classification := browserClassification{}
+		tabMatch := false
+		if t.Source == "browser" {
+			windows := enumerate()
+			titles := make([]string, len(windows))
+			for i, w := range windows {
+				titles[i] = w.Title
+			}
+			// Ambiguous YouTube matches must still be classified to prevent blocked browser cards leaking.
+			if index, count := browserwin.MatchYouTubeTitle(titles, t.Title); count >= 1 {
+				classification.Service = "youtube"
+				candidate := t
+				candidate.Service = "youtube"
+				// The address bar is read only for a unique match while YouTube is enabled.
+				if count == 1 && !player.IsBlocked(candidate, e.Cfg.Get().Sources.Blocked) {
+					hwnd := windows[index].HWND
+					if raw, err := readAddress(hwnd); err == nil {
+						if id, valid := browserwin.ParseYouTubeWatchID(raw); valid {
+							again := enumerate()
+							titles = titles[:0]
+							for _, w := range again {
+								titles = append(titles, w.Title)
+							}
+							if i, n := browserwin.MatchYouTubeTitle(titles, t.Title); n == 1 && again[i].HWND == hwnd {
+								classification.VideoID = id
+							}
+						}
+					}
+				}
+			} else if tabsEnabled {
+				remaining := 200
+				for i, window := range windows {
+					if i >= 8 || remaining <= 0 {
+						break
+					}
+					names, err := readTabs(window.HWND, remaining)
+					if len(names) > remaining {
+						names = names[:remaining]
+					}
+					remaining -= len(names)
+					if err == nil && browserwin.MatchYouTubeTabName(names, t.Title) {
+						classification.Service = "youtube"
+						tabMatch = true
+						break
+					}
+				}
+			}
+		}
 		lookup := e.Art.Resolve(art.Track{
 			Source: t.Source, Title: t.Title, Artist: t.Artist, Album: t.Album,
 			ArtURL: t.ArtURL, Thumb: t.Thumb,
 		}, prefer)
+		if classification.Service == "youtube" {
+			lookup.DiscordURL = art.YouTubeSymbolURL
+			lookup.ListenURL = ""
+			if lookup.ImageURL == "" {
+				lookup.ImageURL = art.YouTubeSymbolURL
+				lookup.Via = "symbol"
+			}
+		}
+		if tabMatch {
+			lookup.ImageURL, lookup.DiscordURL, lookup.Via = art.YouTubeSymbolURL, art.YouTubeSymbolURL, "symbol"
+		}
+		if classification.VideoID != "" {
+			image, via := art.YouTubeSymbolURL, "symbol"
+			if thumbnails, ok := e.Art.(interface{ YouTubeThumbnail(string) (string, string) }); ok {
+				image, via = thumbnails.YouTubeThumbnail(classification.VideoID)
+			}
+			lookup.ImageURL, lookup.DiscordURL, lookup.Via = image, image, via
+		}
 		imageURL := lookup.ImageURL
 
 		dashboardArt := imageURL
-		discordArt := discordAssetURL(imageURL)
+		discordArt := lookup.DiscordURL
+		if discordArt == "" {
+			discordArt = discordAssetURL(imageURL)
+		}
 		if imageURL == "" {
-			discordArt = e.Art.DefaultURL()
-			dashboardArt = discordArt
+			dashboardArt = e.Art.DefaultURL()
+			if discordArt == "" {
+				discordArt = discordAssetURL(dashboardArt)
+			}
 		}
 		e.mu.Lock()
 		current := e.artGeneration == generation && e.cur != nil && e.cur.IdentityPlaying() == identity
 		if current {
+			if t.Source == "browser" {
+				if e.browserCache == nil || len(e.browserCache) >= 16 {
+					e.browserCache = make(map[string]browserClassification)
+				}
+				e.browserCache[t.Identity()] = classification
+				e.classifyPending = false
+			}
 			e.lastArtURL = dashboardArt
+			e.lastDiscordArtURL = discordArt
 			e.lastListenURL = lookup.ListenURL
 			e.lastVia = lookup.Via
 		}
@@ -498,7 +660,11 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 }
 
 func (e *Engine) activityName(cfg *config.Config, t *player.Track) string {
-	if n := cfg.Discord.Names[t.Source]; n != "" {
+	key := t.Source
+	if t.Service == "youtube" {
+		key = "youtube"
+	}
+	if n := cfg.Discord.Names[key]; n != "" {
 		return n
 	}
 	return serviceName(t)
@@ -526,6 +692,11 @@ func (e *Engine) Status() Status {
 		s.Playing = e.cur.Playing
 		s.Source = e.cur.Source
 		s.Service = serviceName(e.cur)
+		cfgType := ""
+		if e.Cfg != nil {
+			cfgType = e.Cfg.Get().Presence.Type
+		}
+		s.ActivityType = trackActivityType(e.cur, cfgType)
 		s.Title = e.cur.Title
 		s.Artist = e.cur.Artist
 		s.Album = e.cur.Album

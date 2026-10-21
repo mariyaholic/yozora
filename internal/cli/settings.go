@@ -156,7 +156,7 @@ func probeDashboard(ctx context.Context, endpoint dashboardEndpoint) bool {
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 8192)).Decode(&result); err != nil || result.Name != "Yozora" {
 		return false
 	}
-	for _, source := range []string{"applemusic", "spotify", "spotifyapi", "browser", "generic"} {
+	for _, source := range config.ToggleKeys {
 		if _, ok := result.Enabled[source]; !ok {
 			return false
 		}

@@ -53,13 +53,15 @@ Double-click **Yozora.exe** to open the control panel in its own native window. 
 - Disabling a source stops new detections and clears an activity that source was driving at the next rate step.
 - Saved through the existing `sources.blocked` list in `cadence.toml`; custom per-app filters are preserved.
 
+YouTube has a separate toggle, off by default, and requires Browser media. Detection matches only an exact Edge or Chrome window title (the active tab), checked when the browser track or its play/pause state changes, and again if a track has not been classified yet. When enabled and a video ID is available, it shows Watching YouTube with the video thumbnail (or symbol) and a Watch on YouTube button; otherwise it shows the symbol on Discord and the SMTC thumbnail (or symbol) on the dashboard, without a video button. When disabled, a browser track matching a YouTube window title is hidden instead of shown as a browser card, even if several windows match. When YouTube is on and exactly one window matches, Yozora reads that window’s address bar once through Windows UI Automation at each of those checks to get the video ID (active tab only, best effort), and keeps only the ID.
+
 ## Source priority
 
 When more than one detected source is playing at once, the **priority list** decides which one appears. The panel shows drag handles (or ↑/↓ buttons for keyboard users); the order saves with Apply into `sources.order` in `cadence.toml`.
 
-- The list is a total order over the five canonical sources; the top entry wins whenever it is playing.
+- The list is a total order over the six canonical sources (`applemusic`, `spotify`, `spotifyapi`, `youtubemusic`, `browser`, `generic`); the top entry wins whenever it is playing.
 - If the top source stops playing or disappears, the next white-listed source takes over automatically.
-- Files/order validation is strict: all five sources, each exactly once, canonical spelling (the API rejects anything else).
+- API order validation is strict: every source, each exactly once, canonical spelling; unknown or duplicate file entries are dropped on load.
 
 For this local Rich Presence path, desktop Discord must be running; no Discord client secret is required.
 
@@ -70,6 +72,8 @@ For this local Rich Presence path, desktop Discord must be running; no Discord c
 - Small image: Yozora's application icon. Override `discord.small_image` with a Discord asset key or a publicly accessible image URL if the app icon changes.
 - First button: **Listen on [service]**. A custom `buttons.label` is preserved; the legacy/default `Listen along` label becomes the service-specific label.
 - Second button: **Yozora**, using `buttons.yozora_url`.
+
+Background tab detection has its own toggle, off by default. When no window title matches, it reads the tab names of up to 8 browser windows (designed for Edge) through Windows UI Automation at the same moments as the title check, and looks for a `<title> - YouTube - Audio playing` tab; any match, even several, counts as YouTube. It shows the symbol only (never a thumbnail or button), and with YouTube off it is used only to hide the track.
 
 Browser videos use only the thumbnail the browser itself supplies through Windows media controls, and browser titles are never matched against music catalogs. YouTube pages usually expose no public thumbnail URL to this API, and Discord's servers cannot fetch the local dashboard's `127.0.0.1` art cache — so a browser card shows whatever artwork is available in the local dashboard, while its Discord presence may appear without a large image (text, timestamps, and the Yozora button still show).
 
@@ -86,3 +90,5 @@ Every merge to `main` tests, builds and publishes a release automatically (`.git
 ## Notes
 
 Yozora is not affiliated with or endorsed by Discord, Spotify, or Apple.
+
+YouTube Music is a dedicated source, enabled by default, for its browser PWA and supported desktop apps. It always uses Listening activity, shows the Windows media thumbnail in the dashboard, and uses a fixed YouTube Music symbol on Discord without catalog lookups or a listen button. Custom app filters such as `msedge` still block the YouTube Music PWA; its source toggle cannot override them.

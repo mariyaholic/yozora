@@ -36,3 +36,40 @@ func TestArbitrateBlocksCanonicalSource(t *testing.T) {
 		t.Fatalf("Arbitrate() = %+v, want blocked source to be dropped", got)
 	}
 }
+
+func TestReservedSourceFilters(t *testing.T) {
+	music := Track{Source: "youtubemusic", AppID: "com.github.th-ch.youtube-music", Title: "song", Playing: true}
+	pwa := Track{Source: "youtubemusic", AppID: "MSEdge._crx_cinhimbnkkaeohfgghhklpknlkffjgod"}
+	youtube := Track{Source: "browser", Service: "youtube", Title: "video", Playing: true}
+	for _, tc := range []struct {
+		track  Track
+		filter string
+		want   bool
+	}{
+		{music, "youtube", false}, {music, "youtubemusic", true},
+		{pwa, "MSEdge", true}, {youtube, "browser", true}, {youtube, "youtube", true},
+		{Track{Source: "browser", AppID: "youtube_tabs"}, "youtube_tabs", false},
+		{Track{Source: "browser", AppID: "youtube"}, "youtube", false},
+		{music, "th-ch", true},
+	} {
+		if got := IsBlocked(tc.track, []string{tc.filter}); got != tc.want {
+			t.Errorf("%+v / %s: %v", tc.track, tc.filter, got)
+		}
+	}
+	if got := Arbitrate([]Track{youtube, music}, []string{"browser", "youtubemusic"}, []string{"youtube"}); got == nil || got.Source != "youtubemusic" {
+		t.Fatalf("no fallthrough: %+v", got)
+	}
+}
+
+func TestYouTubeServiceBlockingAndFallback(t *testing.T) {
+	youtube := Track{Source: "browser", Service: "youtube", Title: "video", Playing: true}
+	plain := Track{Source: "browser", Title: "plain", Playing: true}
+	music := Track{Source: "youtubemusic", AppID: "com.github.th-ch.youtube-music", Title: "song", Playing: true}
+	if !IsBlocked(youtube, []string{"youtube"}) || !IsBlocked(youtube, []string{"browser"}) || IsBlocked(plain, []string{"youtube"}) || IsBlocked(music, []string{"youtube"}) {
+		t.Fatal("incorrect service blocking")
+	}
+	got := Arbitrate([]Track{youtube, music}, []string{"browser", "youtubemusic"}, []string{"youtube"})
+	if got == nil || got.Source != "youtubemusic" {
+		t.Fatal("blocked YouTube did not fall through")
+	}
+}

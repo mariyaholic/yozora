@@ -69,3 +69,28 @@ func TestBrowserNeverSearchesMusic(t *testing.T) {
 		}
 	}
 }
+
+func TestYouTubeMusicNeverSearchesCatalog(t *testing.T) {
+	for _, prefer := range []string{"cdn", "smtc"} {
+		for _, thumbnail := range []bool{false, true} {
+			r := New(t.TempDir(), 1<<20)
+			r.baseURL = "http://127.0.0.1:43210"
+			r.httpClient.Transport = fixtureTransport(func(*http.Request) (*http.Response, error) { t.Error("unexpected catalog lookup"); return nil, nil })
+			track := Track{Source: "youtubemusic", Title: "song", ArtURL: "https://ignored.test/art"}
+			if thumbnail {
+				track.Thumb = func() ([]byte, error) { return []byte("thumbnail"), nil }
+			}
+			got := r.Resolve(track, prefer)
+			if got.DiscordURL != YouTubeMusicSymbolURL || got.ListenURL != "" {
+				t.Fatalf("lookup: %+v", got)
+			}
+			if thumbnail {
+				if got.Via != "smtc" || !strings.HasPrefix(got.ImageURL, r.baseURL) {
+					t.Fatalf("local art missing: %+v", got)
+				}
+			} else if got.Via != "symbol" || got.ImageURL != "" {
+				t.Fatalf("fallback: %+v", got)
+			}
+		}
+	}
+}
