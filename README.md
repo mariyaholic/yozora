@@ -14,6 +14,8 @@ Coming from v0.1.1? Its separate `yozora-daemon-...exe` and `yozora-panel-...exe
 
 Advanced: a portable [Yozora.exe](https://github.com/mariyaholic/yozora/releases/latest/download/Yozora.exe) is attached to the same release.
 
+Closing the control panel releases its WebView2 browser while Yozora keeps running in the tray. Use **Open control panel** from the tray or launch Yozora again to reopen it; choose **Quit Yozora** to stop it.
+
 ## Repository
 
 You are looking at it. The second Discord button is **Yozora**, linking here.
