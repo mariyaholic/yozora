@@ -9,6 +9,8 @@ import (
 
 type Track struct {
 	Source      string
+	Service     string
+	VideoID     string
 	AppID       string
 	Player      string
 	Title       string
@@ -54,7 +56,8 @@ func IsBlocked(t Track, blocked []string) bool {
 	source := strings.ToLower(strings.TrimSpace(t.Source))
 	for _, b := range blocked {
 		filter := strings.ToLower(strings.TrimSpace(b))
-		if filter != "" && (filter == source || strings.Contains(app, filter)) {
+		reserved := filter == "youtube" || filter == "youtubemusic" || filter == "youtube_tabs"
+		if filter != "" && (filter == source || filter == strings.ToLower(strings.TrimSpace(t.Service)) || (!reserved && strings.Contains(app, filter))) {
 			return true
 		}
 	}

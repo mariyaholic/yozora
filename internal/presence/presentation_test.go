@@ -30,7 +30,7 @@ func TestSendUsesPlatformPresentation(t *testing.T) {
 			client := &recordingActivityClient{}
 			now := time.Now()
 			track := &player.Track{Source: tc.source, Title: "fixture song", Artist: "fixture artist", Album: "fixture album", Playing: true, LastUpdated: now, DurationSec: 200, ListenURL: tc.direct}
-			engine := &Engine{Cfg: holder, ipc: client, cur: track, lastArtURL: "https://example.test/album.jpg", lastListenURL: tc.lookup}
+			engine := &Engine{Cfg: holder, ipc: client, cur: track, lastArtURL: "https://example.test/album.jpg", lastDiscordArtURL: "https://example.test/album.jpg", lastListenURL: tc.lookup}
 			engine.send(track, now)
 			if len(client.activities) != 1 {
 				t.Fatalf("published %d activities, want 1", len(client.activities))

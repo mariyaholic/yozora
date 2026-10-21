@@ -2,4 +2,6 @@
 
 package server
 
-var canonicalSources = []string{"applemusic", "spotify", "spotifyapi", "browser", "generic"}
+import "uika-resonance/internal/config"
+
+var canonicalSources = config.OrderSources

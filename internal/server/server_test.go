@@ -45,7 +45,7 @@ func request(h http.Handler, method, path, body string, header bool) *httptest.R
 func TestSourcesRejectInvalidBodiesWithoutChangingConfig(t *testing.T) {
 	h, cfg := fixtureHandler(t)
 	before := cfg.Get()
-	for _, body := range []string{`{}`, `null`, `{"enabled":null}`, `{"enabled":[]}`, `{"enabled":{"browser":null}}`, `{"enabled":{"browser":1}}`, `{"enabled":{"browser":"false"}}`, `{"enabled":{"youtube":false}}`, `{"enabled":{"Browser":false}}`, `{"enabled":{},"extra":true}`, `{"enabled":{}} {}`, `{"enabled":{}} trailing`, strings.Repeat(" ", 4097) + `{"enabled":{}}`} {
+	for _, body := range []string{`{}`, `null`, `{"enabled":null}`, `{"enabled":[]}`, `{"enabled":{"browser":null}}`, `{"enabled":{"browser":1}}`, `{"enabled":{"browser":"false"}}`, `{"enabled":{"unknown":false}}`, `{"enabled":{"Browser":false}}`, `{"enabled":{},"extra":true}`, `{"enabled":{}} {}`, `{"enabled":{}} trailing`, strings.Repeat(" ", 4097) + `{"enabled":{}}`} {
 		w := request(h, "POST", "/api/sources", body, true)
 		if w.Code != 400 && w.Code != 413 {
 			t.Errorf("accepted %q: %d", body[:min(len(body), 80)], w.Code)
@@ -129,7 +129,7 @@ func TestDashboardSourceControls(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 	page := w.Body.String()
-	for _, source := range []string{"applemusic", "spotify", "spotifyapi", "browser", "generic"} {
+	for _, source := range config.ToggleKeys {
 		if !strings.Contains(page, `id="source-`+source+`"`) || !strings.Contains(page, `for="source-`+source+`"`) {
 			t.Errorf("missing accessible checkbox for %s", source)
 		}
@@ -210,7 +210,7 @@ func TestSourcesPersistPartialChangesWithoutMutatingSnapshot(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.Name != "Yozora" || len(response.Enabled) != 5 || response.Enabled["browser"] || response.Enabled["spotify"] || !response.Enabled["applemusic"] {
+	if response.Name != "Yozora" || len(response.Enabled) != 8 || response.Enabled["browser"] || response.Enabled["spotify"] || !response.Enabled["applemusic"] {
 		t.Fatalf("state=%+v", response)
 	}
 	w = request(h, "POST", "/api/sources", `{"enabled":{"browser":true,"generic":false}}`, true)
@@ -235,5 +235,22 @@ func TestSourcesPersistPartialChangesWithoutMutatingSnapshot(t *testing.T) {
 	}
 	if !reflect.DeepEqual(restarted.Get(), &want) {
 		t.Fatal("restart lost source choices")
+	}
+}
+
+func TestYouTubeToggleAcceptedButNotPriority(t *testing.T) {
+	h, cfg := fixtureHandler(t)
+	for _, enabled := range []string{"true", "false"} {
+		w := request(h, "POST", "/api/sources", `{"enabled":{"youtube":`+enabled+`,"youtube_tabs":`+enabled+`}}`, true)
+		if w.Code != 200 {
+			t.Fatalf("toggle: %d %s", w.Code, w.Body.String())
+		}
+	}
+	w := request(h, "POST", "/api/sources", `{"order":["applemusic","spotify","spotifyapi","youtubemusic","browser","youtube"]}`, true)
+	if w.Code != 400 {
+		t.Fatalf("youtube priority accepted: %d", w.Code)
+	}
+	if len(cfg.Get().Sources.Order) != 6 {
+		t.Fatal("priority changed")
 	}
 }
