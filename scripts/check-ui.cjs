@@ -11,7 +11,7 @@ const root = path.resolve(__dirname, '..');
 const output = path.resolve(process.env.UI_EVIDENCE_DIR || path.join(os.tmpdir(), 'yozora-ui-check'));
 fs.mkdirSync(output, { recursive: true });
 const nonce = 'synthetic-ui-test';
-const html = fs.readFileSync(path.join(root, 'internal/server/ui.html'), 'utf8').replace('{{.Nonce}}', nonce);
+const html = fs.readFileSync(path.join(root, 'internal/server/ui.html'), 'utf8').replace('{{.Nonce}}', nonce).replace('{{.Theme}}', 'yozora');
 // Use the production policy, including its nonce and restriction on image URLs.
 const serverSource = fs.readFileSync(path.join(root, 'internal/server/server.go'), 'utf8');
 const cspExpression = serverSource.match(/Set\("Content-Security-Policy", (.+)\)/)[1];
@@ -24,6 +24,9 @@ let sourceGetHTTP = 200;
 let sourcePostHTTP = 200;
 let autostartHTTP = 200;
 let autostart = false;
+let theme = 'yozora';
+let themeHTTP = 200;
+const themePosts = [];
 let saveDelay = 0;
 const posts = [];
 const errors = [];
@@ -49,6 +52,14 @@ const server = http.createServer(async (req, res) => {
       if (sourcePostHTTP === 200) sources = posted;
       json(sources, sourcePostHTTP);
     } else json(sources, sourceGetHTTP);
+  } else if (url.pathname === '/api/theme') {
+    if (req.method === 'POST') {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      themePosts.push(JSON.parse(body));
+      if (themeHTTP === 200) theme = JSON.parse(body).theme;
+    }
+    json({ theme, themes: [] }, themeHTTP);
   } else if (url.pathname === '/api/autostart') {
     if (req.method === 'POST') {
       let body = '';
@@ -211,6 +222,50 @@ const server = http.createServer(async (req, res) => {
     assert.equal(await page.locator('#autostart').isChecked(), true);
     autostartHTTP = 200;
     check('startup save and failed-save rollback');
+
+    // Themes: each one applies at once, saves, rolls back on failure and keeps text readable.
+    const themeIds = await page.locator('input[name="theme"]').evaluateAll(inputs => inputs.map(input => input.value));
+    assert.deepEqual(themeIds, ['yozora', 'ao-pine', 'ao-kurisu', 'ao-ava', 'ao-paper', 'omoi-uika', 'omoi-sumimi', 'omoi-confluence', 'omoi-panel', 'omoi-pc98', 'astra-console', 'astra-paper', 'residual-night', 'residual-paper']);
+    assert.equal(await page.locator('input[name="theme"][value="yozora"]').isChecked(), true);
+    const ratio = (a, b) => {
+      const lum = hex => { const v = hex.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+      const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+      return (x + 0.05) / (y + 0.05);
+    };
+    const applyTheme = async id => {
+      await page.locator(`input[name="theme"][value="${id}"]`).evaluate(input => input.closest('label').scrollIntoView({block:'center'}));
+      await page.locator('label.theme-option', { has: page.locator(`input[value="${id}"]`) }).click();
+      await waitText('#theme-status', 'theme saved');
+      assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), id);
+      assert.deepEqual(themePosts.at(-1), { theme: id });
+      const roles = await page.evaluate(() => {
+        const probe = document.createElement('i');
+        document.body.appendChild(probe);
+        const read = name => { probe.style.color = `var(${name})`; return getComputedStyle(probe).color; };
+        const out = Object.fromEntries(['--bg', '--panel', '--panel-2', '--text', '--muted', '--dim', '--accent', '--on-accent', '--link', '--good', '--bad', '--warn', '--line-strong'].map(name => [name, read(name)]));
+        probe.remove();
+        return out;
+      });
+      for (const ground of ['--bg', '--panel']) {
+        for (const ink of ['--text', '--muted', '--dim', '--accent', '--link', '--bad', '--warn']) {
+          assert.ok(ratio(roles[ink], roles[ground]) >= 4.5, `${id}: ${ink} on ${ground} is ${ratio(roles[ink], roles[ground]).toFixed(2)}:1`);
+        }
+      }
+      assert.ok(ratio(roles['--on-accent'], roles['--accent']) >= 4.5, `${id}: primary button text is ${ratio(roles['--on-accent'], roles['--accent']).toFixed(2)}:1`);
+      assert.ok(ratio(roles['--text'], roles['--panel-2']) >= 4.5, `${id}: button text`);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await page.evaluate(() => scrollTo(0, 0));
+      await shot(`theme-${id}-560`);
+    };
+    for (const id of themeIds.slice(1)) await applyTheme(id);
+    themeHTTP = 500;
+    await page.locator('label.theme-option', { has: page.locator('input[value="ao-ava"]') }).click();
+    await waitText('#theme-status', 'Could not save');
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'residual-paper', 'a failed save must restore the saved theme');
+    assert.equal(await page.locator('input[name="theme"][value="residual-paper"]').isChecked(), true);
+    themeHTTP = 200;
+    await applyTheme('yozora');
+    check('fourteen design-system themes apply, save, roll back, and keep 4.5:1 text');
 
     state = { ...state, playing: true, title: 'A very long synthetic track title — ' + 'unbroken'.repeat(15), artist: 'Synthetic artist name '.repeat(12), published_activity: { buttons: [{ label: 'Unsafe', url: 'javascript:alert(1)' }, { label: 'Credentials', url: 'https://name:password@example.test' }, { label: 'Yozora', url: 'https://github.com/mariyaholic/yozora' }] } };
     await refresh();

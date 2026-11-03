@@ -85,6 +85,27 @@ type Log struct {
 	Level string `toml:"level"`
 }
 
+// UI holds control panel preferences. Theme must be one of Themes.
+type UI struct {
+	Theme string `toml:"theme"`
+}
+
+// DefaultTheme is Yozora's own night palette.
+const DefaultTheme = "yozora"
+
+// Themes lists the control panel palettes, in picker order. The ids match
+// the data-theme blocks in internal/server/ui.html.
+var Themes = []string{
+	DefaultTheme,
+	"ao-pine", "ao-kurisu", "ao-ava", "ao-paper",
+	"omoi-uika", "omoi-sumimi", "omoi-confluence", "omoi-panel", "omoi-pc98",
+	"astra-console", "astra-paper",
+	"residual-night", "residual-paper",
+}
+
+// ValidTheme reports whether id names a control panel theme.
+func ValidTheme(id string) bool { return slices.Contains(Themes, id) }
+
 type Config struct {
 	Discord  Discord  `toml:"discord"`
 	Presence Presence `toml:"presence"`
@@ -95,6 +116,7 @@ type Config struct {
 	Art      Art      `toml:"art"`
 	Server   Server   `toml:"server"`
 	Log      Log      `toml:"log"`
+	UI       UI       `toml:"ui"`
 }
 
 func Defaults() *Config {
@@ -129,6 +151,7 @@ func Defaults() *Config {
 	c.Art.Prefer = "cdn"
 	c.Art.CacheMB = 10
 	c.Log.Level = "info"
+	c.UI.Theme = DefaultTheme
 	return c
 }
 
@@ -210,6 +233,10 @@ func (c *Config) normalize() {
 	}
 	if c.Art.CacheMB <= 0 {
 		c.Art.CacheMB = 4
+	}
+	c.UI.Theme = strings.ToLower(strings.TrimSpace(c.UI.Theme))
+	if !ValidTheme(c.UI.Theme) {
+		c.UI.Theme = DefaultTheme
 	}
 	if c.Spotify.PollSecs < 5 {
 		c.Spotify.PollSecs = 12

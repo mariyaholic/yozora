@@ -81,11 +81,30 @@ Browser videos use only the thumbnail the browser itself supplies through Window
 
 The Windows detector reads once at startup, then polls every second by default. Its one-slot queue retains the newest snapshot, not a stale queued one. The presence engine checks every 250 ms; the brief debounce suppresses rapid skip bursts. Discord sends remain spaced by at least five seconds, so fast detection is not a promise of an immediate Discord-visible update. Artwork can arrive as a later enriched update.
 
+## Appearance
+
+The control panel's **Appearance** section offers 14 themes. Choosing one applies it at once and saves it in `cadence.toml`:
+
+```toml
+[ui]
+  theme = "yozora"
+```
+
+| Group | Theme ids | Source |
+| --- | --- | --- |
+| Yozora | `yozora` (default) | Yozora's own night palette |
+| Argonaut Oak | `ao-pine`, `ao-kurisu`, `ao-ava`, `ao-paper` | Argonaut Oak design system tokens |
+| Omoi | `omoi-uika`, `omoi-sumimi`, `omoi-confluence`, `omoi-panel`, `omoi-pc98` | Omoi's skins and the Uika canon sheet (`prototype/tokens.css`, `prototype/inspiration.css`) |
+| Ad Astra | `astra-console`, `astra-paper` | Ad Astra design system tokens |
+| Residual | `residual-night`, `residual-paper` | Residual design system tokens |
+
+Colours are copied exactly from each source. Where a source colour would fall below 4.5:1 as text in this panel, a lighter or darker value is used instead and marked `derived` in `internal/server/ui.html`. This happens for a few error and hover colours. The browser check measures text, muted, link, error and button contrast in every theme. The panel loads no web fonts, so each theme falls back to fonts installed with Windows (Segoe UI, Consolas, Georgia). An unknown or missing `theme` value loads as `yozora`.
+
 ## Verification
 
 Private Windows named-pipe regression tests exercise simultaneous read/write using a unique `yozora-test-*` pipe, not the live Discord client. Ordinary `go test ./...` never publishes experimental activity to a Discord profile. Tests also cover slow artwork, session gaps and out-of-order lookups, coherent track/art transitions, paused clear/resume and visibility-policy reloads under the send-rate gate, label-only Discord button readback, loopback-art filtering, source-toggle API validation and concurrency, launcher endpoint validation, service names, icon placement, platform-specific links, button ordering, display enums, config bounds, and newest-snapshot retention.
 
-The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, connection states, responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
+The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, every theme (applied, saved, rolled back on failure, and checked for 4.5:1 text), mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, connection states, responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
 
 ```sh
 npm install --prefix /tmp/yozora-ui-tools --no-save --no-package-lock playwright@1.62.1

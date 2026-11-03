@@ -254,3 +254,56 @@ func TestYouTubeToggleAcceptedButNotPriority(t *testing.T) {
 		t.Fatal("priority changed")
 	}
 }
+
+func TestThemeSavesKnownThemesOnly(t *testing.T) {
+	h, cfg := fixtureHandler(t)
+	if w := request(h, "GET", "/api/theme", "", false); w.Code != 401 {
+		t.Fatalf("unauthenticated theme read = %d", w.Code)
+	}
+	w := request(h, "GET", "/api/theme", "", true)
+	var got struct {
+		Theme  string   `json:"theme"`
+		Themes []string `json:"themes"`
+	}
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &got) != nil || got.Theme != config.DefaultTheme || !reflect.DeepEqual(got.Themes, config.Themes) {
+		t.Fatalf("theme read = %d %s", w.Code, w.Body.String())
+	}
+	before := cfg.Get()
+	for _, body := range []string{`{}`, `null`, `{"theme":null}`, `{"theme":"neon"}`, `{"theme":"AO-AVA"}`, `{"theme":1}`, `{"theme":"ao-ava","extra":true}`, `{"theme":"ao-ava"} {}`, strings.Repeat(" ", 300) + `{"theme":"ao-ava"}`} {
+		if w := request(h, "POST", "/api/theme", body, true); w.Code != 400 {
+			t.Errorf("accepted %q: %d", body[:min(len(body), 60)], w.Code)
+		}
+		if cfg.Get() != before {
+			t.Fatal("rejected theme changed config")
+		}
+	}
+	w = request(h, "POST", "/api/theme", `{"theme":"ao-ava"}`, true)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"theme":"ao-ava"`) {
+		t.Fatalf("theme save = %d %s", w.Code, w.Body.String())
+	}
+	loaded, err := config.Load(cfg.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.UI.Theme != "ao-ava" || cfg.Get().UI.Theme != "ao-ava" {
+		t.Fatalf("theme not persisted: file %q, holder %q", loaded.UI.Theme, cfg.Get().UI.Theme)
+	}
+	if loaded.Template.State != "custom template" || loaded.Spotify.Market != "fixture-market" || !reflect.DeepEqual(loaded.Sources.Blocked, before.Sources.Blocked) {
+		t.Fatal("theme save changed unrelated settings")
+	}
+	page := request(h, "GET", "/?t=fixture-token", "", false).Body.String()
+	if !strings.Contains(page, `<html lang="en" data-theme="ao-ava">`) {
+		t.Fatal("dashboard does not render the saved theme before scripts run")
+	}
+}
+
+func TestDashboardOffersEveryTheme(t *testing.T) {
+	for _, id := range config.Themes {
+		if !strings.Contains(uiHTML, `[data-theme="`+id+`"]`) || !strings.Contains(uiHTML, `name="theme" value="`+id+`"`) || !strings.Contains(uiHTML, `class="swatch" data-theme="`+id+`"`) {
+			t.Errorf("theme %q lacks a palette, picker option or swatch", id)
+		}
+	}
+	if got := strings.Count(uiHTML, `name="theme" value="`); got != len(config.Themes) {
+		t.Errorf("picker offers %d themes, config allows %d", got, len(config.Themes))
+	}
+}

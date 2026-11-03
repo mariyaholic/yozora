@@ -100,7 +100,7 @@ func Handler(d Deps) http.Handler {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		_ = t.Execute(w, map[string]any{"Token": d.Token, "App": d.DiscordApp, "Nonce": nonce})
+		_ = t.Execute(w, map[string]any{"Token": d.Token, "App": d.DiscordApp, "Nonce": nonce, "Theme": d.Cfg.Get().UI.Theme})
 	})
 	mux.HandleFunc("/api/state", auth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -217,6 +217,46 @@ func Handler(d Deps) http.Handler {
 		default:
 			http.Error(w, "method", 405)
 		}
+	}))
+	mux.HandleFunc("/api/theme", auth(func(w http.ResponseWriter, r *http.Request) {
+		configMu.Lock()
+		defer configMu.Unlock()
+		switch r.Method {
+		case http.MethodGet:
+		case http.MethodPost:
+			var payload struct {
+				Theme *string `json:"theme"`
+			}
+			decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256))
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&payload); err != nil || payload.Theme == nil || !config.ValidTheme(*payload.Theme) {
+				http.Error(w, "invalid theme", 400)
+				return
+			}
+			if err := decoder.Decode(new(any)); err != io.EOF {
+				http.Error(w, "trailing theme payload", 400)
+				return
+			}
+			current, err := config.Load(d.CfgPath)
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			current.UI.Theme = *payload.Theme
+			if err := config.Save(current, d.CfgPath); err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+			if _, err := d.Cfg.Reload(); err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+		default:
+			http.Error(w, "method", 405)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"theme": d.Cfg.Get().UI.Theme, "themes": config.Themes})
 	}))
 	mux.HandleFunc("/api/autostart", auth(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
