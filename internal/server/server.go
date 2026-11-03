@@ -5,7 +5,7 @@ package server
 import (
 	"crypto/rand"
 	"crypto/subtle"
-	_ "embed"
+	"embed"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -26,6 +26,11 @@ import (
 
 //go:embed ui.html
 var uiHTML string
+
+// Theme faces ship inside the binary; the panel never fetches fonts from the network.
+//
+//go:embed fonts/*.woff2
+var fontFiles embed.FS
 
 type Deps struct {
 	Engine     *presence.Engine
@@ -82,6 +87,30 @@ func Handler(d Deps) http.Handler {
 			h(w, r)
 		}
 	}
+	// Fonts are public OFL files, so they need no token; only exact embedded names are served.
+	mux.HandleFunc("/fonts/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.Error(w, "method", 405)
+			return
+		}
+		name := strings.TrimPrefix(r.URL.Path, "/fonts/")
+		if strings.ContainsAny(name, "/\\") || !strings.HasSuffix(name, ".woff2") {
+			http.NotFound(w, r)
+			return
+		}
+		b, err := fontFiles.ReadFile("fonts/" + name)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "font/woff2")
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Length", fmt.Sprint(len(b)))
+		if r.Method == http.MethodGet {
+			_, _ = w.Write(b)
+		}
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if d.Token == "" || !constantTimeEqual(r.URL.Query().Get("t"), d.Token) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -94,7 +123,7 @@ func Handler(d Deps) http.Handler {
 		}
 		nonce := base64.RawURLEncoding.EncodeToString(b)
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'nonce-"+nonce+"'; style-src 'unsafe-inline'; img-src 'self' http: https:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'nonce-"+nonce+"'; style-src 'unsafe-inline'; img-src 'self' http: https:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'")
 		t, err := template.New("ui").Parse(uiHTML)
 		if err != nil {
 			http.Error(w, err.Error(), 500)

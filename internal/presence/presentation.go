@@ -11,8 +11,11 @@ import (
 )
 
 func serviceName(t *player.Track) string {
-	if t.Service == "youtube" {
+	switch t.Service {
+	case "youtube":
 		return "YouTube"
+	case "twitch":
+		return "Twitch"
 	}
 	switch t.Source {
 	case "youtubemusic":
@@ -52,11 +55,18 @@ func discordAssetURL(raw string) string {
 }
 
 var videoIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
+var twitchLoginPattern = regexp.MustCompile(`^[a-z0-9_]{3,25}$`)
 
 func musicURL(t *player.Track, resolved string, spotifySearch bool) string {
 	if t.Service == "youtube" {
 		if videoIDPattern.MatchString(t.VideoID) {
 			return "https://www.youtube.com/watch?v=" + t.VideoID
+		}
+		return ""
+	}
+	if t.Service == "twitch" {
+		if twitchLoginPattern.MatchString(t.Channel) {
+			return "https://www.twitch.tv/" + t.Channel
 		}
 		return ""
 	}

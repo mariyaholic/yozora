@@ -57,6 +57,8 @@ Double-click **Yozora.exe** to open the control panel in its own native window. 
 
 YouTube has a separate toggle, off by default, and requires Browser media. Detection matches only an exact Edge or Chrome window title (the active tab), checked when the browser track or its play/pause state changes, and again if a track has not been classified yet. When enabled and a video ID is available, it shows Watching YouTube with the video thumbnail (or symbol) and a Watch on YouTube button; otherwise it shows the symbol on Discord and the SMTC thumbnail (or symbol) on the dashboard, without a video button. When disabled, a browser track matching a YouTube window title is hidden instead of shown as a browser card, even if several windows match. When YouTube is on and exactly one window matches, Yozora reads that window’s address bar once through Windows UI Automation at each of those checks to get the video ID (active tab only, best effort), and keeps only the ID.
 
+Twitch works the same way under its own toggle, also off by default and also needing Browser media. A browser track matches when an Edge or Chrome window is titled `<channel> - Twitch` and that channel is the track's artist or title (Twitch's media session reports the stream title with the channel as artist). With Twitch on and exactly one window matching, Yozora reads that window's address bar and keeps only the channel login from a `twitch.tv/<channel>` page. The card then shows **Watching Twitch** with the stream's live preview from Twitch's CDN (`static-cdn.jtvnw.net/previews-ttv/live_user_<channel>-640x360.jpg`) and a **Watch on Twitch** button. An offline channel's preview redirects to a placeholder, so Yozora treats that as no preview. VODs, clips and directory pages have no channel login, and ambiguous matches have no address-bar read; all of these show the Twitch symbol without a button. With Twitch off, matching tracks are hidden from Discord, as with YouTube.
+
 ## Source priority
 
 When more than one detected source is playing at once, the **priority list** decides which one appears. The panel combines source switches and priority in one always-visible list. Drag a grip with a mouse or touch to the gold insertion line; holding near the top or bottom of the window scrolls to off-screen rows. Release to reorder, or press Escape / release outside the list to cancel. Keyboard users can use the ↑/↓ buttons or focus a grip and press Up/Down. The order saves with Apply into `sources.order` in `cadence.toml`, together with the source switches.
@@ -83,7 +85,7 @@ The Windows detector reads once at startup, then polls every second by default. 
 
 ## Appearance
 
-The control panel's **Appearance** section offers 11 themes. Choosing one applies it at once and saves it in `cadence.toml`:
+The **Appearance** button in the panel's header opens a dialog with 11 themes and the motion setting. Each theme tile previews its colours and title face. Choosing one applies it at once and saves it in `cadence.toml`:
 
 ```toml
 [ui]
@@ -107,11 +109,11 @@ The control panel's **Appearance** section offers 11 themes. Choosing one applie
 
 All 11 appear in one grid, dark themes first. Themes that looked nearly identical were merged: Omoi Panel into Night sky, and Residual Night and Paper into Astra and Astra light. Saved ids `panel`, `residual` and `residual-light` load as the theme that absorbed them. Where a source called a theme "Paper", "Night" or "Console", it is renamed so each name is unique. Omoi palettes come from `prototype/tokens.css` and `prototype/inspiration.css`.
 
-Colours are copied exactly from each source. Where a source colour would fall below 4.5:1 as text in this panel, a lighter or darker value is used instead and marked `derived` in `internal/server/ui.html`. This happens for a few error and hover colours. The browser check measures text, muted, link, error and button contrast in every theme. The panel loads no web fonts, so each theme falls back to fonts installed with Windows (Segoe UI, Consolas, Georgia). An unknown or missing `theme` value loads as `yozora`.
+Colours are copied exactly from each source. Where a source colour would fall below 4.5:1 as text in this panel, a lighter or darker value is used instead and marked `derived` in `internal/server/ui.html`. This happens for a few error and hover colours. The browser check measures text, muted, link, error and button contrast in every theme. Each theme's faces ship inside the binary (Latin subsets, about 370 KB, all under the SIL Open Font License; see `internal/server/fonts/README.md`), and the panel serves them itself at `/fonts/`. The content-security policy allows fonts only from the panel, so nothing is fetched from the network. Night sky uses Segoe UI and Confluence uses Georgia and Consolas, which Windows already has. The browser check confirms that every other theme loads its own faces. An unknown or missing `theme` value loads as `yozora`.
 
 ### Motion
 
-Motion only answers an event: a hover or press, a drag, a reorder, a new track or play state, or a save in progress. Nothing animates while the panel sits idle. The one repeating animation is the status dot in Pine, Kurisu and Ava, which pulses only while Discord is connected and a track is playing. The **Motion** setting under Appearance chooses how much of this runs:
+Motion only answers an event: a hover or press, a drag, a reorder, a new track or play state, or a save in progress. Nothing animates while the panel sits idle. The one repeating animation is the playback dot in Pine, Kurisu and Ava, which pulses only while Discord is connected and a track is playing. The **Motion** setting under Appearance chooses how much of this runs:
 
 - **Follow Windows** (`system`, the default) uses Windows' "Show animations" setting (`prefers-reduced-motion`).
 - **Reduced** (`reduced`) turns every animation and transition off, whatever Windows says.
@@ -123,7 +125,7 @@ Like the theme, it applies at once and is saved in `cadence.toml`; an unknown va
 | --- | --- | --- | --- |
 | Night sky | New track: artwork fades in, the crescent's star twinkles | Lift 1px, gold border | Rows part around the drop point; glowing drop line; rows slide 200ms |
 | Uika | Wine glow fades in once when the theme loads; new track: artwork fades in | Gold underline sweeps in | Lifted row glows gold; rows glide 300ms on the canon ease-out |
-| Pine, Kurisu, Ava | Live status dot. Kurisu: new text warms up. Ava: readouts flash on track or play-state change | 0.15s colour, 1px accent outline on press | 2px accent edge on the dragged row; rows snap. Kurisu: amber afterglow. Ava: the drop line sweeps |
+| Pine, Kurisu, Ava | Live playback dot. Kurisu: new text warms up. Ava: readouts flash on track or play-state change | 0.15s colour, 1px accent outline on press | 2px accent edge on the dragged row; rows snap. Kurisu: amber afterglow. Ava: the drop line sweeps |
 | Ledger | None | Ink colour | A double rule opens at the drop point; rows snap |
 | Astra, Astra light | None (colour changes only, 120ms) | Colour only | Dashed placeholder, ruler-tick drop line; rows snap |
 | Mariyaholic-98 | A block cursor blinks while a save is in flight | Keys sink into their hard shadow | Hard-shadow preview on a 4px grid; rows move in four frames |
@@ -134,7 +136,7 @@ Like the theme, it applies at once and is saved in `cadence.toml`; an unknown va
 
 Private Windows named-pipe regression tests exercise simultaneous read/write using a unique `yozora-test-*` pipe, not the live Discord client. Ordinary `go test ./...` never publishes experimental activity to a Discord profile. Tests also cover slow artwork, session gaps and out-of-order lookups, coherent track/art transitions, paused clear/resume and visibility-policy reloads under the send-rate gate, label-only Discord button readback, loopback-art filtering, source-toggle API validation and concurrency, launcher endpoint validation, service names, icon placement, platform-specific links, button ordering, display enums, config bounds, and newest-snapshot retention.
 
-The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, every theme (applied, saved, rolled back on failure, and checked for 4.5:1 text), motion (no animation at idle in any theme, cues fire once per change and never on reconnect, every drag, cancel and reorder ends with no leftover transform or running animation, busy cursors clear after failed saves, Windows reduced motion and the Reduced mode each disable everything, and Full overrides Windows), mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, connection states, responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
+The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, every theme (applied, saved, rolled back on failure, and checked for 4.5:1 text), motion (no animation at idle in any theme, cues fire once per change and never on reconnect, every drag, cancel and reorder ends with no leftover transform or running animation, busy cursors clear after failed saves, Windows reduced motion and the Reduced mode each disable everything, and Full overrides Windows), mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, the Appearance dialog, that each theme loads its own fonts, the Twitch card, Discord-offline and panel-offline notes, responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
 
 ```sh
 npm install --prefix /tmp/yozora-ui-tools --no-save --no-package-lock playwright@1.62.1

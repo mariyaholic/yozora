@@ -17,7 +17,7 @@ const serverSource = fs.readFileSync(path.join(root, 'internal/server/server.go'
 const cspExpression = serverSource.match(/Set\("Content-Security-Policy", (.+)\)/)[1];
 const csp = cspExpression.split('+nonce+').map(part => JSON.parse(part)).join(nonce);
 const canonical = ['applemusic', 'spotify', 'spotifyapi', 'youtubemusic', 'browser', 'generic'];
-let sources = { enabled: Object.fromEntries([...canonical, 'youtube', 'youtube_tabs'].map(key => [key, !['browser', 'generic', 'youtube', 'youtube_tabs'].includes(key)])), order: [...canonical] };
+let sources = { enabled: Object.fromEntries([...canonical, 'youtube', 'youtube_tabs', 'twitch'].map(key => [key, !['browser', 'generic', 'youtube', 'youtube_tabs', 'twitch'].includes(key)])), order: [...canonical] };
 let state = { playing: true, activity_type: 'listening', title: 'Night Walk', artist: 'Mira', album: 'After Hours', service: 'Spotify', source: 'spotify', elapsed_sec: 82, duration_sec: 243, sends: 12, discord_connected: true, art_url: '/test-art.svg', small_image: '/test-badge.svg', published_activity: { buttons: [{ label: 'Listen on Spotify', url: 'https://open.spotify.com/track/synthetic' }, { label: 'Yozora', url: 'https://github.com/mariyaholic/yozora' }] } };
 let stateHTTP = 200;
 let sourceGetHTTP = 200;
@@ -39,6 +39,9 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/') {
     res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Security-Policy': csp, 'Referrer-Policy': 'no-referrer' });
     res.end(html);
+  } else if (/^\/fonts\/[a-z0-9-]+\.woff2$/.test(url.pathname) && fs.existsSync(path.join(root, 'internal/server', url.pathname))) {
+    res.writeHead(200, { 'Content-Type': 'font/woff2' });
+    res.end(fs.readFileSync(path.join(root, 'internal/server', url.pathname)));
   } else if (url.pathname.startsWith('/test-')) {
     res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
     res.end('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160"><rect width="160" height="160" fill="#253348"/><circle cx="111" cy="48" r="26" fill="#e0b758"/><path d="M0 135 54 65 114 160H0M72 160l49-78 39 60v18" fill="#53647d"/></svg>');
@@ -96,10 +99,28 @@ const server = http.createServer(async (req, res) => {
       await page.screenshot({ path: path.join(output, `${name}-viewport.png`) });
     };
     const check = name => { checks.push(name); console.log(`PASS ${name}`); };
+    // Settings are ready once the sources fieldset unlocks; a clean form shows no status line at all.
+    const ready = p => p.waitForFunction(() => !document.getElementById('source-fields').disabled);
+    const openAppearance = async p => {
+      if (!await p.evaluate(() => document.getElementById('appearance').open)) await p.locator('#appearance-open').click();
+    };
+    const closeAppearance = p => p.evaluate(() => document.getElementById('appearance').close());
+    // Picks a theme or motion mode through the dialog, waits for the save, and closes it again.
+    const choose = async (p, name, value, saved) => {
+      await openAppearance(p);
+      const tile = name === 'theme' ? p.locator('label.theme-option', { has: p.locator(`input[value="${value}"]`) }) : p.locator('.segmented label', { has: p.locator(`input[value="${value}"]`) });
+      await tile.scrollIntoViewIfNeeded();
+      await tile.click();
+      await p.waitForFunction(text => document.querySelector('#theme-status').textContent.includes(text), saved);
+      await closeAppearance(p);
+    };
     await page.goto(`${origin}/?t=synthetic`);
-    await waitText('#source-status', 'All changes saved');
-    await waitText('#connection', 'Discord connected');
+    await ready(page);
+    await page.waitForFunction(() => document.getElementById('playback-state').textContent === 'Playing');
     assert.equal(await page.locator('#source-save').isDisabled(), true);
+    assert.equal(await page.locator('#source-status').textContent(), '', 'a clean form says nothing');
+    assert.equal(await page.locator('#preview-note').isHidden(), true, 'a healthy connection needs no note');
+    assert.equal(await page.locator('#connection').count(), 0, 'no connection pill in the masthead');
     await shot('playing-560');
     assert.equal(await page.locator('#source-order li').count(), 6);
     const firstRow = await page.locator('#source-order li').first().boundingBox();
@@ -112,7 +133,7 @@ const server = http.createServer(async (req, res) => {
     await page.evaluate(() => {
       window.statusMutations = 0;
       window.statusObserver = new MutationObserver(records => { window.statusMutations += records.length; });
-      for (const id of ['connection', 'preview-note']) window.statusObserver.observe(document.getElementById(id), { childList: true });
+      for (const id of ['preview-note', 'order-status']) window.statusObserver.observe(document.getElementById(id), { childList: true });
     });
     await refresh();
     assert.equal(await page.evaluate(() => window.statusMutations), 0, 'unchanged live regions must stay quiet during polling');
@@ -131,7 +152,14 @@ const server = http.createServer(async (req, res) => {
     await page.locator('#source-reset').click();
     assert.equal(await page.locator('#source-youtube').isChecked(), false);
     assert.equal(await page.locator('#source-save').isDisabled(), true);
-    check('unsaved changes, dependency hint, and discard');
+    assert.equal(await page.locator('#browser-dependency').isHidden(), true);
+    await page.locator('label[for=source-twitch]').click({ position: { x: 3, y: 3 } });
+    assert.equal(await page.locator('#browser-dependency').isVisible(), true, 'Twitch also needs Browser media');
+    await page.locator('#source-browser').check();
+    assert.equal(await page.locator('#browser-dependency').isHidden(), true);
+    await page.locator('#source-reset').click();
+    assert.equal(await page.locator('#source-twitch').isChecked(), false);
+    check('unsaved changes, dependency hint for YouTube and Twitch, and discard');
 
     await page.getByRole('button', { name: 'Move Spotify (desktop) up', exact: true }).focus();
     await page.keyboard.press('Enter');
@@ -142,7 +170,7 @@ const server = http.createServer(async (req, res) => {
     await page.keyboard.press('ArrowDown');
     assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Reorder Spotify (desktop)');
     assert.equal(await page.locator('#source-save').isDisabled(), true, 'returning to the saved order should clear dirty state');
-    assert.equal(await page.locator('#source-status').textContent(), 'All changes saved.');
+    assert.equal(await page.locator('#source-status').textContent(), '');
     await page.keyboard.press('ArrowDown');
     assert.equal(await page.locator('#source-order li').nth(2).getAttribute('data-source'), 'spotify');
     check('keyboard reorder, focus retention, and restoring saved order');
@@ -162,7 +190,8 @@ const server = http.createServer(async (req, res) => {
     assert.deepEqual(await page.locator('#source-order li').evaluateAll(rows => rows.map(row => row.dataset.source)), beforeSavingOrder);
     await waitText('#source-status', 'Saved. Discord');
     assert.deepEqual(posts.at(-1).order, beforeSavingOrder);
-    assert.equal(Object.keys(posts.at(-1).enabled).length, 8);
+    assert.equal(Object.keys(posts.at(-1).enabled).length, 9);
+    assert.equal(posts.at(-1).enabled.twitch, false);
     assert.equal(await page.locator('#source-save').isDisabled(), true);
     saveDelay = 0;
     check('failed-save retry, exact payload, and reorder lock during save');
@@ -234,10 +263,38 @@ const server = http.createServer(async (req, res) => {
       const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
       return (x + 0.05) / (y + 0.05);
     };
+    // Appearance lives in a dialog off the masthead.
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.locator('#appearance-open').click();
+    assert.equal(await page.evaluate(() => document.getElementById('appearance').open), true);
+    assert.equal(await page.evaluate(() => document.activeElement.name === 'theme' && document.activeElement.checked), true, 'focus starts on the saved theme');
+    await page.waitForFunction(() => document.fonts.status === 'loaded');
+    await page.screenshot({ path: path.join(output, 'appearance-dialog-560.png') });
+    await page.keyboard.press('Escape');
+    assert.equal(await page.evaluate(() => document.getElementById('appearance').open), false);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'appearance-open', 'closing returns focus to the opener');
+    await page.locator('#appearance-open').click();
+    await page.mouse.click(4, 4);
+    assert.equal(await page.evaluate(() => document.getElementById('appearance').open), false, 'a backdrop click closes the dialog');
+    await page.locator('#appearance-open').click();
+    await page.locator('#appearance-close').click();
+    assert.equal(await page.evaluate(() => document.getElementById('appearance').open), false);
+    check('appearance dialog opens from the masthead, starts on the saved theme, and closes by Escape, backdrop, or button');
+
+    // Each theme must actually load its own faces from the embedded files, not fall back to Segoe UI.
+    const faces = {
+      yozora: [], confluence: [],
+      pine: ['Inter', 'Outfit', 'JetBrains Mono'], kurisu: ['Inter', 'Outfit', 'JetBrains Mono'], ava: ['Inter', 'Outfit', 'JetBrains Mono'], ledger: ['Inter', 'Outfit', 'JetBrains Mono'],
+      astra: ['IBM Plex Sans', 'Source Serif 4', 'IBM Plex Mono'], 'astra-light': ['IBM Plex Sans', 'Source Serif 4', 'IBM Plex Mono'],
+      uika: ['Outfit', 'Cinzel', 'JetBrains Mono'], sumimi: ['Outfit', 'Cinzel', 'JetBrains Mono'], 'mariyaholic-98': ['Departure Mono'],
+    };
     const applyTheme = async id => {
-      await page.locator(`input[name="theme"][value="${id}"]`).evaluate(input => input.closest('label').scrollIntoView({block:'center'}));
-      await page.locator('label.theme-option', { has: page.locator(`input[value="${id}"]`) }).click();
-      await waitText('#theme-status', 'theme saved');
+      await choose(page, 'theme', id, 'theme saved');
+      await page.evaluate(() => document.fonts.ready);
+      const loaded = await page.evaluate(() => [...document.fonts].filter(face => face.status === 'loaded').map(face => face.family.replace(/"/g, '')));
+      for (const family of faces[id]) assert.ok(loaded.includes(family), `${id}: ${family} did not load (loaded: ${loaded})`);
+      const used = await page.evaluate(() => [getComputedStyle(document.querySelector('h1')).fontFamily, getComputedStyle(document.body).fontFamily]);
+      if (faces[id].length) assert.ok(faces[id].some(family => used.join().includes(family)), `${id}: the page does not ask for its faces`);
       assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), id);
       assert.deepEqual(themePosts.at(-1), { theme: id });
       const roles = await page.evaluate(() => {
@@ -261,15 +318,22 @@ const server = http.createServer(async (req, res) => {
     };
     for (const id of themeIds.slice(1)) await applyTheme(id);
     themeHTTP = 500;
-    await page.locator('label.theme-option', { has: page.locator('input[value="ava"]') }).click();
-    await waitText('#theme-status', 'Could not save');
+    await choose(page, 'theme', 'ava', 'Could not save');
     assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'astra-light', 'a failed save must restore the saved theme');
     assert.equal(await page.locator('input[name="theme"][value="astra-light"]').isChecked(), true);
     themeHTTP = 200;
     await applyTheme('yozora');
-    check('eleven design-system themes apply, save, roll back, and keep 4.5:1 text');
+    check('eleven design-system themes apply, save, roll back, keep 4.5:1 text, and load their own faces');
 
-    state = { ...state, playing: true, title: 'A very long synthetic track title — ' + 'unbroken'.repeat(15), artist: 'Synthetic artist name '.repeat(12), published_activity: { buttons: [{ label: 'Unsafe', url: 'javascript:alert(1)' }, { label: 'Credentials', url: 'https://name:password@example.test' }, { label: 'Yozora', url: 'https://github.com/mariyaholic/yozora' }] } };
+    state = { ...state, playing: true, activity_type: 'watching', title: 'Ranked grind, then chat', artist: 'streamer', album: '', service: 'Twitch', source: 'browser', duration_sec: 0, art_url: '/test-art.svg', published_activity: { buttons: [{ label: 'Watch on Twitch', url: 'https://www.twitch.tv/streamer' }] } };
+    await refresh();
+    assert.equal(await page.locator('#head').textContent(), 'Watching Twitch');
+    assert.equal(await page.locator('#buttons a').textContent(), 'Watch on Twitch');
+    assert.equal(await page.locator('#timeline').isHidden(), true, 'a live stream has no progress bar');
+    await shot('twitch-560');
+    check('Twitch stream preview with live thumbnail and watch button');
+
+    state = { ...state, playing: true, activity_type: 'listening', service: 'Spotify', source: 'spotify', duration_sec: 243, title: 'A very long synthetic track title — ' + 'unbroken'.repeat(15), artist: 'Synthetic artist name '.repeat(12), published_activity: { buttons: [{ label: 'Unsafe', url: 'javascript:alert(1)' }, { label: 'Credentials', url: 'https://name:password@example.test' }, { label: 'Yozora', url: 'https://github.com/mariyaholic/yozora' }] } };
     await refresh();
     assert.equal(await page.locator('#buttons a').count(), 1);
     for (const width of [320, 390, 560, 960]) {
@@ -291,11 +355,12 @@ const server = http.createServer(async (req, res) => {
     await shot('idle-560');
     state.discord_connected = false;
     await refresh();
-    assert.equal(await page.locator('#connection').textContent(), 'Discord offline');
+    assert.match(await page.locator('#preview-note').textContent(), /Discord isn’t open/);
+    assert.match(await page.locator('#meta').textContent(), /Discord: not running/);
     await shot('discord-offline-560');
     stateHTTP = 503;
     await refresh();
-    assert.equal(await page.locator('#connection').textContent(), 'Panel offline');
+    assert.match(await page.locator('#preview-note').textContent(), /Can’t reach Yozora/);
     assert.equal(await page.locator('#preview').getAttribute('data-stale'), 'true');
     await shot('panel-offline-560');
     stateHTTP = 200;
@@ -311,7 +376,7 @@ const server = http.createServer(async (req, res) => {
     sourceGetHTTP = 500;
     stateHTTP = 503;
     await page.reload();
-    await waitText('#connection', 'Panel offline');
+    await waitText('#preview-note', 'Can’t reach Yozora');
     assert.equal(await page.locator('#det').textContent(), 'Waiting for Yozora');
     await shot('initial-offline-560');
     stateHTTP = 200;
@@ -320,7 +385,8 @@ const server = http.createServer(async (req, res) => {
     assert.equal(await page.locator('#source-applemusic').isDisabled(), true);
     sourceGetHTTP = 200;
     await page.locator('#source-retry').click();
-    await waitText('#source-status', 'All changes saved');
+    await ready(page);
+    assert.equal(await page.locator('#source-status').textContent(), '');
     assert.equal(await page.locator('#source-applemusic').isEnabled(), true);
     assert.equal(await page.evaluate(() => document.activeElement.id), 'source-applemusic');
     check('broken-art fallback and initial settings-load retry');
@@ -351,14 +417,11 @@ const server = http.createServer(async (req, res) => {
         assert.equal(await m.locator('#source-order li.parted, #source-order li.dragging, .drag-preview, .drop-before, .drop-after').count(), 0);
         assert.equal(await m.locator('#source-order li').evaluateAll(rows => rows.every(row => !row.style.transform && !row.style.transition && getComputedStyle(row).transform === 'none')), true, 'rows must return to their layout position');
       };
-      const pick = async id => {
-        await m.locator('label.theme-option', { has: m.locator(`input[value="${id}"]`) }).click();
-        await mText('#theme-status', 'theme saved');
-      };
+      const pick = id => choose(m, 'theme', id, 'theme saved');
       const playing = { ...state, playing:true, title:'Night Walk', artist:'Mira', album:'After Hours', service:'Spotify', source:'spotify', elapsed_sec:82, duration_sec:243, discord_connected:true, art_url:'/test-art.svg' };
       state = { playing:false, title:'', discord_connected:true, sends:12 };
       await m.goto(`${origin}/?t=synthetic`);
-      await mText('#source-status', 'All changes saved');
+      await ready(m);
       for (const id of themeIds) {
         if (id !== 'yozora') await pick(id);
         state = { playing:false, title:'', discord_connected:true, sends:12 };
@@ -462,10 +525,7 @@ const server = http.createServer(async (req, res) => {
 
       // Motion mode: Reduced stills everything even though this context allows motion; a failed save keeps the old mode.
       const allAnimations = page => page.evaluate(() => document.getAnimations().map(a => a.animationName || a.transitionProperty));
-      const setMotion = async (page, value, name) => {
-        await page.locator('.segmented label', { has: page.locator(`input[value="${value}"]`) }).click();
-        await page.waitForFunction(text => document.querySelector('#theme-status').textContent.includes(text), `${name} motion saved`);
-      };
+      const setMotion = (page, value, name) => choose(page, 'motion', value, `${name} motion saved`);
       await pick('yozora');
       await setMotion(m, 'reduced', 'Reduced');
       assert.deepEqual(themePosts.at(-1), { motion:'reduced' }, 'a motion change posts only the motion field');
@@ -480,8 +540,7 @@ const server = http.createServer(async (req, res) => {
       await m.waitForTimeout(300);
       assert.deepEqual(await loops(), [], 'Reduced mode stops the live dot');
       themeHTTP = 500;
-      await m.locator('.segmented label', { has: m.locator('input[value="full"]') }).click();
-      await mText('#theme-status', 'Could not save the motion');
+      await choose(m, 'motion', 'full', 'Could not save the motion');
       assert.equal(await m.evaluate(() => document.documentElement.dataset.motion), 'reduced');
       assert.equal(await m.locator('input[name="motion"][value="reduced"]').isChecked(), true);
       themeHTTP = 200;
@@ -508,7 +567,7 @@ const server = http.createServer(async (req, res) => {
       const r = await still.newPage();
       r.on('pageerror', error => errors.push(error.message));
       await r.goto(`${origin}/?t=synthetic`);
-      await r.waitForFunction(() => document.querySelector('#source-status').textContent.includes('All changes saved'));
+      await ready(r);
       state = { ...playing, title:'Reduced Motion Track' };
       await r.evaluate(async () => { while (polling) await new Promise(resolve => setTimeout(resolve, 10)); await tick(); });
       await r.locator('#source-order li').nth(0).locator('.move button').last().click();
@@ -564,7 +623,7 @@ const server = http.createServer(async (req, res) => {
       };
       const centerList = () => touchPage.locator('#source-order').evaluate(list => list.scrollIntoView({block:'center'}));
       await touchPage.goto(`${origin}/?t=synthetic`);
-      await touchPage.waitForFunction(() => document.querySelector('#source-status').textContent.includes('All changes saved'));
+      await ready(touchPage);
       assert.equal(await touchPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       await touchShot(`phone-${width}`);
       const initialOrder = await touchOrder();

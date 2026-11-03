@@ -141,7 +141,7 @@ func TestDashboardSourceControls(t *testing.T) {
 	}
 
 	for _, marker := range []string{`id="source-order"`, `draggable`, `data.order || []`, `order:savedOrder`, "Priority ",
-		"Priority decides which source wins when several play at once"} {
+		"The highest source that is playing wins", `id="appearance-open"`, `<dialog class="appearance"`} {
 		if !strings.Contains(page, marker) {
 			t.Errorf("missing hierarchy control %q", marker)
 		}
@@ -210,7 +210,7 @@ func TestSourcesPersistPartialChangesWithoutMutatingSnapshot(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.Name != "Yozora" || len(response.Enabled) != 8 || response.Enabled["browser"] || response.Enabled["spotify"] || !response.Enabled["applemusic"] {
+	if response.Name != "Yozora" || len(response.Enabled) != len(config.ToggleKeys) || response.Enabled["browser"] || response.Enabled["spotify"] || !response.Enabled["applemusic"] {
 		t.Fatalf("state=%+v", response)
 	}
 	w = request(h, "POST", "/api/sources", `{"enabled":{"browser":true,"generic":false}}`, true)
