@@ -112,7 +112,7 @@
     --title-weight:400; --label-track:.04em; --radius:0px; --radius-sm:0px; --radius-art:0px;
     --masthead-rule:var(--line-strong); --rule-height:2px; --panel-shadow:6px 6px 0 #000000;
   }
-  [data-theme="mariyaholic-98"] body { background-image:repeating-conic-gradient(#1a1636 0% 25%, #120c24 0% 50%); background-size:4px 4px; }
+  html[data-theme="mariyaholic-98"] { background-image:repeating-conic-gradient(#1a1636 0% 25%, #120c24 0% 50%); background-size:4px 4px; }
   [data-theme="mariyaholic-98"] :focus-visible { outline:2px dashed #f4cf8a; outline-offset:4px; }
   [data-theme="mariyaholic-98"] :is(.preview, .panel) { border:2px solid var(--line-strong); }
   [data-theme="mariyaholic-98"] #source-save { background:#f4cf8a; border:2px solid #000; color:#120c24; box-shadow:3px 3px 0 #000; }
@@ -121,7 +121,7 @@
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
   html { background:var(--bg); }
-  body { margin:0; min-height:100vh; background:var(--page-glow), var(--bg); background-repeat:no-repeat; color:var(--text); font:14px/1.5 var(--font-ui); }
+  body { margin:0; min-height:100vh; background:transparent; color:var(--text); font:14px/1.5 var(--font-ui); }
   button, input { font:inherit; }
   button, summary, label { -webkit-tap-highlight-color:transparent; }
   button, summary { cursor:pointer; }
@@ -169,7 +169,7 @@
   .t { display:flex; justify-content:space-between; font:10px/1.4 var(--font-label); color:var(--dim); font-variant-numeric:tabular-nums; }
   #buttons { display:flex; flex-wrap:wrap; gap:7px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
   #buttons:empty { display:none; }
-  .btn { display:inline-flex; align-items:center; min-height:32px; padding:5px 11px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); color:var(--text); background:var(--panel-2); font-size:12px; overflow-wrap:anywhere; transition:background-color .15s ease, border-color .15s ease; }
+  .btn { display:inline-flex; align-items:center; min-height:32px; padding:5px 11px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); color:var(--text); background:var(--panel-2); font-size:12px; overflow-wrap:anywhere; }
   .btn:hover { background:var(--panel-hi); border-color:var(--accent-dim); text-decoration:none; }
   .preview-note { margin:8px 2px 14px; color:var(--muted); font-size:11px; }
 
@@ -192,7 +192,7 @@
   summary:hover { color:var(--text); }
   details p { color:var(--muted); font-size:12px; margin:0 0 10px; }
   #source-order { list-style:none; margin:0 0 8px; padding:0; }
-  #source-order li { position:relative; display:flex; align-items:center; gap:6px; padding:4px 6px; border:1px solid var(--line); border-radius:var(--radius-sm); margin:5px 0; background:var(--bg); transition:background-color .15s ease, border-color .15s ease; }
+  #source-order li { position:relative; display:flex; align-items:center; gap:6px; padding:4px 6px; border:1px solid var(--line); border-radius:var(--radius-sm); margin:5px 0; background:var(--bg); }
   #source-order .source-option { flex:1; min-width:0; border:0; padding:0; background:none; min-height:44px; }
   #source-order li:has(input:checked) { background:var(--accent-wash); border-color:var(--accent-dim); }
   #source-order .drag-handle { width:40px; height:44px; flex:none; padding:0; touch-action:none; user-select:none; cursor:grab; color:var(--dim); background:transparent; border-color:transparent; }
@@ -200,8 +200,6 @@
   .grip { font-size:20px; letter-spacing:-3px; padding-right:3px; }
   #source-order[data-dragging] .drag-handle { cursor:grabbing; }
   #source-order li.drop-before::before, #source-order li.drop-after::after { content:""; position:absolute; left:0; right:0; height:3px; background:var(--accent); border-radius:3px; pointer-events:none; z-index:1; }
-  #source-order li.drop-before::before { top:-5px; }
-  #source-order li.drop-after::after { bottom:-5px; }
   #source-order li.dragging { border-style:dashed; border-color:var(--accent); background:var(--panel-hi); }
   #source-order .rank { color:var(--accent); min-width:1.2em; font:500 12px/1 var(--font-label); font-variant-numeric:tabular-nums; text-align:center; }
   #source-order .move { margin-left:auto; display:flex; gap:5px; flex:none; }
@@ -210,7 +208,7 @@
   #order-status { margin:0 0 8px; }
   #order-status:empty { display:none; }
   .source-subheading { margin:14px 0 7px; font:500 10px/1.4 var(--font-label); letter-spacing:var(--label-track); text-transform:uppercase; color:var(--dim); }
-  button { border:1px solid var(--line-strong); border-radius:var(--radius-sm); padding:6px 12px; background:var(--panel-2); color:var(--text); font-size:12px; min-height:34px; transition:background-color .15s ease, border-color .15s ease; }
+  button { border:1px solid var(--line-strong); border-radius:var(--radius-sm); padding:6px 12px; background:var(--panel-2); color:var(--text); font-size:12px; min-height:34px; }
   button:hover:enabled { background:var(--panel-hi); border-color:var(--accent-dim); }
   #source-order .move button { width:34px; padding:4px; font-size:15px; }
   .save-row { display:flex; align-items:center; gap:8px; margin-top:12px; }
@@ -247,14 +245,100 @@
   .made-by a { text-decoration:underline; text-underline-offset:2px; }
   .made-by { margin:14px 0 0; text-align:center; font-size:11px; color:var(--dim); }
   @media (max-width:380px) { .wrap { padding:16px 14px; } .source-grid { grid-template-columns:1fr; } .masthead { gap:8px; } .mark { width:30px; height:30px; } .mark svg { width:18px; height:18px; } .art-wrap { width:64px; height:64px; } .card { gap:12px; } .preview, .panel { padding:12px; } .det { font-size:16px; } .connection { padding:4px 8px; } .theme-grid { grid-template-columns:1fr 1fr; } }
-  @media (prefers-reduced-motion:reduce) { *, *::before, *::after { transition:none !important; } }
+
+  /* ---- Motion. Everything here answers an event (a click, a drag, a track or save change); nothing loops at idle.
+     Tokens: --dur/--ease for hovers, --slide-dur/--slide-ease for rows, --part for the gap opened at a drop point. */
+  :root { --dur:.15s; --ease:ease; --slide-dur:200ms; --slide-ease:ease; --part:10px; --line-h:3px; --drag-grid:1; --glow-in:none; }
+  [data-theme="uika"], [data-theme="sumimi"] { --dur:.3s; --ease:cubic-bezier(.16,1,.3,1); --slide-dur:300ms; --slide-ease:cubic-bezier(.16,1,.3,1); }
+  [data-theme="uika"] { --glow-in:glow-in .5s cubic-bezier(.16,1,.3,1) both; }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) { --dur:.15s; --ease:ease; --slide-dur:0ms; }
+  :is([data-theme="astra"], [data-theme="astra-light"]) { --dur:120ms; --ease:linear; --slide-dur:0ms; --line-h:6px; }
+  [data-theme="confluence"] { --slide-dur:200ms; --slide-ease:cubic-bezier(.2,.7,.3,1); --line-h:2px; }
+  [data-theme="ledger"] { --line-h:4px; }
+  [data-theme="mariyaholic-98"] { --dur:80ms; --ease:steps(2, end); --slide-dur:160ms; --slide-ease:steps(4, end); --part:8px; --line-h:4px; --drag-grid:4; }
+
+  /* The page glow sits on its own layer so a theme can fade it in once. */
+  body::before { content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; background:var(--page-glow); animation:var(--glow-in); }
+  @keyframes glow-in { from { opacity:0; } to { opacity:1; } }
+
+  button, .btn { transition:background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background-size var(--dur) var(--ease); }
+  #source-order li { transition:transform var(--slide-dur) var(--slide-ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+  #source-order { position:relative; }
+  #source-order li.parted { transform:translateY(var(--part)); }
+  #source-order li.drop-before::before, #source-order li.drop-after::after { height:var(--line-h); }
+  #source-order li.drop-before::before { top:calc((5px + var(--part)) / -2 - var(--line-h) / 2); }
+  #source-order li.drop-after::after { bottom:calc(-2.5px - var(--line-h) / 2); }
+
+  /* Night sky: lift on hover, glowing drop line, the crescent's star twinkles on a new track. */
+  [data-theme="yozora"] :is(button:hover:enabled:not(.drag-handle), .btn:hover) { transform:translateY(-1px); border-color:var(--accent); }
+  [data-theme="yozora"] .drag-preview { box-shadow:0 12px 30px rgba(0,0,0,.55); animation:lift-in .15s ease-out; }
+  [data-theme="yozora"] #source-order li:is(.drop-before, .drop-after)::before, [data-theme="yozora"] #source-order li.drop-after::after { box-shadow:0 0 10px var(--accent); }
+  .mark .star { transform-box:fill-box; transform-origin:center; }
+  [data-theme="yozora"] body.track-changed .mark .star { animation:twinkle .7s ease-out; }
+  :is([data-theme="yozora"], [data-theme="uika"]) body.track-changed .art { animation:art-in .5s var(--ease) both; }
+  @keyframes lift-in { from { transform:scale(.96); opacity:.6; } }
+  @keyframes twinkle { 40% { transform:scale(1.7) rotate(25deg); opacity:.55; } }
+  @keyframes art-in { from { opacity:0; } }
+
+  /* Uika: a gold underline sweeps in; the lifted row glows; rows glide on the canon curve. */
+  [data-theme="uika"] :is(button:not(.drag-handle):not(#source-save), .btn) { background-image:linear-gradient(var(--accent), var(--accent)); background-repeat:no-repeat; background-position:left bottom; background-size:0% 1px; }
+  [data-theme="uika"] :is(button:hover:enabled:not(.drag-handle):not(#source-save), .btn:hover) { background-size:100% 1px; }
+  [data-theme="uika"] .drag-preview { box-shadow:0 0 0 1px var(--accent), 0 0 22px rgba(187,153,85,.35); }
+
+  /* Argonaut Oak (Pine, Kurisu, Ava, Ledger): 0.15s, no easing on rows, a 2px accent edge on the active row,
+     and a live pulse on the status dot only while connected and playing. */
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) button:active:enabled { outline:1px solid var(--accent); outline-offset:2px; }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) #source-order li.dragging { box-shadow:inset 2px 0 0 var(--accent); }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"]) .connection[data-state="connected"]::before { box-shadow:0 0 8px var(--good); }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"]) .connection[data-live="true"]::before { animation:live-pulse 1s ease-in-out infinite alternate; }
+  @keyframes live-pulse { to { opacity:.35; } }
+  /* Kurisu: new text warms up like a CRT; the drop line leaves an amber afterglow. */
+  [data-theme="kurisu"] body.track-changed :is(.head, .det, .st) { animation:phosphor .25s ease-out; }
+  [data-theme="kurisu"] #source-order li.drop-before::before, [data-theme="kurisu"] #source-order li.drop-after::after { box-shadow:0 0 8px var(--accent); }
+  @keyframes phosphor { from { opacity:.6; } }
+  /* Ava: readouts flash cyan when the track or play state changes; the drop line sweeps like a target lock. */
+  [data-theme="ava"] body:is(.track-changed, .state-changed) :is(.t, #playback-state) { animation:readout .45s ease-out; }
+  [data-theme="ava"] #source-order li.drop-before::before, [data-theme="ava"] #source-order li.drop-after::after { background:linear-gradient(90deg, transparent, var(--accent-strong), transparent) 0 0 / 35% 100% no-repeat, var(--accent); animation:sweep .9s linear infinite; }
+  @keyframes readout { from { color:var(--accent-strong); text-shadow:0 0 6px var(--accent); } }
+  @keyframes sweep { from { background-position:-60% 0, 0 0; } to { background-position:160% 0, 0 0; } }
+  /* Ledger: ink colour on hover; a double rule opens where the row will land. */
+  [data-theme="ledger"] :is(button:hover:enabled:not(#source-save), .btn:hover) { color:var(--accent); }
+  [data-theme="ledger"] #source-order li.drop-before::before, [data-theme="ledger"] #source-order li.drop-after::after { background:none; border-top:1px solid var(--accent); border-bottom:1px solid var(--accent); border-radius:0; transform-origin:left; animation:rule-open .16s ease-out; }
+  @keyframes rule-open { from { transform:scaleX(0); } }
+
+  /* Astra: colour changes only (120ms); the dragged row stays dashed and the drop point is a ruler tick. */
+  :is([data-theme="astra"], [data-theme="astra-light"]) :is(button, .btn) { transition:background-color var(--dur) linear, border-color var(--dur) linear, color var(--dur) linear; }
+  :is([data-theme="astra"], [data-theme="astra-light"]) #source-order li { transition:background-color var(--dur) linear, border-color var(--dur) linear; }
+  :is([data-theme="astra"], [data-theme="astra-light"]) #source-order li.drop-before::before, :is([data-theme="astra"], [data-theme="astra-light"]) #source-order li.drop-after::after { background:repeating-linear-gradient(90deg, var(--accent) 0 2px, transparent 2px 8px); border-radius:0; }
+
+  /* Mariyaholic-98: keys sink into hard shadows, motion moves in frames, a block cursor blinks while saving. */
+  [data-theme="mariyaholic-98"] :is(button:not(.drag-handle), .btn) { box-shadow:3px 3px 0 #000; }
+  [data-theme="mariyaholic-98"] :is(button:active:enabled:not(.drag-handle), .btn:active) { transform:translate(3px, 3px); box-shadow:none; }
+  [data-theme="mariyaholic-98"] .drag-preview { border:2px solid var(--accent); box-shadow:6px 6px 0 #000; border-radius:0; }
+  [data-theme="mariyaholic-98"] #source-order li.dragging { box-shadow:4px 4px 0 #000; }
+  [data-theme="mariyaholic-98"] #source-order li.drop-before::before, [data-theme="mariyaholic-98"] #source-order li.drop-after::after { border-radius:0; }
+  [data-theme="mariyaholic-98"] .status[data-busy="true"]::after { content:"█"; margin-left:4px; animation:caret 1s steps(1, end) infinite; }
+  @keyframes caret { 50% { opacity:0; } }
+
+  /* Sumimi: soft paper fades; a gold wash spreads from the point you pressed; rows lift like paper. */
+  @property --ink { syntax:"<percentage>"; inherits:false; initial-value:0%; }
+  [data-theme="sumimi"] body.track-changed .card { animation:paper-in .3s var(--ease); }
+  [data-theme="sumimi"] :is(button, .btn).pressed { background-image:radial-gradient(circle at var(--px, 50%) var(--py, 50%), var(--accent-wash) var(--ink), transparent calc(var(--ink) + 1%)); animation:ink-spread .45s ease-out; }
+  [data-theme="sumimi"] .drag-preview { box-shadow:0 8px 22px rgba(80,60,20,.2); }
+  @keyframes paper-in { from { opacity:.4; } }
+  @keyframes ink-spread { from { --ink:0%; } to { --ink:160%; } }
+
+  /* Confluence: an oxblood underline and drop rule; rows slide without fading. */
+  [data-theme="confluence"] :is(button:hover:enabled:not(.drag-handle):not(#source-save), .btn:hover) { text-decoration:underline 1px var(--accent); text-underline-offset:3px; }
+  [data-theme="confluence"] #source-order li.drop-before::before, [data-theme="confluence"] #source-order li.drop-after::after { border-radius:0; }
+  @media (prefers-reduced-motion:reduce) { *, *::before, *::after { transition:none !important; animation:none !important; } }
 </style>
 </head>
 <body>
 <main class="wrap">
   <header class="masthead">
     <div class="brand">
-      <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M14.6 3.6a8.6 8.6 0 1 0 6 13.1 7 7 0 0 1-6-13.1Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M18.2 3.4l.55 1.45 1.45.55-1.45.55-.55 1.45-.55-1.45-1.45-.55 1.45-.55Z" fill="currentColor"/></svg></span>
+      <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M14.6 3.6a8.6 8.6 0 1 0 6 13.1 7 7 0 0 1-6-13.1Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path class="star" d="M18.2 3.4l.55 1.45 1.45.55-1.45.55-.55 1.45-.55-1.45-1.45-.55 1.45-.55Z" fill="currentColor"/></svg></span>
       <div><h1>Yozora</h1><p class="subtitle">Discord Rich Presence</p></div>
     </div>
     <div id="connection" class="connection" role="status">Connecting…</div>
@@ -413,6 +497,27 @@ const sourceOptions = Object.fromEntries(sourceKeys.map(source => [source, docum
 const orderList = document.getElementById("source-order");
 const orderStatus = document.getElementById("order-status");
 let drag = null;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+// Remember where each row is drawn now (transforms included), so a re-render can slide rows from there.
+function captureRows() {
+  return new Map([...orderList.children].map(row => [row.dataset.source, row.getBoundingClientRect().top]));
+}
+function playSlide(before) {
+  const duration = parseFloat(getComputedStyle(orderList).getPropertyValue("--slide-dur")) || 0;
+  if (!before || duration <= 0 || reduceMotion.matches) return;
+  const moved = [];
+  for (const row of orderList.children) {
+    const from = before.get(row.dataset.source);
+    const delta = from === undefined ? 0 : from - row.getBoundingClientRect().top;
+    if (Math.abs(delta) < 1) continue;
+    row.style.transition = "none";
+    row.style.transform = `translateY(${delta}px)`;
+    moved.push(row);
+  }
+  if (!moved.length) return;
+  orderList.getBoundingClientRect(); // Commit the inverted positions before releasing them.
+  for (const row of moved) { row.style.transition = ""; row.style.transform = ""; }
+}
 function showOrder(order) {
   savedOrder = order.slice();
   renderOrder();
@@ -492,6 +597,7 @@ function moveDrag(event) {
     drag.hint = document.createElement("small");
     drag.preview.appendChild(drag.hint);
     document.body.appendChild(drag.preview);
+    drag.grid = Math.max(1, parseFloat(getComputedStyle(orderList).getPropertyValue("--drag-grid")) || 1);
     drag.lastFrame = performance.now();
     drag.frame = requestAnimationFrame(scrollDrag);
   }
@@ -502,12 +608,14 @@ function updateDragTarget() {
   const bounds = orderList.getBoundingClientRect();
   const rows = [...orderList.children].filter((_, index) => index !== drag.index);
   const inside = drag.x >= bounds.left && drag.x <= bounds.right && drag.y >= bounds.top - 48 && drag.y <= bounds.bottom + 48;
-  const to = inside ? rows.filter(row => { const r = row.getBoundingClientRect(); return drag.y > r.top + r.height / 2; }).length : null;
+  // Layout offsets ignore the parting transforms, so the target never flickers between two slots.
+  const to = inside ? rows.filter(row => drag.y > bounds.top + row.offsetTop + row.offsetHeight / 2).length : null;
   if (to !== drag.to) {
-    for (const row of orderList.children) row.classList.remove("drop-before", "drop-after");
+    for (const row of orderList.children) row.classList.remove("drop-before", "drop-after", "parted");
     if (to !== null && to !== drag.index) {
       if (to < rows.length) rows[to].classList.add("drop-before");
       else rows.at(-1)?.classList.add("drop-after");
+      rows.slice(to).forEach(row => row.classList.add("parted"));
     }
     drag.to = to;
     const hint = to === null ? "Outside list · release to cancel" : `Drop at priority ${to + 1}`;
@@ -516,8 +624,9 @@ function updateDragTarget() {
   }
   const width = drag.preview.offsetWidth;
   const height = drag.preview.offsetHeight;
-  drag.preview.style.left = Math.max(8, Math.min(innerWidth - width - 8, drag.x + 20)) + "px";
-  drag.preview.style.top = Math.max(8, Math.min(innerHeight - height - 8, drag.y - height - 12)) + "px";
+  const snap = value => Math.round(value / drag.grid) * drag.grid;
+  drag.preview.style.left = snap(Math.max(8, Math.min(innerWidth - width - 8, drag.x + 20))) + "px";
+  drag.preview.style.top = snap(Math.max(8, Math.min(innerHeight - height - 8, drag.y - height - 12))) + "px";
 }
 function scrollDrag(now) {
   if (!drag?.active) return;
@@ -539,15 +648,17 @@ function finishDrag(commit) {
   const finished = drag;
   drag = null;
   cancelAnimationFrame(finished.frame);
+  const before = finished.active ? captureRows() : null;
   finished.preview?.remove();
   delete orderList.dataset.dragging;
-  for (const row of orderList.children) row.classList.remove("dragging", "drop-before", "drop-after");
+  for (const row of orderList.children) row.classList.remove("dragging", "drop-before", "drop-after", "parted");
   if (finished.handle.hasPointerCapture(finished.pointerId)) finished.handle.releasePointerCapture(finished.pointerId);
   if (!finished.active) return;
   if (commit && !sourceFields.disabled && finished.to !== null && finished.to !== finished.index) {
     const [moved] = savedOrder.splice(finished.index, 1);
     savedOrder.splice(finished.to, 0, moved);
     renderOrder();
+    playSlide(before);
     orderList.children[finished.to]?.querySelector(".drag-handle").focus({preventScroll:true});
     updateStatus(orderStatus, "");
     updateDirty(`${sourceLabels[moved]} moved to priority ${finished.to + 1}. Apply to save.`, true);
@@ -564,9 +675,11 @@ function moveSource(index, delta, fromHandle = false) {
   finishDrag(false);
   const to = index + delta;
   if (sourceFields.disabled || to < 0 || to >= savedOrder.length) return;
+  const before = captureRows();
   const [moved] = savedOrder.splice(index, 1);
   savedOrder.splice(to, 0, moved);
   renderOrder();
+  playSlide(before);
   const items = document.getElementById("source-order").children;
   const row = items[to] || items[index];
   const direction = row?.querySelectorAll(".move button")[delta < 0 ? 0 : 1];
@@ -581,6 +694,7 @@ document.getElementById("sources-form").addEventListener("submit", async event =
   sourceFields.disabled = true;
   sourceSave.textContent = "Saving…";
   sourceMessage("Saving changes…");
+  sourceStatus.dataset.busy = "true";
   try {
     const r = await fetch(sourceURL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled, order:savedOrder})});
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -590,7 +704,7 @@ document.getElementById("sources-form").addEventListener("submit", async event =
     rememberSources();
     updateDirty("Saved. Discord activity may take a few seconds to update.");
   } catch (e) { sourceMessage(`Save failed: ${e}. Your changes were not confirmed; try again.`, "error"); }
-  finally { sourceFields.disabled = false; sourceSave.textContent = "Apply changes"; }
+  finally { delete sourceStatus.dataset.busy; sourceFields.disabled = false; sourceSave.textContent = "Apply changes"; }
 });
 sourceFields.addEventListener("change", () => updateDirty());
 sourceReset.addEventListener("click", () => {
@@ -615,11 +729,13 @@ autostartCall().then(() => { autostartBox.disabled = false; }).catch(e => { auto
 autostartBox.addEventListener("change", async () => {
   const want = autostartBox.checked;
   autostartBox.disabled = true;
+  autostartStatus.textContent = "Saving startup setting…";
+  autostartStatus.dataset.busy = "true";
   try {
     await autostartCall({method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled:want})});
     autostartStatus.textContent = autostartBox.checked ? "Yozora will start with Windows." : "Yozora will not start with Windows.";
   } catch (e) { autostartBox.checked = !want; autostartStatus.textContent = `Could not change startup setting: ${e}`; }
-  finally { autostartBox.disabled = false; }
+  finally { delete autostartStatus.dataset.busy; autostartBox.disabled = false; }
 });
 const themeFields = document.getElementById("theme-fields");
 const themeStatus = document.getElementById("theme-status");
@@ -639,13 +755,14 @@ async function themeCall(init) {
   return (await r.json()).theme;
 }
 themeCall().then(theme => { savedTheme = showTheme(theme); themeFields.disabled = false; })
-  .catch(e => { updateStatus(themeStatus, `Could not read the saved theme: ${e}`); themeStatus.dataset.tone = "error"; });
+  .catch(e => { themeFields.disabled = false; themeStatus.dataset.tone = "error"; updateStatus(themeStatus, `Could not confirm the saved theme: ${e}. Showing ${themeNames[savedTheme]}.`); });
 themeFields.addEventListener("change", async event => {
   const want = event.target.value;
   showTheme(want);
   themeFields.disabled = true;
   themeStatus.dataset.tone = "pending";
   updateStatus(themeStatus, `Saving ${themeNames[want]}…`);
+  themeStatus.dataset.busy = "true";
   try {
     savedTheme = showTheme(await themeCall({method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({theme:want})}));
     themeStatus.dataset.tone = "";
@@ -655,10 +772,35 @@ themeFields.addEventListener("change", async event => {
     themeStatus.dataset.tone = "error";
     updateStatus(themeStatus, `Could not save the theme: ${e}. Kept ${themeNames[savedTheme]}.`);
   } finally {
+    delete themeStatus.dataset.busy;
     themeFields.disabled = false;
     document.querySelector('input[name="theme"]:checked')?.focus({preventScroll:true});
   }
 });
+const pressTimers = new WeakMap();
+document.addEventListener("pointerdown", event => {
+  const target = event.target.closest?.("button, .btn");
+  if (!target || target.disabled || target.classList.contains("drag-handle")) return;
+  const box = target.getBoundingClientRect();
+  target.style.setProperty("--px", `${event.clientX - box.left}px`);
+  target.style.setProperty("--py", `${event.clientY - box.top}px`);
+  target.classList.remove("pressed");
+  void target.offsetWidth; // Restart the wash on a repeated press.
+  target.classList.add("pressed");
+  clearTimeout(pressTimers.get(target));
+  pressTimers.set(target, setTimeout(() => target.classList.remove("pressed"), 500));
+});
+// Track and play-state changes replay a one-shot animation; first load and reconnects do not.
+const cueTimers = {};
+function cue(name) {
+  document.body.classList.remove(name);
+  void document.body.offsetWidth;
+  document.body.classList.add(name);
+  clearTimeout(cueTimers[name]);
+  cueTimers[name] = setTimeout(() => document.body.classList.remove(name), 900);
+}
+let lastTrack = null;
+let lastPlayState = null;
 const fmt = s => { s = Math.max(0, Math.round(s||0)); const m = Math.floor(s/60);
   return m >= 60 ? `${Math.floor(m/60)}:${String(m%60).padStart(2,"0")}:${String(s%60).padStart(2,"0")}` : `${m}:${String(s%60).padStart(2,"0")}`; };
 const preview = document.getElementById("preview");
@@ -723,6 +865,12 @@ async function tick() {
     connection.dataset.state = s.discord_connected ? "connected" : "offline";
     updateStatus(connection, s.discord_connected ? "Discord connected" : "Discord offline");
     playbackState.textContent = hasTrack ? (s.playing ? "Playing" : "Paused") : "Idle";
+    connection.dataset.live = String(Boolean(s.discord_connected && hasTrack && s.playing));
+    const track = hasTrack ? [s.title, s.artist || "", s.album || "", s.service || ""].join("\u0001") : "";
+    if (lastTrack !== null && track !== lastTrack) cue("track-changed");
+    else if (lastPlayState !== null && playbackState.textContent !== lastPlayState) cue("state-changed");
+    lastTrack = track;
+    lastPlayState = playbackState.textContent;
     head.textContent = hasTrack ? `${s.activity_type === "watching" ? "Watching" : s.activity_type === "playing" ? "Playing" : "Listening to"} ${s.service || "Media Player"}` : "Nothing playing";
     det.textContent = s.title || "Ready when you are";
     det.title = s.title || "";
@@ -748,6 +896,7 @@ async function tick() {
   } catch (e) {
     preview.dataset.stale = "true";
     connection.dataset.state = "offline";
+    connection.dataset.live = "false";
     updateStatus(connection, "Panel offline");
     playbackState.textContent = hasPreview ? "Last known activity" : "Unavailable";
     updateStatus(previewNote, "Can't reach Yozora. Retrying automatically…");
