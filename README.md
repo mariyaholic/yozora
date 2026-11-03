@@ -49,7 +49,7 @@ Commands: `serve`, `status`, `doctor`, `setup`, `install`, `uninstall`. `install
 
 ## Source switches (Yozora.exe)
 
-Double-click **Yozora.exe** to open the control panel in its own native window. The "Detected sources" checkboxes save on Apply. A second press while the panel is open simply brings the existing window to the front.
+Double-click **Yozora.exe** to open the control panel in its own native window. The source checkboxes save on Apply. A second press while the panel is open simply brings the existing window to the front.
 
 - New installations default to **Browser media / videos** and **Other media players** off; the music sources are on. Existing configs keep their explicit choices until you change them.
 - Disabling a source stops new detections and clears an activity that source was driving at the next rate step.
@@ -59,7 +59,7 @@ YouTube has a separate toggle, off by default, and requires Browser media. Detec
 
 ## Source priority
 
-When more than one detected source is playing at once, the **priority list** decides which one appears. The panel shows drag handles (or ↑/↓ buttons for keyboard users); the order saves with Apply into `sources.order` in `cadence.toml`.
+When more than one detected source is playing at once, the **priority list** decides which one appears. The panel combines source switches and priority in one always-visible list. Drag a grip with a mouse or touch to the gold insertion line; holding near the top or bottom of the window scrolls to off-screen rows. Release to reorder, or press Escape / release outside the list to cancel. Keyboard users can use the ↑/↓ buttons or focus a grip and press Up/Down. The order saves with Apply into `sources.order` in `cadence.toml`, together with the source switches.
 
 - The list is a total order over the six canonical sources (`applemusic`, `spotify`, `spotifyapi`, `youtubemusic`, `browser`, `generic`); the top entry wins whenever it is playing.
 - If the top source stops playing or disappears, the next white-listed source takes over automatically.
@@ -85,7 +85,7 @@ The Windows detector reads once at startup, then polls every second by default. 
 
 Private Windows named-pipe regression tests exercise simultaneous read/write using a unique `yozora-test-*` pipe, not the live Discord client. Ordinary `go test ./...` never publishes experimental activity to a Discord profile. Tests also cover slow artwork, session gaps and out-of-order lookups, coherent track/art transitions, paused clear/resume and visibility-policy reloads under the send-rate gate, label-only Discord button readback, loopback-art filtering, source-toggle API validation and concurrency, launcher endpoint validation, service names, icon placement, platform-specific links, button ordering, display enums, config bounds, and newest-snapshot retention.
 
-The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, keyboard/drag priority ordering, save failures, connection states, responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
+The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, connection states, responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
 
 ```sh
 npm install --prefix /tmp/yozora-ui-tools --no-save --no-package-lock playwright@1.62.1
