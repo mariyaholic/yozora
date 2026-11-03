@@ -58,7 +58,7 @@ type activityClient interface {
 	Close()
 }
 
-type browserClassification struct{ Service, VideoID string }
+type browserClassification struct{ Service, VideoID, Channel string }
 
 type Engine struct {
 	EnumerateWindows func() []browserwin.Window
@@ -172,7 +172,7 @@ func (e *Engine) pick(now time.Time) *player.Track {
 	for i := range sessions {
 		if sessions[i].Source == "browser" {
 			c := e.browserCache[sessions[i].Identity()]
-			sessions[i].Service, sessions[i].VideoID = c.Service, c.VideoID
+			sessions[i].Service, sessions[i].VideoID, sessions[i].Channel = c.Service, c.VideoID, c.Channel
 		}
 	}
 	sp := e.spotify
@@ -255,7 +255,7 @@ func (e *Engine) step(now time.Time) {
 	}
 	e.mu.Lock()
 	classification := e.browserCache[cur.Identity()]
-	pending := cur.Source == "browser" && (e.classifyPending || classification.Service != cur.Service || classification.VideoID != cur.VideoID)
+	pending := cur.Source == "browser" && (e.classifyPending || classification.Service != cur.Service || classification.VideoID != cur.VideoID || classification.Channel != cur.Channel)
 	e.mu.Unlock()
 	if pending {
 		// A replacement awaiting browser classification cannot safely be published yet.
@@ -317,7 +317,7 @@ func activityType(cfgType string) int {
 }
 
 func trackActivityType(t *player.Track, cfgType string) string {
-	if t.Service == "youtube" {
+	if t.Service == "youtube" || t.Service == "twitch" {
 		return "watching"
 	}
 	if t.Source == "youtubemusic" {
@@ -477,8 +477,11 @@ func (e *Engine) send(t *player.Track, now time.Time) {
 			label := cfg.Buttons.Label
 			if label == "" || label == "Listen along" {
 				label = "Listen on " + serviceName(t)
-				if t.Service == "youtube" {
+				switch t.Service {
+				case "youtube":
 					label = "Watch on YouTube"
+				case "twitch":
+					label = "Watch on Twitch"
 				}
 			}
 			a.Buttons = append(a.Buttons, discordipc.Button{Label: template.Truncate(label, template.MaxButtonLabel), URL: target})
@@ -583,6 +586,26 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 						}
 					}
 				}
+			} else if index, count := browserwin.MatchTwitchTitle(titles, t.Title, t.Artist); count >= 1 {
+				// Same rules as YouTube: ambiguous matches still classify, so a blocked Twitch card cannot leak.
+				classification.Service = "twitch"
+				candidate := t
+				candidate.Service = "twitch"
+				if count == 1 && !player.IsBlocked(candidate, e.Cfg.Get().Sources.Blocked) {
+					hwnd := windows[index].HWND
+					if raw, err := readAddress(hwnd); err == nil {
+						if login, valid := browserwin.ParseTwitchChannel(raw); valid {
+							again := enumerate()
+							titles = titles[:0]
+							for _, w := range again {
+								titles = append(titles, w.Title)
+							}
+							if i, n := browserwin.MatchTwitchTitle(titles, t.Title, t.Artist); n == 1 && again[i].HWND == hwnd {
+								classification.Channel = login
+							}
+						}
+					}
+				}
 			} else if tabsEnabled {
 				remaining := 200
 				for i, window := range windows {
@@ -613,6 +636,21 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 				lookup.ImageURL = art.YouTubeSymbolURL
 				lookup.Via = "symbol"
 			}
+		}
+		if classification.Service == "twitch" {
+			lookup.DiscordURL = art.TwitchSymbolURL
+			lookup.ListenURL = ""
+			if lookup.ImageURL == "" {
+				lookup.ImageURL = art.TwitchSymbolURL
+				lookup.Via = "symbol"
+			}
+		}
+		if classification.Channel != "" {
+			image, via := art.TwitchSymbolURL, "symbol"
+			if previews, ok := e.Art.(interface{ TwitchThumbnail(string) (string, string) }); ok {
+				image, via = previews.TwitchThumbnail(classification.Channel)
+			}
+			lookup.ImageURL, lookup.DiscordURL, lookup.Via = image, image, via
 		}
 		if tabMatch {
 			lookup.ImageURL, lookup.DiscordURL, lookup.Via = art.YouTubeSymbolURL, art.YouTubeSymbolURL, "symbol"
@@ -661,8 +699,8 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 
 func (e *Engine) activityName(cfg *config.Config, t *player.Track) string {
 	key := t.Source
-	if t.Service == "youtube" {
-		key = "youtube"
+	if t.Service == "youtube" || t.Service == "twitch" {
+		key = t.Service
 	}
 	if n := cfg.Discord.Names[key]; n != "" {
 		return n
