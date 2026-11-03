@@ -100,7 +100,7 @@ func Handler(d Deps) http.Handler {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		_ = t.Execute(w, map[string]any{"Token": d.Token, "App": d.DiscordApp, "Nonce": nonce, "Theme": d.Cfg.Get().UI.Theme})
+		_ = t.Execute(w, map[string]any{"Token": d.Token, "App": d.DiscordApp, "Nonce": nonce, "Theme": d.Cfg.Get().UI.Theme, "Motion": d.Cfg.Get().UI.Motion})
 	})
 	mux.HandleFunc("/api/state", auth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -218,23 +218,27 @@ func Handler(d Deps) http.Handler {
 			http.Error(w, "method", 405)
 		}
 	}))
-	mux.HandleFunc("/api/theme", auth(func(w http.ResponseWriter, r *http.Request) {
+	// Appearance is the panel's theme and motion mode. A POST may change either or both; an invalid
+	// field rejects the whole request, so a partly valid body never saves half of itself.
+	mux.HandleFunc("/api/appearance", auth(func(w http.ResponseWriter, r *http.Request) {
 		configMu.Lock()
 		defer configMu.Unlock()
 		switch r.Method {
 		case http.MethodGet:
 		case http.MethodPost:
 			var payload struct {
-				Theme *string `json:"theme"`
+				Theme  *string `json:"theme"`
+				Motion *string `json:"motion"`
 			}
 			decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256))
 			decoder.DisallowUnknownFields()
-			if err := decoder.Decode(&payload); err != nil || payload.Theme == nil || !config.ValidTheme(*payload.Theme) {
-				http.Error(w, "invalid theme", 400)
+			if err := decoder.Decode(&payload); err != nil || (payload.Theme == nil && payload.Motion == nil) ||
+				(payload.Theme != nil && !config.ValidTheme(*payload.Theme)) || (payload.Motion != nil && !config.ValidMotion(*payload.Motion)) {
+				http.Error(w, "invalid appearance", 400)
 				return
 			}
 			if err := decoder.Decode(new(any)); err != io.EOF {
-				http.Error(w, "trailing theme payload", 400)
+				http.Error(w, "trailing appearance payload", 400)
 				return
 			}
 			current, err := config.Load(d.CfgPath)
@@ -242,7 +246,12 @@ func Handler(d Deps) http.Handler {
 				http.Error(w, err.Error(), 500)
 				return
 			}
-			current.UI.Theme = *payload.Theme
+			if payload.Theme != nil {
+				current.UI.Theme = *payload.Theme
+			}
+			if payload.Motion != nil {
+				current.UI.Motion = *payload.Motion
+			}
 			if err := config.Save(current, d.CfgPath); err != nil {
 				http.Error(w, err.Error(), 500)
 				return
@@ -256,7 +265,8 @@ func Handler(d Deps) http.Handler {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"theme": d.Cfg.Get().UI.Theme, "themes": config.Themes})
+		ui := d.Cfg.Get().UI
+		_ = json.NewEncoder(w).Encode(map[string]any{"theme": ui.Theme, "themes": config.Themes, "motion": ui.Motion, "motions": config.Motions})
 	}))
 	mux.HandleFunc("/api/autostart", auth(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

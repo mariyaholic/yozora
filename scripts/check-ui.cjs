@@ -11,7 +11,7 @@ const root = path.resolve(__dirname, '..');
 const output = path.resolve(process.env.UI_EVIDENCE_DIR || path.join(os.tmpdir(), 'yozora-ui-check'));
 fs.mkdirSync(output, { recursive: true });
 const nonce = 'synthetic-ui-test';
-const html = fs.readFileSync(path.join(root, 'internal/server/ui.html'), 'utf8').replace('{{.Nonce}}', nonce).replace('{{.Theme}}', 'yozora');
+const html = fs.readFileSync(path.join(root, 'internal/server/ui.html'), 'utf8').replace('{{.Nonce}}', nonce).replace('{{.Theme}}', 'yozora').replace('{{.Motion}}', 'system');
 // Use the production policy, including its nonce and restriction on image URLs.
 const serverSource = fs.readFileSync(path.join(root, 'internal/server/server.go'), 'utf8');
 const cspExpression = serverSource.match(/Set\("Content-Security-Policy", (.+)\)/)[1];
@@ -25,6 +25,7 @@ let sourcePostHTTP = 200;
 let autostartHTTP = 200;
 let autostart = false;
 let theme = 'yozora';
+let motion = 'system';
 let themeHTTP = 200;
 const themePosts = [];
 let saveDelay = 0;
@@ -52,14 +53,15 @@ const server = http.createServer(async (req, res) => {
       if (sourcePostHTTP === 200) sources = posted;
       json(sources, sourcePostHTTP);
     } else json(sources, sourceGetHTTP);
-  } else if (url.pathname === '/api/theme') {
+  } else if (url.pathname === '/api/appearance') {
     if (req.method === 'POST') {
       let body = '';
       for await (const chunk of req) body += chunk;
-      themePosts.push(JSON.parse(body));
-      if (themeHTTP === 200) theme = JSON.parse(body).theme;
+      const posted = JSON.parse(body);
+      themePosts.push(posted);
+      if (themeHTTP === 200) { theme = posted.theme ?? theme; motion = posted.motion ?? motion; }
     }
-    json({ theme, themes: [] }, themeHTTP);
+    json({ theme, themes: [], motion, motions: [] }, themeHTTP);
   } else if (url.pathname === '/api/autostart') {
     if (req.method === 'POST') {
       let body = '';
@@ -458,6 +460,38 @@ const server = http.createServer(async (req, res) => {
       assert.equal(await button.evaluate(node => node.classList.contains('pressed')), false);
       check('Sumimi press wash starts at the pointer and clears itself');
 
+      // Motion mode: Reduced stills everything even though this context allows motion; a failed save keeps the old mode.
+      const allAnimations = page => page.evaluate(() => document.getAnimations().map(a => a.animationName || a.transitionProperty));
+      const setMotion = async (page, value, name) => {
+        await page.locator('.segmented label', { has: page.locator(`input[value="${value}"]`) }).click();
+        await page.waitForFunction(text => document.querySelector('#theme-status').textContent.includes(text), `${name} motion saved`);
+      };
+      await pick('yozora');
+      await setMotion(m, 'reduced', 'Reduced');
+      assert.deepEqual(themePosts.at(-1), { motion:'reduced' }, 'a motion change posts only the motion field');
+      assert.deepEqual(await m.evaluate(() => [document.documentElement.dataset.theme, document.documentElement.dataset.motion]), ['yozora', 'reduced']);
+      await m.waitForTimeout(400);
+      state = { ...playing, title:'Reduced Mode Track' };
+      await mRefresh();
+      await m.locator('#source-order li').nth(0).locator('.move button').last().click();
+      assert.deepEqual(await allAnimations(m), [], 'Reduced mode: no cue, slide or hover transition');
+      await m.locator('#source-reset').click();
+      await pick('pine');
+      await m.waitForTimeout(300);
+      assert.deepEqual(await loops(), [], 'Reduced mode stops the live dot');
+      themeHTTP = 500;
+      await m.locator('.segmented label', { has: m.locator('input[value="full"]') }).click();
+      await mText('#theme-status', 'Could not save the motion');
+      assert.equal(await m.evaluate(() => document.documentElement.dataset.motion), 'reduced');
+      assert.equal(await m.locator('input[name="motion"][value="reduced"]').isChecked(), true);
+      themeHTTP = 200;
+      await setMotion(m, 'system', 'Follow Windows');
+      await m.waitForTimeout(300);
+      assert.deepEqual(await loops(), ['live-pulse'], 'Follow Windows restores motion when Windows allows it');
+      await pick('yozora');
+      assert.equal(await m.locator('#source-order li').evaluateAll(rows => rows.every(row => !row.style.transform)), true);
+      check('Reduced motion mode stills the panel when Windows allows motion; a failed save keeps the previous mode');
+
       themeHTTP = 500;
       await m.reload();
       await mText('#theme-status', 'Could not confirm');
@@ -480,8 +514,24 @@ const server = http.createServer(async (req, res) => {
       await r.locator('#source-order li').nth(0).locator('.move button').last().click();
       assert.deepEqual(await r.evaluate(() => document.getAnimations().map(a => a.animationName || a.transitionProperty)), [], 'reduced motion turns every animation off');
       await r.locator('#source-reset').click();
-      await still.close();
       check('reduced motion: no animation or transition at all');
+      // Full overrides Windows' reduced setting; Follow Windows goes back to still.
+      await setMotion(r, 'full', 'Full');
+      state = { ...playing, title:'Full Mode Track' };
+      await r.evaluate(async () => { while (polling) await new Promise(resolve => setTimeout(resolve, 10)); await tick(); });
+      assert.ok((await allAnimations(r)).includes('twinkle'), 'Full mode cues the track change despite Windows reduced motion');
+      await r.waitForTimeout(1000);
+      await r.locator('#source-order li').nth(0).locator('.move button').last().click();
+      assert.ok((await allAnimations(r)).includes('transform'), 'Full mode slides rows');
+      await r.waitForTimeout(600);
+      await r.locator('#source-reset').click();
+      await r.waitForTimeout(600);
+      await setMotion(r, 'system', 'Follow Windows');
+      await r.locator('#source-order li').nth(0).locator('.move button').last().click();
+      assert.deepEqual(await allAnimations(r), [], 'Follow Windows is still again');
+      await r.locator('#source-reset').click();
+      await still.close();
+      check('Full motion mode overrides Windows reduced motion; Follow Windows returns to it');
       state = playing;
     }
 
