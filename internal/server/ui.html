@@ -71,29 +71,8 @@
     --accent:#214c96; --accent-strong:#1a3d7a; --accent-dim:#a9a59a; --accent-wash:#e3e9f4; --on-accent:#fbfaf7;
     --link:#1a3d7a; --good:#1d6b45; --bad:#a8261b; --warn:#8a5300;
   }
-  /* Residual, Residual light: from Residual. Drawn on the ground, square, one stream line under the name. */
-  :is([data-theme="residual"], [data-theme="residual-light"]) {
-    --font-ui:"Hanken Grotesk","Segoe UI",system-ui,sans-serif; --font-title:"Martian Mono","JetBrains Mono",Consolas,monospace; --font-label:"Martian Mono","JetBrains Mono",Consolas,monospace;
-    --title-weight:300; --label-track:.08em; --radius:0px; --radius-sm:2px; --radius-art:0px; --page-glow:none;
-    --masthead-rule:var(--accent); --rule-height:2px;
-  }
-  [data-theme="residual"] {
-    color-scheme:dark;
-    --bg:#0f1211; --panel:#0f1211; --panel-2:#161a19; --panel-hi:#18233f; --line:#2a302d; --line-strong:#5f6964;
-    --text:#e7ece9; --muted:#9aa49f; --dim:#9aa49f; --brand:#e7ece9;
-    --accent:#7ea6ff; --accent-strong:#9bbaff; --accent-dim:#5f6964; --accent-wash:#18233f; --on-accent:#0f1211;
-    --link:#7ea6ff; --good:#7ea6ff; --bad:#ff9b5e; --warn:#ff9b5e;
-  }
-  [data-theme="residual-light"] {
-    color-scheme:light;
-    --bg:#f5f6f3; --panel:#f5f6f3; --panel-2:#ffffff; --panel-hi:#dfe7fb; --line:#cdd2ce; --line-strong:#7d8681;
-    --text:#121614; --muted:#545d59; --dim:#545d59; --brand:#121614;
-    --accent:#1d4ed8; --accent-strong:#1a44bd; --accent-dim:#7d8681; --accent-wash:#dfe7fb; --on-accent:#ffffff;
-    --link:#1d4ed8; --good:#1d4ed8; --bad:#a63f0a; --warn:#a63f0a;
-  }
-
-  /* Uika, Sumimi, Confluence, Panel, Mariyaholic-98: from Omoi (mariyaholic/omoi prototype/tokens.css + inspiration.css). Uika is the estate canon; values marked derived are lifted for 4.5:1 text. */
-  :is([data-theme="uika"], [data-theme="sumimi"], [data-theme="confluence"], [data-theme="panel"], [data-theme="mariyaholic-98"]) { --page-glow:none; --masthead-rule:var(--line); --rule-height:1px; }
+  /* Uika, Sumimi, Confluence, Mariyaholic-98: from Omoi (mariyaholic/omoi prototype/tokens.css + inspiration.css). Uika is the estate canon; values marked derived are lifted for 4.5:1 text. */
+  :is([data-theme="uika"], [data-theme="sumimi"], [data-theme="confluence"], [data-theme="mariyaholic-98"]) { --page-glow:none; --masthead-rule:var(--line); --rule-height:1px; }
   [data-theme="uika"] {
     color-scheme:dark;
     --bg:#0b0913; --panel:#14101c; --panel-2:#1a1424; --panel-hi:#221a30; --line:#2e2440; --line-strong:#3c2f52;
@@ -123,15 +102,6 @@
     --title-weight:400; --label-track:.08em; --radius:0px; --radius-sm:0px; --radius-art:0px;
   }
   [data-theme="confluence"] h1 { font-size:24px; letter-spacing:-.035em; }
-  [data-theme="panel"] {
-    color-scheme:dark;
-    --bg:#121418; --panel:#1a1d23; --panel-2:#23272f; --panel-hi:#2a2f38; --line:#2a2f38; --line-strong:#424955;
-    --text:#ebeef2; --muted:#8c94a0; --dim:#8c94a0; --brand:#ebeef2;
-    --accent:#d4b372; --accent-strong:#e1c68e; --accent-dim:#927d56; --accent-wash:rgba(212,179,114,.10); --on-accent:#121418;
-    --link:#b6bfcd; --good:#6e9c7e; --bad:#e3857f; --warn:#d4b372; /* bad: derived */
-    --font-ui:"Segoe UI",Tahoma,sans-serif; --font-title:"Segoe UI",Tahoma,sans-serif; --font-label:"Segoe UI",Tahoma,sans-serif;
-    --title-weight:600; --label-track:.06em; --radius:6px; --radius-sm:4px; --radius-art:8px;
-  }
   [data-theme="mariyaholic-98"] {
     color-scheme:dark;
     --bg:#120c24; --panel:#22204a; --panel-2:#33407a; --panel-hi:#2b2f63; --line:#33407a; --line-strong:#8fa0dd;
@@ -170,7 +140,7 @@
   .subtitle, .source-help, .status, .made-by { color:var(--muted); font-size:12px; }
   .subtitle { margin:1px 0 0; font-family:var(--font-label); font-size:10px; letter-spacing:var(--label-track); text-transform:uppercase; color:var(--dim); }
   .connection { display:flex; align-items:center; gap:7px; border:1px solid var(--line); border-radius:999px; padding:5px 10px; font:11px/1.3 var(--font-label); color:var(--muted); background:var(--panel); flex-shrink:0; }
-  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .connection, :is([data-theme="uika"], [data-theme="sumimi"], [data-theme="confluence"], [data-theme="panel"], [data-theme="mariyaholic-98"]) .connection, :is([data-theme="astra"], [data-theme="astra-light"]) .connection, :is([data-theme="residual"], [data-theme="residual-light"]) .connection { border-radius:var(--radius-sm); }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .connection, :is([data-theme="uika"], [data-theme="sumimi"], [data-theme="confluence"], [data-theme="mariyaholic-98"]) .connection, :is([data-theme="astra"], [data-theme="astra-light"]) .connection { border-radius:var(--radius-sm); }
   .connection::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--dim); flex:none; }
   .connection[data-state="connected"]::before { background:var(--good); box-shadow:0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
   .connection[data-state="offline"]::before { background:var(--warn); }
@@ -179,7 +149,7 @@
   :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .eyebrow, :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .section-title, [data-theme="uika"] .eyebrow, [data-theme="uika"] .section-title, [data-theme="sumimi"] .eyebrow, [data-theme="sumimi"] .section-title { color:var(--accent); }
 
   .preview { position:relative; background:var(--panel); border:1px solid var(--line); border-radius:calc(var(--radius) + 4px); padding:16px; overflow:hidden; box-shadow:var(--panel-shadow); }
-  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .preview, :is([data-theme="uika"], [data-theme="sumimi"], [data-theme="confluence"], [data-theme="panel"], [data-theme="mariyaholic-98"]) .preview, :is([data-theme="astra"], [data-theme="astra-light"]) .preview, :is([data-theme="residual"], [data-theme="residual-light"]) .preview { border-radius:var(--radius); }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .preview, :is([data-theme="uika"], [data-theme="sumimi"], [data-theme="confluence"], [data-theme="mariyaholic-98"]) .preview, :is([data-theme="astra"], [data-theme="astra-light"]) .preview { border-radius:var(--radius); }
   .preview[data-stale="true"] { border-style:dashed; }
   .preview-label { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
   #playback-state { display:inline-flex; align-items:center; gap:6px; color:var(--accent); font:500 10px/1.4 var(--font-label); letter-spacing:var(--label-track); text-transform:uppercase; }
@@ -194,7 +164,7 @@
   .det { font:650 18px/1.3 var(--font-ui); overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
   .st { color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:3px; }
   .bar { height:4px; border-radius:999px; background:var(--panel-2); box-shadow:inset 0 0 0 1px var(--line); margin:12px 0 5px; overflow:hidden; }
-  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .bar, :is([data-theme="residual"], [data-theme="residual-light"]) .bar { border-radius:0; }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .bar { border-radius:0; }
   .bar i { display:block; height:100%; background:var(--accent); width:0; transition:width 1s linear; }
   .t { display:flex; justify-content:space-between; font:10px/1.4 var(--font-label); color:var(--dim); font-variant-numeric:tabular-nums; }
   #buttons { display:flex; flex-wrap:wrap; gap:7px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
@@ -355,15 +325,12 @@
         <label class="theme-option"><input type="radio" name="theme" value="pine"><span class="swatch" data-theme="pine" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Pine <small>Dark</small></span></label>
         <label class="theme-option"><input type="radio" name="theme" value="kurisu"><span class="swatch" data-theme="kurisu" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Kurisu <small>Dark</small></span></label>
         <label class="theme-option"><input type="radio" name="theme" value="ava"><span class="swatch" data-theme="ava" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Ava <small>Dark</small></span></label>
-        <label class="theme-option"><input type="radio" name="theme" value="panel"><span class="swatch" data-theme="panel" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Panel <small>Dark</small></span></label>
         <label class="theme-option"><input type="radio" name="theme" value="astra"><span class="swatch" data-theme="astra" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Astra <small>Dark</small></span></label>
-        <label class="theme-option"><input type="radio" name="theme" value="residual"><span class="swatch" data-theme="residual" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Residual <small>Dark</small></span></label>
         <label class="theme-option"><input type="radio" name="theme" value="mariyaholic-98"><span class="swatch" data-theme="mariyaholic-98" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Mariyaholic-98 <small>Dark</small></span></label>
         <label class="theme-option"><input type="radio" name="theme" value="sumimi"><span class="swatch" data-theme="sumimi" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Sumimi <small>Light</small></span></label>
         <label class="theme-option"><input type="radio" name="theme" value="ledger"><span class="swatch" data-theme="ledger" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Ledger <small>Light</small></span></label>
         <label class="theme-option"><input type="radio" name="theme" value="confluence"><span class="swatch" data-theme="confluence" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Confluence <small>Light</small></span></label>
         <label class="theme-option"><input type="radio" name="theme" value="astra-light"><span class="swatch" data-theme="astra-light" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Astra light <small>Light</small></span></label>
-        <label class="theme-option"><input type="radio" name="theme" value="residual-light"><span class="swatch" data-theme="residual-light" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Residual light <small>Light</small></span></label>
       </div>
     </fieldset>
     <p id="theme-status" class="status" role="status" aria-live="polite"></p>

@@ -269,7 +269,7 @@ func TestThemeSavesKnownThemesOnly(t *testing.T) {
 		t.Fatalf("theme read = %d %s", w.Code, w.Body.String())
 	}
 	before := cfg.Get()
-	for _, body := range []string{`{}`, `null`, `{"theme":null}`, `{"theme":"neon"}`, `{"theme":"ao-ava"}`, `{"theme":"AVA"}`, `{"theme":1}`, `{"theme":"ava","extra":true}`, `{"theme":"ava"} {}`, strings.Repeat(" ", 300) + `{"theme":"ava"}`} {
+	for _, body := range []string{`{}`, `null`, `{"theme":null}`, `{"theme":"neon"}`, `{"theme":"ao-ava"}`, `{"theme":"panel"}`, `{"theme":"AVA"}`, `{"theme":1}`, `{"theme":"ava","extra":true}`, `{"theme":"ava"} {}`, strings.Repeat(" ", 300) + `{"theme":"ava"}`} {
 		if w := request(h, "POST", "/api/theme", body, true); w.Code != 400 {
 			t.Errorf("accepted %q: %d", body[:min(len(body), 60)], w.Code)
 		}

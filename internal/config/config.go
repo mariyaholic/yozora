@@ -96,9 +96,12 @@ const DefaultTheme = "yozora"
 // Themes lists the control panel palettes in picker order: dark, then light. The ids match
 // the data-theme blocks in internal/server/ui.html.
 var Themes = []string{
-	DefaultTheme, "uika", "pine", "kurisu", "ava", "panel", "astra", "residual", "mariyaholic-98",
-	"sumimi", "ledger", "confluence", "astra-light", "residual-light",
+	DefaultTheme, "uika", "pine", "kurisu", "ava", "astra", "mariyaholic-98",
+	"sumimi", "ledger", "confluence", "astra-light",
 }
+
+// mergedThemes maps retired theme ids to the theme that absorbed them.
+var mergedThemes = map[string]string{"panel": DefaultTheme, "residual": "astra", "residual-light": "astra-light"}
 
 // ValidTheme reports whether id names a control panel theme.
 func ValidTheme(id string) bool { return slices.Contains(Themes, id) }
@@ -232,6 +235,9 @@ func (c *Config) normalize() {
 		c.Art.CacheMB = 4
 	}
 	c.UI.Theme = strings.ToLower(strings.TrimSpace(c.UI.Theme))
+	if merged, ok := mergedThemes[c.UI.Theme]; ok {
+		c.UI.Theme = merged
+	}
 	if !ValidTheme(c.UI.Theme) {
 		c.UI.Theme = DefaultTheme
 	}

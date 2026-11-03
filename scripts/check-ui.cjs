@@ -225,7 +225,7 @@ const server = http.createServer(async (req, res) => {
 
     // Themes: each one applies at once, saves, rolls back on failure and keeps text readable.
     const themeIds = await page.locator('input[name="theme"]').evaluateAll(inputs => inputs.map(input => input.value));
-    assert.deepEqual(themeIds, ['yozora', 'uika', 'pine', 'kurisu', 'ava', 'panel', 'astra', 'residual', 'mariyaholic-98', 'sumimi', 'ledger', 'confluence', 'astra-light', 'residual-light']);
+    assert.deepEqual(themeIds, ['yozora', 'uika', 'pine', 'kurisu', 'ava', 'astra', 'mariyaholic-98', 'sumimi', 'ledger', 'confluence', 'astra-light']);
     assert.equal(await page.locator('input[name="theme"][value="yozora"]').isChecked(), true);
     const ratio = (a, b) => {
       const lum = hex => { const v = hex.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
@@ -261,11 +261,11 @@ const server = http.createServer(async (req, res) => {
     themeHTTP = 500;
     await page.locator('label.theme-option', { has: page.locator('input[value="ava"]') }).click();
     await waitText('#theme-status', 'Could not save');
-    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'residual-light', 'a failed save must restore the saved theme');
-    assert.equal(await page.locator('input[name="theme"][value="residual-light"]').isChecked(), true);
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'astra-light', 'a failed save must restore the saved theme');
+    assert.equal(await page.locator('input[name="theme"][value="astra-light"]').isChecked(), true);
     themeHTTP = 200;
     await applyTheme('yozora');
-    check('fourteen design-system themes apply, save, roll back, and keep 4.5:1 text');
+    check('eleven design-system themes apply, save, roll back, and keep 4.5:1 text');
 
     state = { ...state, playing: true, title: 'A very long synthetic track title — ' + 'unbroken'.repeat(15), artist: 'Synthetic artist name '.repeat(12), published_activity: { buttons: [{ label: 'Unsafe', url: 'javascript:alert(1)' }, { label: 'Credentials', url: 'https://name:password@example.test' }, { label: 'Yozora', url: 'https://github.com/mariyaholic/yozora' }] } };
     await refresh();
