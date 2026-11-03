@@ -324,9 +324,10 @@ func TestLoadNormalizesPanelTheme(t *testing.T) {
 	for raw, want := range map[string]string{
 		"":                 DefaultTheme,
 		"neon":             DefaultTheme,
-		" AO-Ava ":         "ao-ava",
-		"residual-paper":   "residual-paper",
-		"astra-console":    "astra-console",
+		"ao-ava":           DefaultTheme,
+		" Ava ":            "ava",
+		"residual-light":   "residual-light",
+		"mariyaholic-98":   "mariyaholic-98",
 		"../../etc/passwd": DefaultTheme,
 	} {
 		path := filepath.Join(t.TempDir(), "cadence.toml")

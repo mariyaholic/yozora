@@ -93,14 +93,11 @@ type UI struct {
 // DefaultTheme is Yozora's own night palette.
 const DefaultTheme = "yozora"
 
-// Themes lists the control panel palettes, in picker order. The ids match
+// Themes lists the control panel palettes in picker order: dark, then light. The ids match
 // the data-theme blocks in internal/server/ui.html.
 var Themes = []string{
-	DefaultTheme,
-	"ao-pine", "ao-kurisu", "ao-ava", "ao-paper",
-	"omoi-uika", "omoi-sumimi", "omoi-confluence", "omoi-panel", "omoi-pc98",
-	"astra-console", "astra-paper",
-	"residual-night", "residual-paper",
+	DefaultTheme, "uika", "pine", "kurisu", "ava", "panel", "astra", "residual", "mariyaholic-98",
+	"sumimi", "ledger", "confluence", "astra-light", "residual-light",
 }
 
 // ValidTheme reports whether id names a control panel theme.
