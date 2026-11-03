@@ -88,6 +88,7 @@ The control panel's **Appearance** section offers 11 themes. Choosing one applie
 ```toml
 [ui]
   theme = "yozora"
+  motion = "system"
 ```
 
 | Theme id | Name | Mode | Palette source |
@@ -110,7 +111,13 @@ Colours are copied exactly from each source. Where a source colour would fall be
 
 ### Motion
 
-Motion only answers an event: a hover or press, a drag, a reorder, a new track or play state, or a save in progress. Nothing animates while the panel sits idle. The one repeating animation is the status dot in Pine, Kurisu and Ava, which pulses only while Discord is connected and a track is playing. Windows' "Show animations" setting off (`prefers-reduced-motion`) turns every animation and transition off.
+Motion only answers an event: a hover or press, a drag, a reorder, a new track or play state, or a save in progress. Nothing animates while the panel sits idle. The one repeating animation is the status dot in Pine, Kurisu and Ava, which pulses only while Discord is connected and a track is playing. The **Motion** setting under Appearance chooses how much of this runs:
+
+- **Follow Windows** (`system`, the default) uses Windows' "Show animations" setting (`prefers-reduced-motion`).
+- **Reduced** (`reduced`) turns every animation and transition off, whatever Windows says.
+- **Full** (`full`) keeps the panel's motion on even when Windows asks for reduced motion.
+
+Like the theme, it applies at once and is saved in `cadence.toml`; an unknown value loads as `system`.
 
 | Theme | On events | Buttons | Drag and reorder |
 | --- | --- | --- | --- |
@@ -127,7 +134,7 @@ Motion only answers an event: a hover or press, a drag, a reorder, a new track o
 
 Private Windows named-pipe regression tests exercise simultaneous read/write using a unique `yozora-test-*` pipe, not the live Discord client. Ordinary `go test ./...` never publishes experimental activity to a Discord profile. Tests also cover slow artwork, session gaps and out-of-order lookups, coherent track/art transitions, paused clear/resume and visibility-policy reloads under the send-rate gate, label-only Discord button readback, loopback-art filtering, source-toggle API validation and concurrency, launcher endpoint validation, service names, icon placement, platform-specific links, button ordering, display enums, config bounds, and newest-snapshot retention.
 
-The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, every theme (applied, saved, rolled back on failure, and checked for 4.5:1 text), motion (no animation at idle in any theme, cues fire once per change and never on reconnect, every drag, cancel and reorder ends with no leftover transform or running animation, busy cursors clear after failed saves, reduced motion disables everything), mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, connection states, responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
+The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, every theme (applied, saved, rolled back on failure, and checked for 4.5:1 text), motion (no animation at idle in any theme, cues fire once per change and never on reconnect, every drag, cancel and reorder ends with no leftover transform or running animation, busy cursors clear after failed saves, Windows reduced motion and the Reduced mode each disable everything, and Full overrides Windows), mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, connection states, responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
 
 ```sh
 npm install --prefix /tmp/yozora-ui-tools --no-save --no-package-lock playwright@1.62.1

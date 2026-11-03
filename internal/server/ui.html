@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="{{.Theme}}">
+<html lang="en" data-theme="{{.Theme}}" data-motion="{{.Motion}}">
 <head>
 <meta charset="utf-8">
 <title>Yozora — control panel</title>
@@ -221,6 +221,16 @@
   .startup .source-option { background:none; border:0; padding:0; min-height:32px; }
   #autostart-status:empty, #theme-status:empty { display:none; }
 
+  .motion-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin-top:14px; }
+  .motion-label { font-size:12px; color:var(--text); }
+  .segmented { display:inline-flex; border:1px solid var(--line-strong); border-radius:var(--radius-sm); overflow:hidden; }
+  .segmented label { position:relative; display:flex; align-items:center; min-height:32px; padding:0 12px; font-size:12px; color:var(--muted); background:var(--bg); cursor:pointer; transition:background-color var(--dur) var(--ease), color var(--dur) var(--ease); }
+  .segmented label + label { border-left:1px solid var(--line-strong); }
+  .segmented label:hover { color:var(--text); }
+  .segmented label:has(input:checked) { background:var(--accent); color:var(--on-accent); font-weight:600; }
+  .segmented label:has(input:focus-visible) { outline:2px solid var(--accent); outline-offset:2px; z-index:1; }
+  .segmented input { position:absolute; opacity:0; width:1px; height:1px; margin:0; pointer-events:none; }
+  #motion-help { margin:6px 0 0; }
   .theme-grid { margin-top:10px; display:grid; grid-template-columns:repeat(auto-fill, minmax(104px, 1fr)); gap:6px; }
   .theme-option { position:relative; display:flex; flex-direction:column; gap:6px; padding:6px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--bg); cursor:pointer; transition:border-color .15s ease, background-color .15s ease; }
   .theme-option:hover { border-color:var(--line-strong); }
@@ -331,7 +341,10 @@
   /* Confluence: an oxblood underline and drop rule; rows slide without fading. */
   [data-theme="confluence"] :is(button:hover:enabled:not(.drag-handle):not(#source-save), .btn:hover) { text-decoration:underline 1px var(--accent); text-underline-offset:3px; }
   [data-theme="confluence"] #source-order li.drop-before::before, [data-theme="confluence"] #source-order li.drop-after::after { border-radius:0; }
-  @media (prefers-reduced-motion:reduce) { *, *::before, *::after { transition:none !important; animation:none !important; } }
+  /* Motion mode: "reduced" always stills the panel, "full" keeps motion even when Windows asks for less,
+     "system" (default) follows Windows' Show animations setting. */
+  html[data-motion="reduced"] *, html[data-motion="reduced"] *::before, html[data-motion="reduced"] *::after { transition:none !important; animation:none !important; }
+  @media (prefers-reduced-motion:reduce) { html:not([data-motion="full"]) *, html:not([data-motion="full"]) *::before, html:not([data-motion="full"]) *::after { transition:none !important; animation:none !important; } }
 </style>
 </head>
 <body>
@@ -416,6 +429,15 @@
         <label class="theme-option"><input type="radio" name="theme" value="confluence"><span class="swatch" data-theme="confluence" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Confluence <small>Light</small></span></label>
         <label class="theme-option"><input type="radio" name="theme" value="astra-light"><span class="swatch" data-theme="astra-light" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Astra light <small>Light</small></span></label>
       </div>
+      <div class="motion-row">
+        <span class="motion-label" id="motion-title">Motion</span>
+        <div class="segmented" role="radiogroup" aria-labelledby="motion-title" aria-describedby="motion-help">
+          <label><input type="radio" name="motion" value="system"><span>Follow Windows</span></label>
+          <label><input type="radio" name="motion" value="reduced"><span>Reduced</span></label>
+          <label><input type="radio" name="motion" value="full"><span>Full</span></label>
+        </div>
+      </div>
+      <p class="source-help" id="motion-help">Reduced turns off every animation and transition. Follow Windows uses its Show animations setting.</p>
     </fieldset>
     <p id="theme-status" class="status" role="status" aria-live="polite"></p>
   </section>
@@ -498,13 +520,17 @@ const orderList = document.getElementById("source-order");
 const orderStatus = document.getElementById("order-status");
 let drag = null;
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+function motionReduced() {
+  const mode = document.documentElement.dataset.motion;
+  return mode === "reduced" || (mode !== "full" && reduceMotion.matches);
+}
 // Remember where each row is drawn now (transforms included), so a re-render can slide rows from there.
 function captureRows() {
   return new Map([...orderList.children].map(row => [row.dataset.source, row.getBoundingClientRect().top]));
 }
 function playSlide(before) {
   const duration = parseFloat(getComputedStyle(orderList).getPropertyValue("--slide-dur")) || 0;
-  if (!before || duration <= 0 || reduceMotion.matches) return;
+  if (!before || duration <= 0 || motionReduced()) return;
   const moved = [];
   for (const row of orderList.children) {
     const from = before.get(row.dataset.source);
@@ -739,42 +765,55 @@ autostartBox.addEventListener("change", async () => {
 });
 const themeFields = document.getElementById("theme-fields");
 const themeStatus = document.getElementById("theme-status");
-const themeURL = `/api/theme?t=${encodeURIComponent(t)}`;
+const appearanceURL = `/api/appearance?t=${encodeURIComponent(t)}`;
 const themeNames = Object.fromEntries([...document.querySelectorAll('input[name="theme"]')].map(input => [input.value, input.parentElement.querySelector(".name").firstChild.textContent.trim()]));
-function showTheme(theme) {
-  if (!(theme in themeNames)) theme = "yozora";
-  document.documentElement.dataset.theme = theme;
-  const input = document.querySelector(`input[name="theme"][value="${theme}"]`);
+const motionNames = Object.fromEntries([...document.querySelectorAll('input[name="motion"]')].map(input => [input.value, input.nextElementSibling.textContent.trim()]));
+function showChoice(name, value, names, fallback) {
+  if (!(value in names)) value = fallback;
+  document.documentElement.dataset[name] = value;
+  const input = document.querySelector(`input[name="${name}"][value="${value}"]`);
   if (input) input.checked = true;
-  return theme;
+  return value;
 }
-let savedTheme = showTheme(document.documentElement.dataset.theme);
-async function themeCall(init) {
-  const r = await fetch(themeURL, {cache:"no-store", ...init});
+const showTheme = theme => showChoice("theme", theme, themeNames, "yozora");
+const showMotion = motion => showChoice("motion", motion, motionNames, "system");
+// The server rendered the saved appearance into <html>, so it is the starting saved state.
+const saved = {theme:showTheme(document.documentElement.dataset.theme), motion:showMotion(document.documentElement.dataset.motion)};
+const describe = () => `${themeNames[saved.theme]} with ${motionNames[saved.motion]} motion`;
+function showSaved(appearance) {
+  saved.theme = showTheme(appearance.theme);
+  saved.motion = showMotion(appearance.motion);
+}
+async function appearanceCall(init) {
+  const r = await fetch(appearanceURL, {cache:"no-store", ...init});
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return (await r.json()).theme;
+  return r.json();
 }
-themeCall().then(theme => { savedTheme = showTheme(theme); themeFields.disabled = false; })
-  .catch(e => { themeFields.disabled = false; themeStatus.dataset.tone = "error"; updateStatus(themeStatus, `Could not confirm the saved theme: ${e}. Showing ${themeNames[savedTheme]}.`); });
+appearanceCall().then(appearance => { showSaved(appearance); themeFields.disabled = false; })
+  .catch(e => { themeFields.disabled = false; themeStatus.dataset.tone = "error"; updateStatus(themeStatus, `Could not confirm the saved appearance: ${e}. Showing ${describe()}.`); });
 themeFields.addEventListener("change", async event => {
+  const field = event.target.name;
+  if (field !== "theme" && field !== "motion") return;
   const want = event.target.value;
-  showTheme(want);
+  const label = field === "theme" ? `${themeNames[want]} theme` : `${motionNames[want]} motion`;
+  (field === "theme" ? showTheme : showMotion)(want);
   themeFields.disabled = true;
   themeStatus.dataset.tone = "pending";
-  updateStatus(themeStatus, `Saving ${themeNames[want]}…`);
+  updateStatus(themeStatus, `Saving ${label}…`);
   themeStatus.dataset.busy = "true";
   try {
-    savedTheme = showTheme(await themeCall({method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({theme:want})}));
+    showSaved(await appearanceCall({method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({[field]:want})}));
     themeStatus.dataset.tone = "";
-    updateStatus(themeStatus, `${themeNames[savedTheme]} theme saved.`);
+    updateStatus(themeStatus, `${label} saved.`);
   } catch (e) {
-    showTheme(savedTheme);
+    showTheme(saved.theme);
+    showMotion(saved.motion);
     themeStatus.dataset.tone = "error";
-    updateStatus(themeStatus, `Could not save the theme: ${e}. Kept ${themeNames[savedTheme]}.`);
+    updateStatus(themeStatus, `Could not save the ${field}: ${e}. Kept ${describe()}.`);
   } finally {
     delete themeStatus.dataset.busy;
     themeFields.disabled = false;
-    document.querySelector('input[name="theme"]:checked')?.focus({preventScroll:true});
+    document.querySelector(`input[name="${field}"]:checked`)?.focus({preventScroll:true});
   }
 });
 const pressTimers = new WeakMap();

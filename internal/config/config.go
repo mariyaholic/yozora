@@ -87,8 +87,18 @@ type Log struct {
 
 // UI holds control panel preferences. Theme must be one of Themes.
 type UI struct {
-	Theme string `toml:"theme"`
+	Theme  string `toml:"theme"`
+	Motion string `toml:"motion"`
 }
+
+// DefaultMotion follows the Windows "Show animations" setting.
+const DefaultMotion = "system"
+
+// Motions lists the control panel motion modes: follow Windows, always reduced, or always full.
+var Motions = []string{DefaultMotion, "reduced", "full"}
+
+// ValidMotion reports whether id names a control panel motion mode.
+func ValidMotion(id string) bool { return slices.Contains(Motions, id) }
 
 // DefaultTheme is Yozora's own night palette.
 const DefaultTheme = "yozora"
@@ -152,6 +162,7 @@ func Defaults() *Config {
 	c.Art.CacheMB = 10
 	c.Log.Level = "info"
 	c.UI.Theme = DefaultTheme
+	c.UI.Motion = DefaultMotion
 	return c
 }
 
@@ -240,6 +251,10 @@ func (c *Config) normalize() {
 	}
 	if !ValidTheme(c.UI.Theme) {
 		c.UI.Theme = DefaultTheme
+	}
+	c.UI.Motion = strings.ToLower(strings.TrimSpace(c.UI.Motion))
+	if !ValidMotion(c.UI.Motion) {
+		c.UI.Motion = DefaultMotion
 	}
 	if c.Spotify.PollSecs < 5 {
 		c.Spotify.PollSecs = 12
