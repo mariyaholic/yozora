@@ -2,91 +2,165 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Yozora — dashboard</title>
+<title>Yozora — control panel</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body { margin:0; min-height:100vh; display:grid; place-items:center;
-         background:#111318; color:#e8e6e3; font:15px/1.5 system-ui, sans-serif; }
-  .wrap { width:min(560px, 92vw); }
-  h1 { font-size:15px; font-weight:600; color:#d4a843; letter-spacing:.04em; }
-  .card { background:#1e1f22; border-radius:10px; padding:14px; display:flex; gap:14px;
-          box-shadow:0 2px 10px rgba(0,0,0,.4); }
-  .art-wrap { position:relative; width:88px; height:88px; flex:none; }
-  .small-icon { position:absolute; right:-4px; bottom:-4px; width:28px; height:28px; border-radius:50%; border:2px solid #1e1f22; background:#2b2d31; }
-  .art { width:88px; height:88px; border-radius:8px; object-fit:cover; background:#2b2d31; flex:none; }
-  .body { min-width:0; }
-  .head { font-size:14px; font-weight:700; margin-bottom:4px; color:#fff; }
-  .det { font-size:14px; color:#dbdee1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .st  { font-size:13px; color:#b5bac1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .bar { height:4px; border-radius:2px; background:#2b2d31; margin:9px 0 3px; overflow:hidden; }
-  .bar i { display:block; height:100%; background:#d4a843; width:0; transition:width 1s linear; }
-  .t   { font-size:11px; color:#949ba4; font-variant-numeric:tabular-nums; }
-  .btn { margin-top:8px; display:block; font-size:12px; color:#00a8fc; text-decoration:none; }
-  .meta { margin-top:14px; font-size:12px; color:#949ba4; white-space:pre-wrap; }
-  .err { color:#f2736b; }
-  .made-by { margin:16px 0 0; font-size:12px; color:#949ba4; text-align:center; }
-  .made-by a { color:#00a8fc; text-decoration:none; }
-  .made-by a:hover { text-decoration:underline; }
-  fieldset { margin:18px 0 0; border:1px solid #34363c; border-radius:8px; padding:12px 14px; }
-  legend { font-size:13px; color:#b5bac1; padding:0 5px; }
-  .source-option { display:flex; align-items:center; gap:8px; margin:5px 0; }
-  .source-option input { accent-color:#b5bac1; }
-  .source-help, #source-status { font-size:12px; color:#949ba4; }
-  #source-save { margin-top:10px; padding:4px 12px; border:1px solid #45474e; border-radius:5px; background:#24262b; color:#dbdee1; font:inherit; font-size:12px; cursor:pointer; }
-  #source-save:disabled { opacity:.5; cursor:default; }
-  #source-save:focus-visible, .source-option input:focus-visible { outline:2px solid #d4a843; outline-offset:3px; }
-  #source-order { list-style:none; margin:10px 0 0; padding:0; }
-  #source-order li { display:flex; align-items:center; gap:8px; padding:5px 8px; border:1px solid #2b2d31; border-radius:6px; margin:4px 0; background:#1a1b1e; cursor:grab; }
+  :root { color-scheme:dark; --bg:#111318; --panel:#1b1e25; --line:#343943; --text:#eceae6; --muted:#a9b0bd; --gold:#e0b758; }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui,sans-serif; }
+  button, input { font:inherit; }
+  button, summary, label { -webkit-tap-highlight-color:transparent; }
+  button, summary { cursor:pointer; }
+  button:disabled { opacity:.45; cursor:default; }
+  :focus-visible { outline:2px solid var(--gold); outline-offset:3px; }
+  a { color:#8dcfff; text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  .wrap { width:min(620px,100%); margin:0 auto; padding:20px 22px 18px; }
+  .masthead { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+  h1 { margin:0; color:var(--gold); font-size:22px; font-weight:650; letter-spacing:.03em; }
+  .subtitle, .eyebrow, .source-help, .status, .made-by { color:var(--muted); font-size:12px; }
+  .subtitle { margin:0; }
+  .connection { display:flex; align-items:center; gap:7px; border:1px solid var(--line); border-radius:20px; padding:5px 9px; font-size:11px; flex-shrink:0; }
+  .connection::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--muted); }
+  .connection[data-state="connected"]::before { background:#8bd5a6; }
+  .connection[data-state="offline"]::before { background:var(--gold); }
+  .preview { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .preview-label { display:flex; justify-content:space-between; gap:10px; margin-bottom:12px; }
+  .eyebrow { margin:0; font-weight:600; letter-spacing:.08em; text-transform:uppercase; font-size:10px; }
+  #playback-state { color:var(--gold); font-size:11px; }
+  .card { display:flex; gap:16px; align-items:center; }
+  .art-wrap { position:relative; width:88px; height:88px; flex:none; border-radius:10px; background:#292d37; display:grid; place-items:center; }
+  .art-placeholder { color:var(--gold); font-size:34px; }
+  .art { position:absolute; inset:0; width:100%; height:100%; border-radius:10px; object-fit:cover; }
+  .small-icon { position:absolute; right:-4px; bottom:-4px; width:26px; height:26px; border-radius:50%; border:2px solid var(--panel); background:#292d37; }
+  .body { min-width:0; flex:1; }
+  .head { color:var(--muted); font-size:12px; margin-bottom:3px; }
+  .det { font-size:18px; font-weight:650; line-height:1.3; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .st { color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:4px; }
+  .bar { height:4px; border-radius:3px; background:#343943; margin:12px 0 5px; overflow:hidden; }
+  .bar i { display:block; height:100%; background:var(--gold); width:0; transition:width 1s linear; }
+  .t { display:flex; justify-content:space-between; font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  #buttons { display:flex; flex-wrap:wrap; gap:7px; margin-top:14px; }
+  #buttons:empty { display:none; }
+  .btn { display:inline-flex; align-items:center; min-height:32px; padding:5px 10px; border:1px solid #48505d; border-radius:6px; color:var(--text); font-size:12px; overflow-wrap:anywhere; }
+  .btn:hover { background:#2a2f39; text-decoration:none; }
+  .preview-note { margin:10px 0 14px; color:var(--muted); font-size:11px; }
+  .preview[data-stale="true"] { border-style:dashed; }
+  fieldset { margin:0; padding:0; border:0; min-width:0; }
+  legend { padding:0; font-size:15px; font-weight:650; margin-bottom:3px; }
+  .source-help { margin:4px 0 10px; }
+  .source-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .source-option { display:flex; align-items:center; gap:9px; min-height:42px; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:#191c23; cursor:pointer; }
+  .source-grid .source-option:has(input:checked) { background:#23251f; border-color:#625538; }
+  .source-option:has(input:focus-visible) { outline:2px solid var(--gold); outline-offset:2px; }
+  .source-option input { accent-color:var(--gold); width:16px; height:16px; margin:0; flex:none; }
+  .source-option > span { flex:1; font-size:12px; cursor:pointer; }
+  .source-option small { display:block; color:var(--muted); font-size:10px; }
+  .dependency-note { color:var(--gold); font-size:12px; margin:8px 0; }
+  details { border-bottom:1px solid var(--line); }
+  summary { padding:11px 2px; font-size:12px; color:#c9cfda; }
+  summary:hover { color:var(--text); }
+  details p { color:var(--muted); font-size:12px; margin:0 0 10px; }
+  #source-order { list-style:none; margin:0 0 12px; padding:0; }
+  #source-order li { display:flex; align-items:center; gap:9px; padding:6px 8px; border:1px solid var(--line); border-radius:7px; margin:5px 0; background:#191c23; cursor:grab; }
   #source-order li.dragging { opacity:.45; }
-  #source-order li:focus-visible { outline:2px solid #d4a843; outline-offset:2px; }
-  #source-order .rank { font-variant-numeric:tabular-nums; color:#949ba4; min-width:1.4em; text-align:right; }
-  #source-order .move { margin-left:auto; display:flex; gap:4px; }
-  #source-order .move button { padding:0 7px; border:1px solid #45474e; border-radius:4px; background:#24262b; color:#dbdee1; font:inherit; font-size:12px; cursor:pointer; }
-  #source-order .move button:disabled { opacity:.35; cursor:default; }
+  #source-order .rank { color:var(--gold); min-width:1em; font-size:12px; font-variant-numeric:tabular-nums; text-align:center; }
+  #source-order .source-label { font-size:12px; overflow-wrap:anywhere; }
+  #source-order .move { margin-left:auto; display:flex; gap:5px; flex:none; }
+  button { border:1px solid #48505d; border-radius:6px; padding:6px 11px; background:#252a33; color:var(--text); font-size:12px; min-height:34px; }
+  button:hover:enabled { background:#343b47; }
+  #source-order .move button { width:34px; padding:4px; font-size:16px; }
+  .save-row { display:flex; align-items:center; gap:8px; margin-top:12px; }
+  #source-save { background:var(--gold); color:#1b1811; border-color:var(--gold); font-weight:650; }
+  #source-save:hover:enabled { background:#edca79; }
+  .status { margin:7px 0 0; min-height:18px; overflow-wrap:anywhere; }
+  .status[data-tone="error"], .err { color:#ffaaa3; }
+  .status[data-tone="pending"] { color:var(--gold); }
+  #source-retry { margin-top:8px; }
+  .startup { margin-top:18px; padding-top:14px; border-top:1px solid var(--line); }
+  .startup .source-option { background:none; border:0; padding:0; min-height:32px; }
+  #autostart-status:empty { display:none; }
+  .diagnostics { margin-top:10px; }
+  .meta { color:var(--muted); font-size:11px; white-space:pre-wrap; overflow-wrap:anywhere; padding-bottom:10px; }
+  .made-by a { text-decoration:underline; text-underline-offset:2px; }
+  .made-by { margin:14px 0 0; text-align:center; font-size:11px; }
+  @media (max-width:380px) { .wrap { padding:18px 14px; } .source-grid { grid-template-columns:1fr; } .masthead { gap:8px; } .art-wrap { width:64px; height:64px; } .card { gap:12px; } .preview { padding:13px; } .det { font-size:16px; } }
+  @media (prefers-reduced-motion:reduce) { .bar i { transition:none; } }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>YOZORA · live preview</h1>
-  <div class="card">
-    <div class="art-wrap">
-      <img class="art" id="art" alt="Album cover">
-      <img class="small-icon" id="small-icon" alt="Yozora">
+<main class="wrap">
+  <header class="masthead">
+    <div><h1>Yozora</h1><p class="subtitle">Discord Rich Presence</p></div>
+    <div id="connection" class="connection" role="status">Connecting…</div>
+  </header>
+  <section class="preview" id="preview" aria-label="Detected media preview">
+    <div class="preview-label"><h2 class="eyebrow">Detected media</h2><span id="playback-state">Loading…</span></div>
+    <div class="card">
+      <div class="art-wrap">
+        <span class="art-placeholder" aria-hidden="true">♫</span>
+        <img class="art" id="art" alt="" hidden>
+        <img class="small-icon" id="small-icon" alt="" hidden>
+      </div>
+      <div class="body">
+        <div class="head" id="head">Waiting for Yozora</div>
+        <div class="det" id="det">Your next track goes here</div>
+        <div class="st" id="st">Loading detected media…</div>
+        <div id="timeline" hidden>
+          <div class="bar" id="progress" role="progressbar" aria-label="Playback progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="fill"></i></div>
+          <div class="t"><span id="el">0:00</span><span id="du">0:00</span></div>
+        </div>
+      </div>
     </div>
-    <div class="body">
-      <div class="head" id="head"></div>
-      <div class="det" id="det"></div>
-      <div class="st" id="st"></div>
-      <div class="bar"><i id="fill"></i></div>
-      <div class="t"><span id="el">0:00</span> / <span id="du">0:00</span></div>
-      <div id="buttons"></div>
-    </div>
-  </div>
-  <div class="meta" id="meta"></div>
+    <div id="buttons"></div>
+  </section>
+  <p class="preview-note" id="preview-note" role="status">Previewing media detected on this device.</p>
   <form id="sources-form">
-    <fieldset id="source-fields" disabled>
+    <fieldset id="source-fields" disabled aria-describedby="sources-help">
       <legend>Detected sources</legend>
-      <div class="source-option"><input type="checkbox" id="source-applemusic"><label for="source-applemusic">Apple Music</label></div>
-      <div class="source-option"><input type="checkbox" id="source-spotify"><label for="source-spotify">Spotify (desktop)</label></div>
-      <div class="source-option"><input type="checkbox" id="source-spotifyapi"><label for="source-spotifyapi">Spotify (Web API, if configured)</label></div>
-      <div class="source-option"><input type="checkbox" id="source-youtubemusic"><label for="source-youtubemusic">YouTube Music</label></div>
-      <div class="source-option"><input type="checkbox" id="source-browser"><label for="source-browser">Browser media / videos</label></div>
-      <div class="source-option"><input type="checkbox" id="source-youtube"><label for="source-youtube">YouTube (browser tab; needs Browser media)</label></div>
-      <div class="source-option"><input type="checkbox" id="source-youtube_tabs"><label for="source-youtube_tabs">Detect YouTube in background Edge tabs (symbol only)</label></div>
-      <div class="source-option"><input type="checkbox" id="source-generic"><label for="source-generic">Other media players</label></div>
-      <div class="source-help">Checked sources may appear in your activity. YouTube is off by default and needs Browser media. An exact Edge or Chrome window title match shows Watching YouTube with the video thumbnail (or the symbol) and a watch button when a video ID is available, or the symbol (and the media thumbnail here) without a button otherwise; the check runs when the browser track or its play/pause state changes, or while it is not yet classified. When YouTube is off, a matching track is hidden, even if several windows match. When YouTube is on and exactly one window matches, Yozora reads that window’s address bar through Windows UI Automation to get the video ID (active tab only, best effort), and keeps only the ID. Background tab detection is off by default; when no window title matches, it reads the tab names of up to 8 browser windows (designed for Edge) through UI Automation at the same moments, shows the symbol only (never a thumbnail or button), and with YouTube off is used only to hide tracks. Custom app filters such as msedge still block the YouTube Music PWA; its toggle cannot override them.</div>
-      <div id="order-help" class="source-help">Priority decides which source wins when several play at once. Drag rows, or use the arrow buttons; the order saves with Apply.</div>
-      <ul id="source-order" aria-describedby="order-help"></ul>
-      <button type="submit" id="source-save">Apply</button>
+      <p class="source-help" id="sources-help">Choose what can appear in your activity.</p>
+      <div class="source-grid">
+        <label class="source-option" for="source-applemusic"><input type="checkbox" id="source-applemusic"><span>Apple Music</span></label>
+        <label class="source-option" for="source-spotify"><input type="checkbox" id="source-spotify"><span>Spotify <small>Desktop app</small></span></label>
+        <label class="source-option" for="source-spotifyapi"><input type="checkbox" id="source-spotifyapi"><span>Spotify Web API <small>If configured</small></span></label>
+        <label class="source-option" for="source-youtubemusic"><input type="checkbox" id="source-youtubemusic"><span>YouTube Music</span></label>
+        <label class="source-option" for="source-browser"><input type="checkbox" id="source-browser"><span>Browser media / videos</span></label>
+        <label class="source-option" for="source-generic"><input type="checkbox" id="source-generic"><span>Other media players</span></label>
+        <label class="source-option" for="source-youtube"><input type="checkbox" id="source-youtube" aria-describedby="browser-dependency"><span>YouTube <small>Needs Browser media</small></span></label>
+        <label class="source-option" for="source-youtube_tabs"><input type="checkbox" id="source-youtube_tabs"><span>Background Edge tabs <small>YouTube detection · symbol only</small></span></label>
+      </div>
+      <p id="browser-dependency" class="dependency-note" hidden>Enable Browser media / videos to show YouTube activity.</p>
+      <details id="detection-help">
+        <summary>How YouTube detection works</summary>
+        <p>YouTube is off by default and needs Browser media. An exact Edge or Chrome window title match shows Watching YouTube. With a video ID, it uses the video thumbnail (or symbol) and a watch button; without one, it uses the symbol on Discord and the media thumbnail here, without a watch button.</p>
+        <p>Detection checks when the browser track or its play/pause state changes, or while it is not yet classified. With YouTube on and exactly one matching window, Yozora reads that window’s address bar through Windows UI Automation and keeps only the video ID (active tab only, best effort). With YouTube off, matching tracks are hidden, even if several windows match.</p>
+        <p>Background tab detection is off by default. When no window title matches, it reads tab names from up to 8 browser windows (designed for Edge) at the same checks. Matches use the symbol only, without a thumbnail or button; with YouTube off, matches only hide tracks.</p>
+        <p>Custom app filters such as msedge still block the YouTube Music PWA; its source toggle cannot override them.</p>
+      </details>
+      <details id="priority-settings">
+        <summary>Source priority <span class="source-help">· choose which source appears</span></summary>
+        <p id="order-help">Priority decides which source wins when several play at once. Drag rows or use the arrow buttons. The first enabled, playing source wins.</p>
+        <ol id="source-order" aria-label="Source priority" aria-describedby="order-help"></ol>
+      </details>
+      <div class="save-row">
+        <button type="submit" id="source-save" disabled>Apply changes</button>
+        <button type="button" id="source-reset" hidden>Discard changes</button>
+      </div>
     </fieldset>
-    <p id="source-status" role="status" aria-live="polite">Loading saved sources…</p>
+    <p id="source-status" class="status" role="status" aria-live="polite">Loading saved sources…</p>
+    <button type="button" id="source-retry" hidden>Retry loading sources</button>
   </form>
-  <div class="source-option"><input type="checkbox" id="autostart" disabled><label for="autostart">Start Yozora when I sign in to Windows</label></div>
-  <p id="autostart-status" role="status" aria-live="polite"></p>
+  <div class="startup">
+    <label class="source-option" for="autostart"><input type="checkbox" id="autostart" disabled><span>Start Yozora when I sign in to Windows</span></label>
+    <p id="autostart-status" class="status" role="status" aria-live="polite"></p>
+  </div>
+  <details class="diagnostics">
+    <summary>Connection details</summary>
+    <div class="meta" id="meta">Waiting for status…</div>
+  </details>
   <p class="made-by">Made with love by <a href="https://github.com/mariyaholic" target="_blank" rel="noopener noreferrer">Maria</a>.</p>
-</div>
+</main>
 <script nonce="{{.Nonce}}">
 const t = new URLSearchParams(location.search).get("t");
 const sourceKeys = ["applemusic", "spotify", "spotifyapi", "youtubemusic", "browser", "generic"];
@@ -94,6 +168,30 @@ const toggleKeys = [...sourceKeys, "youtube", "youtube_tabs"];
 const sourceFields = document.getElementById("source-fields");
 const sourceStatus = document.getElementById("source-status");
 const sourceSave = document.getElementById("source-save");
+const sourceReset = document.getElementById("source-reset");
+const sourceRetry = document.getElementById("source-retry");
+let savedSources = null;
+function sourceMessage(message, tone = "") {
+  sourceStatus.textContent = message;
+  sourceStatus.dataset.tone = tone;
+}
+function currentSources() {
+  return Object.fromEntries(toggleKeys.map(source => [source, document.getElementById(`source-${source}`).checked]));
+}
+function updateDependency() {
+  document.getElementById("browser-dependency").hidden = !document.getElementById("source-youtube").checked || document.getElementById("source-browser").checked;
+}
+function updateDirty(message, onlyWhenDirty = false) {
+  if (!savedSources) return;
+  const dirty = JSON.stringify({enabled:currentSources(), order:savedOrder}) !== savedSources;
+  sourceSave.disabled = !dirty;
+  sourceReset.hidden = !dirty;
+  updateDependency();
+  sourceMessage((!onlyWhenDirty || dirty ? message : "") || (dirty ? "Unsaved changes. Apply to update your activity." : "All changes saved."), dirty ? "pending" : "");
+}
+function rememberSources() {
+  savedSources = JSON.stringify({enabled:currentSources(), order:savedOrder});
+}
 const sourceURL = `/api/sources?t=${encodeURIComponent(t)}`;
 function safeButtonURL(raw) {
   try {
@@ -106,6 +204,9 @@ function showSources(enabled) {
   for (const source of toggleKeys) document.getElementById(`source-${source}`).checked = enabled[source] === true;
 }
 async function loadSources() {
+  const retrying = !sourceRetry.hidden;
+  sourceRetry.hidden = true;
+  sourceMessage("Loading saved sources…");
   try {
     const r = await fetch(sourceURL, {cache:"no-store"});
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -113,8 +214,13 @@ async function loadSources() {
     showSources(data.enabled);
     showOrder(data.order || []);
     sourceFields.disabled = false;
-    sourceStatus.textContent = "Saved source settings loaded.";
-  } catch (e) { sourceStatus.textContent = `Could not load sources: ${e}. Reload to retry.`; }
+    rememberSources();
+    updateDirty();
+    if (retrying) document.getElementById("source-applemusic").focus();
+  } catch (e) {
+    sourceMessage(`Could not load sources: ${e}. Retry to load your settings.`, "error");
+    sourceRetry.hidden = false;
+  }
 }
 const sourceLabels = { applemusic:"Apple Music", spotify:"Spotify (desktop)", spotifyapi:"Spotify (Web API)", youtubemusic:"YouTube Music", browser:"Browser media / videos", generic:"Other media players" };
 let savedOrder = [];
@@ -129,13 +235,14 @@ function renderOrder() {
   savedOrder.forEach((source, index) => {
     const li = document.createElement("li");
     li.draggable = true;
-    li.tabIndex = 0;
+    li.tabIndex = -1;
     li.dataset.source = source;
     li.setAttribute("aria-label", `Priority ${index + 1}: ${sourceLabels[source] || source}`);
     const rank = document.createElement("span");
     rank.className = "rank";
     rank.textContent = String(index + 1);
     const label = document.createElement("span");
+    label.className = "source-label";
     label.textContent = sourceLabels[source] || source;
     const move = document.createElement("span");
     move.className = "move";
@@ -149,45 +256,63 @@ function renderOrder() {
     down.addEventListener("click", () => moveSource(index, 1));
     move.append(up, down);
     li.append(rank, label, move);
-    li.addEventListener("dragstart", event => { dragFrom = index; li.classList.add("dragging"); event.dataTransfer.effectAllowed = "move"; });
+    li.addEventListener("dragstart", event => { if (sourceFields.disabled) { event.preventDefault(); return; } dragFrom = index; li.classList.add("dragging"); event.dataTransfer.effectAllowed = "move"; });
     li.addEventListener("dragend", () => { dragFrom = -1; li.classList.remove("dragging"); });
     li.addEventListener("dragover", event => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; });
     li.addEventListener("drop", event => {
       event.preventDefault();
       const from = dragFrom;
       dragFrom = -1;
-      if (!Number.isInteger(from) || from < 0 || from === index || from >= savedOrder.length) return;
+      if (sourceFields.disabled || !Number.isInteger(from) || from < 0 || from === index || from >= savedOrder.length) return;
       const [moved] = savedOrder.splice(from, 1);
       savedOrder.splice(index, 0, moved);
       renderOrder();
+      updateDirty(`${sourceLabels[moved]} moved to priority ${index + 1}. Apply to save.`, true);
+      list.children[index]?.focus();
     });
     list.appendChild(li);
   });
 }
 function moveSource(index, delta) {
   const to = index + delta;
-  if (to < 0 || to >= savedOrder.length) return;
+  if (sourceFields.disabled || to < 0 || to >= savedOrder.length) return;
   const [moved] = savedOrder.splice(index, 1);
   savedOrder.splice(to, 0, moved);
   renderOrder();
   const items = document.getElementById("source-order").children;
-  (items[to] || items[index])?.focus?.();
+  const row = items[to] || items[index];
+  const direction = row?.querySelectorAll("button")[delta < 0 ? 0 : 1];
+  (direction && !direction.disabled ? direction : row)?.focus();
+  updateDirty(`${sourceLabels[moved]} moved to priority ${to + 1}. Apply to save.`, true);
 }
 document.getElementById("sources-form").addEventListener("submit", async event => {
   event.preventDefault();
-  const enabled = Object.fromEntries(toggleKeys.map(source => [source, document.getElementById(`source-${source}`).checked]));
+  if (sourceFields.disabled || sourceSave.disabled) return;
+  const enabled = currentSources();
   sourceFields.disabled = true;
-  sourceStatus.textContent = "Saving…";
+  sourceSave.textContent = "Saving…";
+  sourceMessage("Saving changes…");
   try {
     const r = await fetch(sourceURL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled, order:savedOrder})});
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     showSources(data.enabled);
     showOrder(data.order || savedOrder);
-    sourceStatus.textContent = "Saved. Activity updates after the current rate limit.";
-  } catch (e) { sourceStatus.textContent = `Save failed: ${e}. Your changes were not confirmed; try again.`; }
-  finally { sourceFields.disabled = false; }
+    rememberSources();
+    updateDirty("Saved. Discord activity may take a few seconds to update.");
+  } catch (e) { sourceMessage(`Save failed: ${e}. Your changes were not confirmed; try again.`, "error"); }
+  finally { sourceFields.disabled = false; sourceSave.textContent = "Apply changes"; }
 });
+sourceFields.addEventListener("change", () => updateDirty());
+sourceReset.addEventListener("click", () => {
+  if (!savedSources) return;
+  const saved = JSON.parse(savedSources);
+  showSources(saved.enabled);
+  showOrder(saved.order);
+  updateDirty("Changes discarded. Saved settings restored.");
+  document.getElementById("source-applemusic").focus();
+});
+sourceRetry.addEventListener("click", loadSources);
 loadSources();
 const autostartBox = document.getElementById("autostart");
 const autostartStatus = document.getElementById("autostart-status");
@@ -209,40 +334,106 @@ autostartBox.addEventListener("change", async () => {
 });
 const fmt = s => { s = Math.max(0, Math.round(s||0)); const m = Math.floor(s/60);
   return m >= 60 ? `${Math.floor(m/60)}:${String(m%60).padStart(2,"0")}:${String(s%60).padStart(2,"0")}` : `${m}:${String(s%60).padStart(2,"0")}`; };
+const preview = document.getElementById("preview");
+const connection = document.getElementById("connection");
+const playbackState = document.getElementById("playback-state");
+const previewNote = document.getElementById("preview-note");
+const head = document.getElementById("head");
+const det = document.getElementById("det");
+const st = document.getElementById("st");
+const art = document.getElementById("art");
+const badge = document.getElementById("small-icon");
+const fill = document.getElementById("fill");
+const elapsed = document.getElementById("el");
+const duration = document.getElementById("du");
+const progress = document.getElementById("progress");
+const meta = document.getElementById("meta");
+let buttonSignature = "";
+let polling = false;
+let hasPreview = false;
+for (const image of [art, badge]) image.addEventListener("error", () => { image.hidden = true; });
+function updateStatus(element, text) {
+  // Replacing identical live-region text would announce it again on every poll.
+  if (element.textContent !== text) element.textContent = text;
+}
+function updateImage(image, url) {
+  const next = url || "";
+  if ((image.getAttribute("src") || "") === next) return;
+  image.hidden = !next;
+  if (next) image.src = next;
+  else image.removeAttribute("src");
+}
+function updateButtons(activity) {
+  const links = [];
+  for (const b of activity?.buttons || []) {
+    const href = safeButtonURL(b.url);
+    if (href) links.push({label:b.label, href});
+  }
+  const signature = JSON.stringify(links);
+  if (signature === buttonSignature) return; // Preserve focused links between polls.
+  buttonSignature = signature;
+  const buttons = document.getElementById("buttons");
+  buttons.replaceChildren();
+  for (const b of links) {
+    const link = document.createElement("a");
+    link.className = "btn"; link.textContent = b.label; link.href = b.href;
+    link.target = "_blank"; link.rel = "noopener noreferrer";
+    buttons.appendChild(link);
+  }
+}
 async function tick() {
+  if (polling) return;
+  polling = true;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const r = await fetch(`/api/state?t=${encodeURIComponent(t)}`, {cache:"no-store"});
+    const r = await fetch(`/api/state?t=${encodeURIComponent(t)}`, {cache:"no-store", signal:controller.signal});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const s = await r.json();
-    head.textContent = s.playing ? `${s.activity_type === "watching" ? "Watching" : s.activity_type === "playing" ? "Playing" : "Listening to"} ${s.service || "Media Player"}` : `Paused — ${s.service || "Media Player"}`;
-    det.textContent = s.title || "— nothing playing —";
-    st.textContent = s.artist ? `${s.artist}${s.album ? " — " + s.album : ""}` : "";
-    art.src = s.art_url || "";
-    art.style.visibility = s.art_url ? "visible" : "hidden";
-    const badge = document.getElementById("small-icon");
-    badge.src = s.small_image || "";
-    badge.style.visibility = s.small_image ? "visible" : "hidden";
-    const buttons = document.getElementById("buttons");
-    buttons.replaceChildren();
-    for (const b of s.published_activity?.buttons || []) {
-      const href = safeButtonURL(b.url);
-      if (!href) continue;
-      const link = document.createElement("a");
-      link.className = "btn"; link.textContent = b.label; link.href = href;
-      link.target = "_blank"; link.rel = "noopener noreferrer";
-      buttons.appendChild(link);
-    }
-    const p = s.duration_sec > 0 ? Math.min(100, 100 * s.elapsed_sec / s.duration_sec) : 0;
-    fill.style.width = (s.playing ? p : 0) + "%";
-    el.textContent = fmt(s.elapsed_sec); du.textContent = fmt(s.duration_sec);
-    meta.textContent = `source: ${s.source||"—"} · art: ${s.art_via||"—"} · sends: ${s.sends} · connected: ${s.discord_connected}`;
+    const hasTrack = Boolean(s.title);
+    hasPreview = true;
+    preview.dataset.stale = "false";
+    connection.dataset.state = s.discord_connected ? "connected" : "offline";
+    updateStatus(connection, s.discord_connected ? "Discord connected" : "Discord offline");
+    playbackState.textContent = hasTrack ? (s.playing ? "Playing" : "Paused") : "Idle";
+    head.textContent = hasTrack ? `${s.activity_type === "watching" ? "Watching" : s.activity_type === "playing" ? "Playing" : "Listening to"} ${s.service || "Media Player"}` : "Nothing playing";
+    det.textContent = s.title || "Ready when you are";
+    det.title = s.title || "";
+    st.textContent = hasTrack ? (s.artist ? `${s.artist}${s.album ? " — " + s.album : ""}` : "") : "Play something from an enabled source.";
+    st.title = st.textContent;
+    updateImage(art, hasTrack ? s.art_url : "");
+    updateImage(badge, hasTrack ? s.small_image : "");
+    updateButtons(s.published_activity);
+    const p = s.duration_sec > 0 ? Math.max(0, Math.min(100, 100 * (s.elapsed_sec || 0) / s.duration_sec)) : 0;
+    fill.style.width = p + "%";
+    elapsed.textContent = fmt(s.elapsed_sec); duration.textContent = fmt(s.duration_sec);
+    document.getElementById("timeline").hidden = !hasTrack || !(s.duration_sec > 0);
+    progress.setAttribute("aria-valuenow", String(Math.round(p)));
+    progress.setAttribute("aria-valuetext", `${fmt(s.elapsed_sec)} of ${fmt(s.duration_sec)}`);
+    updateStatus(previewNote, s.last_error ? "Yozora reported an issue. Open Connection details below." : s.discord_connected ? "Detected media preview. Discord updates may take a few seconds." : "Open the Discord desktop app to connect your activity.");
+    meta.textContent = `Source: ${s.source || "—"} · Artwork: ${s.art_via || "—"} · Updates sent: ${s.sends || 0}`;
     if (s.last_error) {
-      const e2 = document.createElement("span");
-      e2.className = "err";
-      e2.style.display = "block";
-      e2.textContent = "error: " + s.last_error;
-      meta.appendChild(e2);
+      const error = document.createElement("div");
+      error.className = "err";
+      error.textContent = "Error: " + s.last_error;
+      meta.appendChild(error);
     }
-  } catch (e) { meta.textContent = "fetch failed: " + e; }
+  } catch (e) {
+    preview.dataset.stale = "true";
+    connection.dataset.state = "offline";
+    updateStatus(connection, "Panel offline");
+    playbackState.textContent = hasPreview ? "Last known activity" : "Unavailable";
+    updateStatus(previewNote, "Can't reach Yozora. Retrying automatically…");
+    if (!hasPreview) {
+      head.textContent = "Preview unavailable";
+      det.textContent = "Waiting for Yozora";
+      st.textContent = "The panel will reconnect automatically.";
+    }
+    meta.textContent = "Could not refresh the preview: " + e;
+  } finally {
+    clearTimeout(timeout);
+    polling = false;
+  }
 }
 tick(); setInterval(tick, 1000);
 </script>

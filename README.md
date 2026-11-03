@@ -85,6 +85,16 @@ The Windows detector reads once at startup, then polls every second by default. 
 
 Private Windows named-pipe regression tests exercise simultaneous read/write using a unique `yozora-test-*` pipe, not the live Discord client. Ordinary `go test ./...` never publishes experimental activity to a Discord profile. Tests also cover slow artwork, session gaps and out-of-order lookups, coherent track/art transitions, paused clear/resume and visibility-policy reloads under the send-rate gate, label-only Discord button readback, loopback-art filtering, source-toggle API validation and concurrency, launcher endpoint validation, service names, icon placement, platform-specific links, button ordering, display enums, config bounds, and newest-snapshot retention.
 
+The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, keyboard/drag priority ordering, save failures, connection states, responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
+
+```sh
+npm install --prefix /tmp/yozora-ui-tools --no-save --no-package-lock playwright@1.62.1
+/tmp/yozora-ui-tools/node_modules/.bin/playwright install chromium
+NODE_PATH=/tmp/yozora-ui-tools/node_modules node scripts/check-ui.cjs
+```
+
+To use an existing Chromium installation, set `CHROMIUM_PATH` to its executable instead of installing Playwright's browser. Screenshots and `results.json` are written to the system temporary directory under `yozora-ui-check`; set `UI_EVIDENCE_DIR` to choose another location. These browser checks complement the Windows Go tests; they do not exercise native WebView2 or media detection.
+
 ## Release
 
 Every merge to `main` tests, builds and publishes a release automatically (`.github/workflows/release.yml`). The version is the latest `v0.1.N` tag plus one, so the download links above always point at the newest build. Use the "Run workflow" button on the release workflow to republish without a code change.
