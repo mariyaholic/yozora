@@ -90,13 +90,24 @@ The control panel's **Appearance** section offers 14 themes. Choosing one applie
   theme = "yozora"
 ```
 
-| Group | Theme ids | Source |
-| --- | --- | --- |
-| Yozora | `yozora` (default) | Yozora's own night palette |
-| Argonaut Oak | `ao-pine`, `ao-kurisu`, `ao-ava`, `ao-paper` | Argonaut Oak design system tokens |
-| Omoi | `omoi-uika`, `omoi-sumimi`, `omoi-confluence`, `omoi-panel`, `omoi-pc98` | Omoi's skins and the Uika canon sheet (`prototype/tokens.css`, `prototype/inspiration.css`) |
-| Ad Astra | `astra-console`, `astra-paper` | Ad Astra design system tokens |
-| Residual | `residual-night`, `residual-paper` | Residual design system tokens |
+| Theme id | Name | Mode | Palette source |
+| --- | --- | --- | --- |
+| `yozora` (default) | Night sky | Dark | Yozora |
+| `uika` | Uika | Dark | Omoi / Uika canon |
+| `pine` | Pine | Dark | Argonaut Oak |
+| `kurisu` | Kurisu | Dark | Argonaut Oak |
+| `ava` | Ava | Dark | Argonaut Oak |
+| `panel` | Panel | Dark | Omoi |
+| `astra` | Astra | Dark | Ad Astra (Console) |
+| `residual` | Residual | Dark | Residual (Night) |
+| `mariyaholic-98` | Mariyaholic-98 | Dark | Omoi |
+| `sumimi` | Sumimi | Light | Omoi / Uika canon |
+| `ledger` | Ledger | Light | Argonaut Oak (Paper) |
+| `confluence` | Confluence | Light | Omoi |
+| `astra-light` | Astra light | Light | Ad Astra (Paper) |
+| `residual-light` | Residual light | Light | Residual (Paper) |
+
+All 14 appear in one grid, dark themes first. Where a source called a theme "Paper", "Night" or "Console", it is renamed so each name is unique. Omoi palettes come from `prototype/tokens.css` and `prototype/inspiration.css`.
 
 Colours are copied exactly from each source. Where a source colour would fall below 4.5:1 as text in this panel, a lighter or darker value is used instead and marked `derived` in `internal/server/ui.html`. This happens for a few error and hover colours. The browser check measures text, muted, link, error and button contrast in every theme. The panel loads no web fonts, so each theme falls back to fonts installed with Windows (Segoe UI, Consolas, Georgia). An unknown or missing `theme` value loads as `yozora`.
 

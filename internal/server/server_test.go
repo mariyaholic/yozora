@@ -269,7 +269,7 @@ func TestThemeSavesKnownThemesOnly(t *testing.T) {
 		t.Fatalf("theme read = %d %s", w.Code, w.Body.String())
 	}
 	before := cfg.Get()
-	for _, body := range []string{`{}`, `null`, `{"theme":null}`, `{"theme":"neon"}`, `{"theme":"AO-AVA"}`, `{"theme":1}`, `{"theme":"ao-ava","extra":true}`, `{"theme":"ao-ava"} {}`, strings.Repeat(" ", 300) + `{"theme":"ao-ava"}`} {
+	for _, body := range []string{`{}`, `null`, `{"theme":null}`, `{"theme":"neon"}`, `{"theme":"ao-ava"}`, `{"theme":"AVA"}`, `{"theme":1}`, `{"theme":"ava","extra":true}`, `{"theme":"ava"} {}`, strings.Repeat(" ", 300) + `{"theme":"ava"}`} {
 		if w := request(h, "POST", "/api/theme", body, true); w.Code != 400 {
 			t.Errorf("accepted %q: %d", body[:min(len(body), 60)], w.Code)
 		}
@@ -277,22 +277,22 @@ func TestThemeSavesKnownThemesOnly(t *testing.T) {
 			t.Fatal("rejected theme changed config")
 		}
 	}
-	w = request(h, "POST", "/api/theme", `{"theme":"ao-ava"}`, true)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `"theme":"ao-ava"`) {
+	w = request(h, "POST", "/api/theme", `{"theme":"ava"}`, true)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"theme":"ava"`) {
 		t.Fatalf("theme save = %d %s", w.Code, w.Body.String())
 	}
 	loaded, err := config.Load(cfg.Path())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.UI.Theme != "ao-ava" || cfg.Get().UI.Theme != "ao-ava" {
+	if loaded.UI.Theme != "ava" || cfg.Get().UI.Theme != "ava" {
 		t.Fatalf("theme not persisted: file %q, holder %q", loaded.UI.Theme, cfg.Get().UI.Theme)
 	}
 	if loaded.Template.State != "custom template" || loaded.Spotify.Market != "fixture-market" || !reflect.DeepEqual(loaded.Sources.Blocked, before.Sources.Blocked) {
 		t.Fatal("theme save changed unrelated settings")
 	}
 	page := request(h, "GET", "/?t=fixture-token", "", false).Body.String()
-	if !strings.Contains(page, `<html lang="en" data-theme="ao-ava">`) {
+	if !strings.Contains(page, `<html lang="en" data-theme="ava">`) {
 		t.Fatal("dashboard does not render the saved theme before scripts run")
 	}
 }
