@@ -83,7 +83,7 @@ The Windows detector reads once at startup, then polls every second by default. 
 
 ## Appearance
 
-The control panel's **Appearance** section offers 14 themes. Choosing one applies it at once and saves it in `cadence.toml`:
+The control panel's **Appearance** section offers 11 themes. Choosing one applies it at once and saves it in `cadence.toml`:
 
 ```toml
 [ui]
@@ -97,17 +97,14 @@ The control panel's **Appearance** section offers 14 themes. Choosing one applie
 | `pine` | Pine | Dark | Argonaut Oak |
 | `kurisu` | Kurisu | Dark | Argonaut Oak |
 | `ava` | Ava | Dark | Argonaut Oak |
-| `panel` | Panel | Dark | Omoi |
 | `astra` | Astra | Dark | Ad Astra (Console) |
-| `residual` | Residual | Dark | Residual (Night) |
 | `mariyaholic-98` | Mariyaholic-98 | Dark | Omoi |
 | `sumimi` | Sumimi | Light | Omoi / Uika canon |
 | `ledger` | Ledger | Light | Argonaut Oak (Paper) |
 | `confluence` | Confluence | Light | Omoi |
 | `astra-light` | Astra light | Light | Ad Astra (Paper) |
-| `residual-light` | Residual light | Light | Residual (Paper) |
 
-All 14 appear in one grid, dark themes first. Where a source called a theme "Paper", "Night" or "Console", it is renamed so each name is unique. Omoi palettes come from `prototype/tokens.css` and `prototype/inspiration.css`.
+All 11 appear in one grid, dark themes first. Themes that looked nearly identical were merged: Omoi Panel into Night sky, and Residual Night and Paper into Astra and Astra light. Saved ids `panel`, `residual` and `residual-light` load as the theme that absorbed them. Where a source called a theme "Paper", "Night" or "Console", it is renamed so each name is unique. Omoi palettes come from `prototype/tokens.css` and `prototype/inspiration.css`.
 
 Colours are copied exactly from each source. Where a source colour would fall below 4.5:1 as text in this panel, a lighter or darker value is used instead and marked `derived` in `internal/server/ui.html`. This happens for a few error and hover colours. The browser check measures text, muted, link, error and button contrast in every theme. The panel loads no web fonts, so each theme falls back to fonts installed with Windows (Segoe UI, Consolas, Georgia). An unknown or missing `theme` value loads as `yozora`.
 

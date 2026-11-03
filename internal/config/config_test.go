@@ -326,7 +326,9 @@ func TestLoadNormalizesPanelTheme(t *testing.T) {
 		"neon":             DefaultTheme,
 		"ao-ava":           DefaultTheme,
 		" Ava ":            "ava",
-		"residual-light":   "residual-light",
+		"residual-light":   "astra-light",
+		"residual":         "astra",
+		"panel":            DefaultTheme,
 		"mariyaholic-98":   "mariyaholic-98",
 		"../../etc/passwd": DefaultTheme,
 	} {
