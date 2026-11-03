@@ -5,6 +5,16 @@
 <title>Yozora — control panel</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
+  /* Theme faces ship with Yozora (internal/server/fonts, SIL OFL 1.1). Latin subsets: other scripts fall back glyph by glyph. */
+  @font-face { font-family:"Inter"; src:url("/fonts/inter.woff2") format("woff2"); font-weight:100 900; font-display:swap; unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family:"Outfit"; src:url("/fonts/outfit.woff2") format("woff2"); font-weight:100 900; font-display:swap; unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family:"JetBrains Mono"; src:url("/fonts/jetbrains-mono.woff2") format("woff2"); font-weight:100 800; font-display:swap; unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family:"IBM Plex Sans"; src:url("/fonts/ibm-plex-sans.woff2") format("woff2"); font-weight:100 700; font-display:swap; unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family:"IBM Plex Mono"; src:url("/fonts/ibm-plex-mono-400.woff2") format("woff2"); font-weight:400; font-display:swap; unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family:"IBM Plex Mono"; src:url("/fonts/ibm-plex-mono-500.woff2") format("woff2"); font-weight:500 700; font-display:swap; unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family:"Source Serif 4"; src:url("/fonts/source-serif-4.woff2") format("woff2"); font-weight:200 900; font-display:swap; unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family:"Cinzel"; src:url("/fonts/cinzel.woff2") format("woff2"); font-weight:400 900; font-display:swap; unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+  @font-face { font-family:"Departure Mono"; src:url("/fonts/departure-mono.woff2") format("woff2"); font-weight:400; font-display:swap; }
   /* Every colour, face and corner comes from a theme block below; component rules only read the roles. */
   :root, [data-theme="yozora"] {
     color-scheme:dark;
@@ -116,7 +126,7 @@
   [data-theme="mariyaholic-98"] :focus-visible { outline:2px dashed #f4cf8a; outline-offset:4px; }
   [data-theme="mariyaholic-98"] :is(.preview, .panel) { border:2px solid var(--line-strong); }
   [data-theme="mariyaholic-98"] #source-save { background:#f4cf8a; border:2px solid #000; color:#120c24; box-shadow:3px 3px 0 #000; }
-  [data-theme="mariyaholic-98"] .connection, [data-theme="mariyaholic-98"] .mark { border-radius:0; }
+  [data-theme="mariyaholic-98"] :is(.mark, .appearance-open) { border-radius:0; }
 
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
@@ -139,11 +149,9 @@
   h1 { margin:0; color:var(--brand); font:var(--title-weight) 21px/1.15 var(--font-title); letter-spacing:.02em; }
   .subtitle, .source-help, .status, .made-by { color:var(--muted); font-size:12px; }
   .subtitle { margin:1px 0 0; font-family:var(--font-label); font-size:10px; letter-spacing:var(--label-track); text-transform:uppercase; color:var(--dim); }
-  .connection { display:flex; align-items:center; gap:7px; border:1px solid var(--line); border-radius:999px; padding:5px 10px; font:11px/1.3 var(--font-label); color:var(--muted); background:var(--panel); flex-shrink:0; }
-  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .connection, :is([data-theme="uika"], [data-theme="sumimi"], [data-theme="confluence"], [data-theme="mariyaholic-98"]) .connection, :is([data-theme="astra"], [data-theme="astra-light"]) .connection { border-radius:var(--radius-sm); }
-  .connection::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--dim); flex:none; }
-  .connection[data-state="connected"]::before { background:var(--good); box-shadow:0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
-  .connection[data-state="offline"]::before { background:var(--warn); }
+  .appearance-open { display:inline-flex; align-items:center; gap:7px; flex-shrink:0; color:var(--muted); background:var(--panel); border-color:var(--line); }
+  .appearance-open:hover:enabled { color:var(--text); }
+  .appearance-open svg { width:16px; height:16px; flex:none; }
 
   .eyebrow, .section-title, legend.section-title { margin:0; padding:0; font:500 10px/1.4 var(--font-label); letter-spacing:var(--label-track); text-transform:uppercase; color:var(--dim); }
   :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .eyebrow, :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .section-title, [data-theme="uika"] .eyebrow, [data-theme="uika"] .section-title, [data-theme="sumimi"] .eyebrow, [data-theme="sumimi"] .section-title { color:var(--accent); }
@@ -171,7 +179,8 @@
   #buttons:empty { display:none; }
   .btn { display:inline-flex; align-items:center; min-height:32px; padding:5px 11px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); color:var(--text); background:var(--panel-2); font-size:12px; overflow-wrap:anywhere; }
   .btn:hover { background:var(--panel-hi); border-color:var(--accent-dim); text-decoration:none; }
-  .preview-note { margin:8px 2px 14px; color:var(--muted); font-size:11px; }
+  .preview-note { margin:8px 2px 0; color:var(--muted); font-size:11px; }
+  .preview-note:empty { display:none; }
 
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px 14px 12px; margin-top:12px; box-shadow:var(--panel-shadow); }
   fieldset { margin:0; padding:0; border:0; min-width:0; }
@@ -219,10 +228,18 @@
   .status[data-tone="pending"] { color:var(--warn); }
   #source-retry { margin-top:8px; }
   .startup .source-option { background:none; border:0; padding:0; min-height:32px; }
-  #autostart-status:empty, #theme-status:empty { display:none; }
+  #autostart-status:empty, #theme-status:empty, #source-status:empty { display:none; }
 
-  .motion-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin-top:14px; }
-  .motion-label { font-size:12px; color:var(--text); }
+  /* Appearance lives in a dialog off the masthead: it is set once, so it should not sit between the daily controls. */
+  dialog.appearance { width:min(560px, calc(100vw - 24px)); max-height:calc(100vh - 24px); padding:16px; color:var(--text); background:var(--panel); border:1px solid var(--line-strong); border-radius:var(--radius); box-shadow:var(--panel-shadow), 0 18px 48px rgba(0,0,0,.45); }
+  dialog.appearance::backdrop { background:rgba(4,5,10,.55); }
+  dialog.appearance[open] { animation:dialog-in var(--slide-dur, .2s) var(--slide-ease, ease); }
+  @keyframes dialog-in { from { opacity:0; transform:translateY(6px); } }
+  .dialog-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+  .dialog-head h2 { margin:0; color:var(--brand); font:var(--title-weight) 17px/1.2 var(--font-title); letter-spacing:.02em; }
+  .dialog-close { width:34px; padding:0; font-size:18px; line-height:1; }
+  .motion-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin-top:16px; padding-top:14px; border-top:1px solid var(--line); }
+  .motion-label { font:500 10px/1.4 var(--font-label); letter-spacing:var(--label-track); text-transform:uppercase; color:var(--dim); }
   .segmented { display:inline-flex; border:1px solid var(--line-strong); border-radius:var(--radius-sm); overflow:hidden; }
   .segmented label { position:relative; display:flex; align-items:center; min-height:32px; padding:0 12px; font-size:12px; color:var(--muted); background:var(--bg); cursor:pointer; transition:background-color var(--dur) var(--ease), color var(--dur) var(--ease); }
   .segmented label + label { border-left:1px solid var(--line-strong); }
@@ -230,22 +247,19 @@
   .segmented label:has(input:checked) { background:var(--accent); color:var(--on-accent); font-weight:600; }
   .segmented label:has(input:focus-visible) { outline:2px solid var(--accent); outline-offset:2px; z-index:1; }
   .segmented input { position:absolute; opacity:0; width:1px; height:1px; margin:0; pointer-events:none; }
-  #motion-help { margin:6px 0 0; }
-  .theme-grid { margin-top:10px; display:grid; grid-template-columns:repeat(auto-fill, minmax(104px, 1fr)); gap:6px; }
+  .theme-grid { margin-top:4px; display:grid; grid-template-columns:repeat(auto-fill, minmax(104px, 1fr)); gap:6px; }
   .theme-option { position:relative; display:flex; flex-direction:column; gap:6px; padding:6px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--bg); cursor:pointer; transition:border-color .15s ease, background-color .15s ease; }
   .theme-option:hover { border-color:var(--line-strong); }
   .theme-option:has(input:checked) { border-color:var(--accent); background:var(--accent-wash); }
   .theme-option:has(input:focus-visible) { outline:2px solid var(--accent); outline-offset:2px; }
   .theme-option input { position:absolute; opacity:0; width:1px; height:1px; margin:0; pointer-events:none; }
   .theme-option .name { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:2px 6px; font-size:12px; line-height:1.2; padding:0 2px 1px; }
-  .theme-option .name small { color:var(--dim); font:10px/1 var(--font-label); letter-spacing:.04em; text-transform:uppercase; }
   .theme-option:has(input:checked) .name::after { content:"✓"; color:var(--accent); font-size:12px; margin-left:auto; }
-  .theme-option:has(input:checked) .name small { display:none; }
   /* A swatch renders with its own theme's roles, so each tile previews the real palette. */
   .swatch { display:grid; grid-template-columns:18px 1fr; grid-template-rows:auto auto auto; gap:4px 6px; align-items:center; padding:7px; background:var(--bg); border:1px solid var(--line); border-radius:var(--radius-sm); }
   .swatch .s-art { grid-row:1 / 3; width:18px; height:18px; border-radius:var(--radius-sm); background:var(--accent); }
-  .swatch .s-line { height:5px; border-radius:3px; background:var(--text); width:80%; }
-  .swatch .s-line + .s-line { background:var(--muted); width:55%; }
+  .swatch .s-face { color:var(--text); font:var(--title-weight) 15px/1 var(--font-title); font-style:normal; }
+  .swatch .s-line { height:5px; border-radius:3px; background:var(--muted); width:60%; }
   .swatch .s-bar { grid-column:1 / 3; height:3px; background:var(--panel-2); position:relative; }
   .swatch .s-bar::before { content:""; position:absolute; inset:0 55% 0 0; background:var(--accent); }
 
@@ -254,7 +268,7 @@
   .meta { color:var(--muted); font:11px/1.6 var(--font-label); white-space:pre-wrap; overflow-wrap:anywhere; padding:8px 2px 2px; }
   .made-by a { text-decoration:underline; text-underline-offset:2px; }
   .made-by { margin:14px 0 0; text-align:center; font-size:11px; color:var(--dim); }
-  @media (max-width:380px) { .wrap { padding:16px 14px; } .source-grid { grid-template-columns:1fr; } .masthead { gap:8px; } .mark { width:30px; height:30px; } .mark svg { width:18px; height:18px; } .art-wrap { width:64px; height:64px; } .card { gap:12px; } .preview, .panel { padding:12px; } .det { font-size:16px; } .connection { padding:4px 8px; } .theme-grid { grid-template-columns:1fr 1fr; } }
+  @media (max-width:380px) { .wrap { padding:16px 14px; } .source-grid { grid-template-columns:1fr; } .masthead { gap:8px; } .mark { width:30px; height:30px; } .mark svg { width:18px; height:18px; } .art-wrap { width:64px; height:64px; } .card { gap:12px; } .preview, .panel, dialog.appearance { padding:12px; } .det { font-size:16px; } .appearance-open span { display:none; } .appearance-open { width:34px; padding:0; justify-content:center; } .theme-grid { grid-template-columns:1fr 1fr; } }
 
   /* ---- Motion. Everything here answers an event (a click, a drag, a track or save change); nothing loops at idle.
      Tokens: --dur/--ease for hovers, --slide-dur/--slide-ease for rows, --part for the gap opened at a drop point. */
@@ -296,11 +310,10 @@
   [data-theme="uika"] .drag-preview { box-shadow:0 0 0 1px var(--accent), 0 0 22px rgba(187,153,85,.35); }
 
   /* Argonaut Oak (Pine, Kurisu, Ava, Ledger): 0.15s, no easing on rows, a 2px accent edge on the active row,
-     and a live pulse on the status dot only while connected and playing. */
+     and a live pulse on the playback dot only while Discord shows the track. */
   :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) button:active:enabled { outline:1px solid var(--accent); outline-offset:2px; }
   :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) #source-order li.dragging { box-shadow:inset 2px 0 0 var(--accent); }
-  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"]) .connection[data-state="connected"]::before { box-shadow:0 0 8px var(--good); }
-  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"]) .connection[data-live="true"]::before { animation:live-pulse 1s ease-in-out infinite alternate; }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"]) #playback-state[data-live="true"]::before { box-shadow:0 0 8px currentColor; animation:live-pulse 1s ease-in-out infinite alternate; }
   @keyframes live-pulse { to { opacity:.35; } }
   /* Kurisu: new text warms up like a CRT; the drop line leaves an amber afterglow. */
   [data-theme="kurisu"] body.track-changed :is(.head, .det, .st) { animation:phosphor .25s ease-out; }
@@ -354,7 +367,7 @@
       <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M14.6 3.6a8.6 8.6 0 1 0 6 13.1 7 7 0 0 1-6-13.1Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path class="star" d="M18.2 3.4l.55 1.45 1.45.55-1.45.55-.55 1.45-.55-1.45-1.45-.55 1.45-.55Z" fill="currentColor"/></svg></span>
       <div><h1>Yozora</h1><p class="subtitle">Discord Rich Presence</p></div>
     </div>
-    <div id="connection" class="connection" role="status">Connecting…</div>
+    <button type="button" class="appearance-open" id="appearance-open" aria-haspopup="dialog" aria-controls="appearance" aria-label="Appearance"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5C21 6.5 17 3 12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="7.5" cy="11" r="1.3" fill="currentColor"/><circle cx="10.5" cy="7.2" r="1.3" fill="currentColor"/><circle cx="15.2" cy="7.6" r="1.3" fill="currentColor"/></svg><span>Appearance</span></button>
   </header>
   <section class="preview" id="preview" aria-label="Detected media preview">
     <div class="preview-label"><h2 class="eyebrow">Detected media</h2><span id="playback-state">Loading…</span></div>
@@ -376,12 +389,11 @@
     </div>
     <div id="buttons"></div>
   </section>
-  <p class="preview-note" id="preview-note" role="status">Previewing media detected on this device.</p>
+  <p class="preview-note" id="preview-note" role="status"></p>
   <form id="sources-form" class="panel">
-    <fieldset id="source-fields" disabled aria-describedby="sources-help">
+    <fieldset id="source-fields" disabled aria-describedby="order-help">
       <legend class="section-title">Sources &amp; priority</legend>
-      <p class="source-help" id="sources-help">Priority decides which source wins when several play at once. The first enabled, playing source appears.</p>
-      <p class="source-help" id="order-help">Drag a grip to reorder. Use the arrow buttons, or focus a grip and press Up/Down. Changes save with Apply.</p>
+      <p class="source-help" id="order-help">The highest source that is playing wins. Drag a grip or use the arrows, then Apply.</p>
       <ol id="source-order" aria-label="Source priority" aria-describedby="order-help">
         <li data-source="applemusic"><label class="source-option" for="source-applemusic"><input type="checkbox" id="source-applemusic"><span>Apple Music</span></label></li>
         <li data-source="spotify"><label class="source-option" for="source-spotify"><input type="checkbox" id="source-spotify"><span>Spotify <small>Desktop app</small></span></label></li>
@@ -391,18 +403,18 @@
         <li data-source="generic"><label class="source-option" for="source-generic"><input type="checkbox" id="source-generic"><span>Other media players</span></label></li>
       </ol>
       <p id="order-status" class="status" role="status" aria-live="polite"></p>
-      <h2 class="source-subheading">YouTube detection</h2>
+      <h2 class="source-subheading">Video sites</h2>
       <div class="source-grid">
-        <label class="source-option" for="source-youtube"><input type="checkbox" id="source-youtube" aria-describedby="browser-dependency"><span>YouTube <small>Needs Browser media</small></span></label>
-        <label class="source-option" for="source-youtube_tabs"><input type="checkbox" id="source-youtube_tabs"><span>Background Edge tabs <small>YouTube detection · symbol only</small></span></label>
+        <label class="source-option" for="source-youtube"><input type="checkbox" id="source-youtube" aria-describedby="browser-dependency"><span>YouTube <small>Video thumbnail</small></span></label>
+        <label class="source-option" for="source-twitch"><input type="checkbox" id="source-twitch" aria-describedby="browser-dependency"><span>Twitch <small>Live stream preview</small></span></label>
+        <label class="source-option" for="source-youtube_tabs"><input type="checkbox" id="source-youtube_tabs"><span>Background Edge tabs <small>YouTube · symbol only</small></span></label>
       </div>
-      <p id="browser-dependency" class="dependency-note" hidden>Enable Browser media / videos to show YouTube activity.</p>
+      <p id="browser-dependency" class="dependency-note" hidden>Video sites need Browser media / videos turned on.</p>
       <details id="detection-help">
-        <summary>How YouTube detection works</summary>
-        <p>YouTube is off by default and needs Browser media. An exact Edge or Chrome window title match shows Watching YouTube. With a video ID, it uses the video thumbnail (or symbol) and a watch button; without one, it uses the symbol on Discord and the media thumbnail here, without a watch button.</p>
-        <p>Detection checks when the browser track or its play/pause state changes, or while it is not yet classified. With YouTube on and exactly one matching window, Yozora reads that window’s address bar through Windows UI Automation and keeps only the video ID (active tab only, best effort). With YouTube off, matching tracks are hidden, even if several windows match.</p>
-        <p>Background tab detection is off by default. When no window title matches, it reads tab names from up to 8 browser windows (designed for Edge) at the same checks. Matches use the symbol only, without a thumbnail or button; with YouTube off, matches only hide tracks.</p>
-        <p>Custom app filters such as msedge still block the YouTube Music PWA; its source toggle cannot override them.</p>
+        <summary>How video detection works</summary>
+        <p>Yozora matches the Edge or Chrome window title to the playing video (“… - YouTube”, “channel - Twitch”). When exactly one window matches and that site is on, it reads the window’s address bar through Windows UI Automation and keeps only the video ID or channel name. Nothing else from the browser is kept.</p>
+        <p>YouTube shows the video thumbnail and a watch button. Twitch shows the stream’s live preview and a watch button; offline channels, VODs and clips get the Twitch symbol instead. While a site is off, its matches are hidden from Discord.</p>
+        <p>Background Edge tabs reads tab names from up to 8 windows when no title matches. It finds YouTube only and shows the symbol, without a thumbnail or button. App filters such as msedge still block the YouTube Music PWA.</p>
       </details>
       <div class="save-row">
         <button type="submit" id="source-save" disabled>Apply changes</button>
@@ -412,50 +424,52 @@
     <p id="source-status" class="status" role="status" aria-live="polite">Loading saved sources…</p>
     <button type="button" id="source-retry" hidden>Retry loading sources</button>
   </form>
-  <section class="panel appearance" aria-labelledby="theme-title">
-    <fieldset id="theme-fields" disabled>
-      <legend class="section-title" id="theme-title">Appearance</legend>
-      <p class="source-help">Pick a palette. It applies at once and is saved for next time.</p>
-      <div class="theme-grid" role="radiogroup" aria-labelledby="theme-title">
-        <label class="theme-option"><input type="radio" name="theme" value="yozora"><span class="swatch" data-theme="yozora" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Night sky <small>Dark</small></span></label>
-        <label class="theme-option"><input type="radio" name="theme" value="uika"><span class="swatch" data-theme="uika" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Uika <small>Dark</small></span></label>
-        <label class="theme-option"><input type="radio" name="theme" value="pine"><span class="swatch" data-theme="pine" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Pine <small>Dark</small></span></label>
-        <label class="theme-option"><input type="radio" name="theme" value="kurisu"><span class="swatch" data-theme="kurisu" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Kurisu <small>Dark</small></span></label>
-        <label class="theme-option"><input type="radio" name="theme" value="ava"><span class="swatch" data-theme="ava" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Ava <small>Dark</small></span></label>
-        <label class="theme-option"><input type="radio" name="theme" value="astra"><span class="swatch" data-theme="astra" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Astra <small>Dark</small></span></label>
-        <label class="theme-option"><input type="radio" name="theme" value="mariyaholic-98"><span class="swatch" data-theme="mariyaholic-98" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Mariyaholic-98 <small>Dark</small></span></label>
-        <label class="theme-option"><input type="radio" name="theme" value="sumimi"><span class="swatch" data-theme="sumimi" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Sumimi <small>Light</small></span></label>
-        <label class="theme-option"><input type="radio" name="theme" value="ledger"><span class="swatch" data-theme="ledger" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Ledger <small>Light</small></span></label>
-        <label class="theme-option"><input type="radio" name="theme" value="confluence"><span class="swatch" data-theme="confluence" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Confluence <small>Light</small></span></label>
-        <label class="theme-option"><input type="radio" name="theme" value="astra-light"><span class="swatch" data-theme="astra-light" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Astra light <small>Light</small></span></label>
-      </div>
-      <div class="motion-row">
-        <span class="motion-label" id="motion-title">Motion</span>
-        <div class="segmented" role="radiogroup" aria-labelledby="motion-title" aria-describedby="motion-help">
-          <label><input type="radio" name="motion" value="system"><span>Follow Windows</span></label>
-          <label><input type="radio" name="motion" value="reduced"><span>Reduced</span></label>
-          <label><input type="radio" name="motion" value="full"><span>Full</span></label>
-        </div>
-      </div>
-      <p class="source-help" id="motion-help">Reduced turns off every animation and transition. Follow Windows uses its Show animations setting.</p>
-    </fieldset>
-    <p id="theme-status" class="status" role="status" aria-live="polite"></p>
-  </section>
   <section class="panel startup" aria-label="Startup and diagnostics">
     <h2 class="section-title">Startup</h2>
     <label class="source-option" for="autostart"><input type="checkbox" id="autostart" disabled><span>Start Yozora when I sign in to Windows</span></label>
     <p id="autostart-status" class="status" role="status" aria-live="polite"></p>
     <details class="diagnostics">
-      <summary>Connection details</summary>
+      <summary>Diagnostics</summary>
       <div class="meta" id="meta">Waiting for status…</div>
     </details>
   </section>
   <p class="made-by">Made with love by <a href="https://github.com/mariyaholic" target="_blank" rel="noopener noreferrer">Maria</a>.</p>
 </main>
+  <dialog class="appearance" id="appearance" aria-labelledby="appearance-title">
+    <div class="dialog-head">
+      <h2 id="appearance-title">Appearance</h2>
+      <button type="button" class="dialog-close" id="appearance-close" aria-label="Close appearance">×</button>
+    </div>
+    <fieldset id="theme-fields" disabled>
+      <legend class="section-title" id="theme-title">Theme</legend>
+      <div class="theme-grid" role="radiogroup" aria-labelledby="theme-title">
+        <label class="theme-option"><input type="radio" name="theme" value="yozora"><span class="swatch" data-theme="yozora" aria-hidden="true"><i class="s-art"></i><b class="s-face">Aa</b><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Night sky</span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="uika"><span class="swatch" data-theme="uika" aria-hidden="true"><i class="s-art"></i><b class="s-face">Aa</b><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Uika</span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="pine"><span class="swatch" data-theme="pine" aria-hidden="true"><i class="s-art"></i><b class="s-face">Aa</b><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Pine</span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="kurisu"><span class="swatch" data-theme="kurisu" aria-hidden="true"><i class="s-art"></i><b class="s-face">Aa</b><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Kurisu</span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="ava"><span class="swatch" data-theme="ava" aria-hidden="true"><i class="s-art"></i><b class="s-face">Aa</b><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Ava</span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="astra"><span class="swatch" data-theme="astra" aria-hidden="true"><i class="s-art"></i><b class="s-face">Aa</b><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Astra</span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="mariyaholic-98"><span class="swatch" data-theme="mariyaholic-98" aria-hidden="true"><i class="s-art"></i><b class="s-face">Aa</b><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Mariyaholic-98</span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="sumimi"><span class="swatch" data-theme="sumimi" aria-hidden="true"><i class="s-art"></i><b class="s-face">Aa</b><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Sumimi</span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="ledger"><span class="swatch" data-theme="ledger" aria-hidden="true"><i class="s-art"></i><b class="s-face">Aa</b><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Ledger</span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="confluence"><span class="swatch" data-theme="confluence" aria-hidden="true"><i class="s-art"></i><b class="s-face">Aa</b><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Confluence</span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="astra-light"><span class="swatch" data-theme="astra-light" aria-hidden="true"><i class="s-art"></i><b class="s-face">Aa</b><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Astra light</span></label>
+      </div>
+      <div class="motion-row">
+        <span class="motion-label" id="motion-title">Motion</span>
+        <div class="segmented" role="radiogroup" aria-labelledby="motion-title">
+          <label title="Uses the Windows Show animations setting"><input type="radio" name="motion" value="system"><span>Follow Windows</span></label>
+          <label title="No animations or transitions"><input type="radio" name="motion" value="reduced"><span>Reduced</span></label>
+          <label title="Animate even when Windows asks for less"><input type="radio" name="motion" value="full"><span>Full</span></label>
+        </div>
+      </div>
+    </fieldset>
+    <p id="theme-status" class="status" role="status" aria-live="polite"></p>
+  </dialog>
 <script nonce="{{.Nonce}}">
 const t = new URLSearchParams(location.search).get("t");
 const sourceKeys = ["applemusic", "spotify", "spotifyapi", "youtubemusic", "browser", "generic"];
-const toggleKeys = [...sourceKeys, "youtube", "youtube_tabs"];
+const toggleKeys = [...sourceKeys, "youtube", "youtube_tabs", "twitch"];
 const sourceFields = document.getElementById("source-fields");
 const sourceStatus = document.getElementById("source-status");
 const sourceSave = document.getElementById("source-save");
@@ -470,7 +484,8 @@ function currentSources() {
   return Object.fromEntries(toggleKeys.map(source => [source, document.getElementById(`source-${source}`).checked]));
 }
 function updateDependency() {
-  document.getElementById("browser-dependency").hidden = !document.getElementById("source-youtube").checked || document.getElementById("source-browser").checked;
+  const sites = ["youtube", "twitch"].some(site => document.getElementById(`source-${site}`).checked);
+  document.getElementById("browser-dependency").hidden = !sites || document.getElementById("source-browser").checked;
 }
 function updateDirty(message, onlyWhenDirty = false) {
   if (!savedSources) return;
@@ -478,7 +493,7 @@ function updateDirty(message, onlyWhenDirty = false) {
   sourceSave.disabled = !dirty;
   sourceReset.hidden = !dirty;
   updateDependency();
-  sourceMessage((!onlyWhenDirty || dirty ? message : "") || (dirty ? "Unsaved changes. Apply to update your activity." : "All changes saved."), dirty ? "pending" : "");
+  sourceMessage((!onlyWhenDirty || dirty ? message : "") || (dirty ? "Unsaved changes." : ""), dirty ? "pending" : "");
 }
 function rememberSources() {
   savedSources = JSON.stringify({enabled:currentSources(), order:savedOrder});
@@ -728,7 +743,7 @@ document.getElementById("sources-form").addEventListener("submit", async event =
     showSources(data.enabled);
     showOrder(data.order || savedOrder);
     rememberSources();
-    updateDirty("Saved. Discord activity may take a few seconds to update.");
+    updateDirty("Saved. Discord catches up within a few seconds.");
   } catch (e) { sourceMessage(`Save failed: ${e}. Your changes were not confirmed; try again.`, "error"); }
   finally { delete sourceStatus.dataset.busy; sourceFields.disabled = false; sourceSave.textContent = "Apply changes"; }
 });
@@ -762,6 +777,19 @@ autostartBox.addEventListener("change", async () => {
     autostartStatus.textContent = autostartBox.checked ? "Yozora will start with Windows." : "Yozora will not start with Windows.";
   } catch (e) { autostartBox.checked = !want; autostartStatus.textContent = `Could not change startup setting: ${e}`; }
   finally { delete autostartStatus.dataset.busy; autostartBox.disabled = false; }
+});
+const appearanceDialog = document.getElementById("appearance");
+document.getElementById("appearance-open").addEventListener("click", () => {
+  finishDrag(false);
+  appearanceDialog.showModal();
+  document.querySelector('input[name="theme"]:checked')?.focus({preventScroll:true});
+});
+document.getElementById("appearance-close").addEventListener("click", () => appearanceDialog.close());
+// A click on the backdrop lands on the dialog itself, outside its padding box.
+appearanceDialog.addEventListener("click", event => {
+  if (event.target !== appearanceDialog) return;
+  const box = appearanceDialog.getBoundingClientRect();
+  if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) appearanceDialog.close();
 });
 const themeFields = document.getElementById("theme-fields");
 const themeStatus = document.getElementById("theme-status");
@@ -843,7 +871,6 @@ let lastPlayState = null;
 const fmt = s => { s = Math.max(0, Math.round(s||0)); const m = Math.floor(s/60);
   return m >= 60 ? `${Math.floor(m/60)}:${String(m%60).padStart(2,"0")}:${String(s%60).padStart(2,"0")}` : `${m}:${String(s%60).padStart(2,"0")}`; };
 const preview = document.getElementById("preview");
-const connection = document.getElementById("connection");
 const playbackState = document.getElementById("playback-state");
 const previewNote = document.getElementById("preview-note");
 const head = document.getElementById("head");
@@ -901,10 +928,8 @@ async function tick() {
     const hasTrack = Boolean(s.title);
     hasPreview = true;
     preview.dataset.stale = "false";
-    connection.dataset.state = s.discord_connected ? "connected" : "offline";
-    updateStatus(connection, s.discord_connected ? "Discord connected" : "Discord offline");
     playbackState.textContent = hasTrack ? (s.playing ? "Playing" : "Paused") : "Idle";
-    connection.dataset.live = String(Boolean(s.discord_connected && hasTrack && s.playing));
+    playbackState.dataset.live = String(Boolean(s.discord_connected && hasTrack && s.playing));
     const track = hasTrack ? [s.title, s.artist || "", s.album || "", s.service || ""].join("\u0001") : "";
     if (lastTrack !== null && track !== lastTrack) cue("track-changed");
     else if (lastPlayState !== null && playbackState.textContent !== lastPlayState) cue("state-changed");
@@ -924,8 +949,9 @@ async function tick() {
     document.getElementById("timeline").hidden = !hasTrack || !(s.duration_sec > 0);
     progress.setAttribute("aria-valuenow", String(Math.round(p)));
     progress.setAttribute("aria-valuetext", `${fmt(s.elapsed_sec)} of ${fmt(s.duration_sec)}`);
-    updateStatus(previewNote, s.last_error ? "Yozora reported an issue. Open Connection details below." : s.discord_connected ? "Detected media preview. Discord updates may take a few seconds." : "Open the Discord desktop app to connect your activity.");
-    meta.textContent = `Source: ${s.source || "—"} · Artwork: ${s.art_via || "—"} · Updates sent: ${s.sends || 0}`;
+    // Only trouble earns a line here; a healthy panel says nothing.
+    updateStatus(previewNote, s.last_error ? "Yozora hit a problem. See Diagnostics below." : s.discord_connected ? "" : "Discord isn’t open, so this isn’t on your profile yet.");
+    meta.textContent = `Discord: ${s.discord_connected ? "connected" : "not running"} · Source: ${s.source || "—"} · Artwork: ${s.art_via || "—"} · Updates sent: ${s.sends || 0}`;
     if (s.last_error) {
       const error = document.createElement("div");
       error.className = "err";
@@ -934,11 +960,9 @@ async function tick() {
     }
   } catch (e) {
     preview.dataset.stale = "true";
-    connection.dataset.state = "offline";
-    connection.dataset.live = "false";
-    updateStatus(connection, "Panel offline");
+    playbackState.dataset.live = "false";
     playbackState.textContent = hasPreview ? "Last known activity" : "Unavailable";
-    updateStatus(previewNote, "Can't reach Yozora. Retrying automatically…");
+    updateStatus(previewNote, "Can’t reach Yozora. Retrying…");
     if (!hasPreview) {
       head.textContent = "Preview unavailable";
       det.textContent = "Waiting for Yozora";
