@@ -1,111 +1,359 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="{{.Theme}}" data-motion="{{.Motion}}">
 <head>
 <meta charset="utf-8">
 <title>Yozora — control panel</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  :root { color-scheme:dark; --bg:#111318; --panel:#1b1e25; --line:#343943; --text:#eceae6; --muted:#a9b0bd; --gold:#e0b758; }
+  /* Every colour, face and corner comes from a theme block below; component rules only read the roles. */
+  :root, [data-theme="yozora"] {
+    color-scheme:dark;
+    --bg:#0f1117; --panel:#171a22; --panel-2:#1f232d; --panel-hi:#2a2f3b; --line:#2c313c; --line-strong:#4f5868;
+    --text:#eceae6; --muted:#a9b0bd; --dim:#8c94a2; --brand:#e0b758;
+    --accent:#e0b758; --accent-strong:#edca79; --accent-dim:#7a6537; --accent-wash:rgba(224,183,88,.11); --on-accent:#1b1811;
+    --link:#8dcfff; --good:#8bd5a6; --bad:#ffaaa3; --warn:#e0b758;
+    --font-ui:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; --font-title:"Segoe UI Variable Display","Segoe UI",system-ui,sans-serif; --font-label:var(--font-ui);
+    --title-weight:650; --label-track:.08em; --radius:8px; --radius-sm:6px; --radius-art:10px;
+    --page-glow:radial-gradient(120% 60% at 85% -10%, rgba(141,207,255,.07), transparent 60%), radial-gradient(90% 50% at 0% -15%, rgba(224,183,88,.06), transparent 55%);
+    --masthead-rule:none; --rule-height:0px; --panel-shadow:none;
+  }
+  /* Pine, Kurisu, Ava, Ledger: from the Argonaut Oak estate system. Square panels, mono plates, one accent role. */
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) {
+    --font-ui:"Inter","Segoe UI",system-ui,sans-serif; --font-title:"Outfit","Inter","Segoe UI",sans-serif; --font-label:"JetBrains Mono","Consolas",ui-monospace,monospace;
+    --title-weight:500; --label-track:.14em; --radius:0px; --radius-sm:4px; --radius-art:12px; --page-glow:none;
+    --masthead-rule:var(--line); --rule-height:1px;
+  }
+  [data-theme="pine"] {
+    color-scheme:dark;
+    --bg:#07100d; --panel:#0d1a15; --panel-2:#13241e; --panel-hi:#0e1e18; --line:#1f332a; --line-strong:#5f7a72;
+    --text:#e7eadf; --muted:#afc0b5; --dim:#74897d; --brand:#e7eadf;
+    --accent:#c6a15b; --accent-strong:#d4b372; --accent-dim:#8f7239; --accent-wash:rgba(198,161,91,.18); --on-accent:#07100d;
+    --link:#6ecbd0; --good:#77c58a; --bad:#dd8173; --warn:#c6a15b;
+  }
+  [data-theme="kurisu"] {
+    color-scheme:dark;
+    --bg:#0a0d08; --panel:#12180d; --panel-2:#171f11; --panel-hi:#1d2615; --line:#3a4a32; --line-strong:#4a5c46;
+    --text:#e8e6e1; --muted:#a7a89b; --dim:#7d8a72; --brand:#e8e6e1;
+    --accent:#f0b429; --accent-strong:#ffce5c; --accent-dim:#b98a1f; --accent-wash:rgba(240,180,41,.18); --on-accent:#0a0d08;
+    --link:#4fc3f7; --good:#9ee87a; --bad:#ff6b76; --warn:#f0b429;
+  }
+  [data-theme="ava"] {
+    color-scheme:dark;
+    --bg:#070a14; --panel:#0d1424; --panel-2:#11192c; --panel-hi:#162035; --line:#1e3a5a; --line-strong:#4a5f7a;
+    --text:#eaf6ff; --muted:#9db3c9; --dim:#7590a8; --brand:#eaf6ff;
+    --accent:#00e5ff; --accent-strong:#7df2ff; --accent-dim:#0899ab; --accent-wash:rgba(0,229,255,.18); --on-accent:#070a14;
+    --link:#6b8cff; --good:#9cf5d3; --bad:#ff8fa3; --warn:#00e5ff;
+  }
+  [data-theme="ledger"] {
+    color-scheme:light;
+    --bg:#fbf8f3; --panel:#f7f3ec; --panel-2:#f0eadf; --panel-hi:#ece5d6; --line:#d9d0bf; --line-strong:#5f7a72;
+    --text:#1d1a16; --muted:#4a443c; --dim:#6b6257; --brand:#1d1a16;
+    --accent:#1f4d3f; --accent-strong:#2c6553; --accent-dim:#4f7466; --accent-wash:rgba(31,77,63,.12); --on-accent:#fbf8f3;
+    --link:#1f6b70; --good:#276b3b; --bad:#9a3a33; --warn:#1f4d3f;
+  }
+  /* Astra, Astra light: from Ad Astra. Hairlines, 3px corners, a ruler under the head. */
+  :is([data-theme="astra"], [data-theme="astra-light"]) {
+    --font-ui:"IBM Plex Sans","Segoe UI",system-ui,sans-serif; --font-title:"Source Serif 4",Charter,"Iowan Old Style",Georgia,serif; --font-label:"IBM Plex Mono","Cascadia Mono",Consolas,monospace;
+    --title-weight:600; --label-track:.08em; --radius:3px; --radius-sm:2px; --radius-art:3px; --page-glow:none;
+    --masthead-rule:repeating-linear-gradient(90deg, var(--line-strong) 0 1px, transparent 1px 12px); --rule-height:6px;
+  }
+  [data-theme="astra"] {
+    color-scheme:dark;
+    --bg:#0e1014; --panel:#15181e; --panel-2:#1b1f26; --panel-hi:#1c2638; --line:#2a2f38; --line-strong:#454c58;
+    --text:#e6e8ec; --muted:#b4b9c3; --dim:#9299a4; --brand:#e6e8ec;
+    --accent:#8fb0ec; --accent-strong:#a9c3f2; --accent-dim:#454c58; --accent-wash:#1c2638; --on-accent:#0e1014;
+    --link:#a9c3f2; --good:#6cc394; --bad:#f08a7e; --warn:#e0b060;
+  }
+  [data-theme="astra-light"] {
+    color-scheme:light;
+    --bg:#f3f2ee; --panel:#fbfaf7; --panel-2:#ebe9e3; --panel-hi:#e3e9f4; --line:#d6d3ca; --line-strong:#a9a59a;
+    --text:#15171c; --muted:#454a54; --dim:#5f646e; --brand:#15171c;
+    --accent:#214c96; --accent-strong:#1a3d7a; --accent-dim:#a9a59a; --accent-wash:#e3e9f4; --on-accent:#fbfaf7;
+    --link:#1a3d7a; --good:#1d6b45; --bad:#a8261b; --warn:#8a5300;
+  }
+  /* Uika, Sumimi, Confluence, Mariyaholic-98: from Omoi (mariyaholic/omoi prototype/tokens.css + inspiration.css). Uika is the estate canon; values marked derived are lifted for 4.5:1 text. */
+  :is([data-theme="uika"], [data-theme="sumimi"], [data-theme="confluence"], [data-theme="mariyaholic-98"]) { --page-glow:none; --masthead-rule:var(--line); --rule-height:1px; }
+  [data-theme="uika"] {
+    color-scheme:dark;
+    --bg:#0b0913; --panel:#14101c; --panel-2:#1a1424; --panel-hi:#221a30; --line:#2e2440; --line-strong:#3c2f52;
+    --text:#d8d4ce; --muted:#97908f; --dim:#97908f; --brand:#bb9955;
+    --accent:#bb9955; --accent-strong:#d8b878; --accent-dim:#7d6738; --accent-wash:rgba(187,153,85,.16); --on-accent:#0b0913;
+    --link:#a497d6; --good:#6e9c7e; --bad:#d9737c; --warn:#e08d3c; /* bad: derived from lining #a2434d */
+    --font-ui:"Outfit","Segoe UI",system-ui,sans-serif; --font-title:"Cinzel","Trajan Pro",Georgia,serif; --font-label:"JetBrains Mono",Consolas,monospace;
+    --title-weight:600; --label-track:.12em; --radius:6px; --radius-sm:4px; --radius-art:12px;
+    --page-glow:radial-gradient(110% 55% at 50% -12%, rgba(136,17,68,.22), transparent 62%);
+  }
+  [data-theme="sumimi"] {
+    color-scheme:light;
+    --bg:#f7f3ea; --panel:#fffdf8; --panel-2:#f6f1e6; --panel-hi:#efe9db; --line:#d9cfae; --line-strong:#c2b184;
+    --text:#37302a; --muted:#6f665b; --dim:#6f665b; --brand:#241f18;
+    --accent:#8a6a20; --accent-strong:#765a1b; --accent-dim:#bfa467; --accent-wash:rgba(187,153,85,.22); --on-accent:#fffdf8; /* accent-strong: derived */
+    --link:#6f5faa; --good:#48785e; --bad:#9c3f47; --warn:#8a6a20;
+    --font-ui:"Outfit","Segoe UI",system-ui,sans-serif; --font-title:"Cinzel","Trajan Pro",Georgia,serif; --font-label:"JetBrains Mono",Consolas,monospace;
+    --title-weight:600; --label-track:.12em; --radius:6px; --radius-sm:4px; --radius-art:12px;
+  }
+  [data-theme="confluence"] {
+    color-scheme:light;
+    --bg:#f3efe4; --panel:#e9e2d5; --panel-2:#ded4c4; --panel-hi:#d6cab6; --line:#c5b9a6; --line-strong:#a69782;
+    --text:#231f19; --muted:#685e51; --dim:#685e51; --brand:#231f19;
+    --accent:#94301f; --accent-strong:#7a2718; --accent-dim:#b75c47; --accent-wash:rgba(148,48,31,.08); --on-accent:#f3efe4; /* panel-hi, accent-strong: derived */
+    --link:#94301f; --good:#48785e; --bad:#9c3f47; --warn:#94301f;
+    --font-ui:"Segoe UI",system-ui,sans-serif; --font-title:Georgia,"Times New Roman",serif; --font-label:Consolas,"Courier New",monospace;
+    --title-weight:400; --label-track:.08em; --radius:0px; --radius-sm:0px; --radius-art:0px;
+  }
+  [data-theme="confluence"] h1 { font-size:24px; letter-spacing:-.035em; }
+  [data-theme="mariyaholic-98"] {
+    color-scheme:dark;
+    --bg:#120c24; --panel:#22204a; --panel-2:#33407a; --panel-hi:#2b2f63; --line:#33407a; --line-strong:#8fa0dd;
+    --text:#cfd6f4; --muted:#8fa0dd; --dim:#8fa0dd; --brand:#ffffff;
+    --accent:#f08868; --accent-strong:#f4cf8a; --accent-dim:#f08868; --accent-wash:#3a1230; --on-accent:#120c24; /* panel-hi: derived */
+    --link:#f4cf8a; --good:#a6dcc4; --bad:#f08868; --warn:#f4cf8a;
+    --font-ui:"Departure Mono","JetBrains Mono",Consolas,"Courier New",monospace; --font-title:var(--font-ui); --font-label:var(--font-ui);
+    --title-weight:400; --label-track:.04em; --radius:0px; --radius-sm:0px; --radius-art:0px;
+    --masthead-rule:var(--line-strong); --rule-height:2px; --panel-shadow:6px 6px 0 #000000;
+  }
+  html[data-theme="mariyaholic-98"] { background-image:repeating-conic-gradient(#1a1636 0% 25%, #120c24 0% 50%); background-size:4px 4px; }
+  [data-theme="mariyaholic-98"] :focus-visible { outline:2px dashed #f4cf8a; outline-offset:4px; }
+  [data-theme="mariyaholic-98"] :is(.preview, .panel) { border:2px solid var(--line-strong); }
+  [data-theme="mariyaholic-98"] #source-save { background:#f4cf8a; border:2px solid #000; color:#120c24; box-shadow:3px 3px 0 #000; }
+  [data-theme="mariyaholic-98"] .connection, [data-theme="mariyaholic-98"] .mark { border-radius:0; }
+
   * { box-sizing:border-box; }
   [hidden] { display:none !important; }
-  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui,sans-serif; }
+  html { background:var(--bg); }
+  body { margin:0; min-height:100vh; background:transparent; color:var(--text); font:14px/1.5 var(--font-ui); }
   button, input { font:inherit; }
   button, summary, label { -webkit-tap-highlight-color:transparent; }
   button, summary { cursor:pointer; }
   button:disabled { opacity:.45; cursor:default; }
-  :focus-visible { outline:2px solid var(--gold); outline-offset:3px; }
-  a { color:#8dcfff; text-decoration:none; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+  a { color:var(--link); text-decoration:none; }
   a:hover { text-decoration:underline; }
-  .wrap { width:min(620px,100%); margin:0 auto; padding:20px 22px 18px; }
-  .masthead { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
-  h1 { margin:0; color:var(--gold); font-size:22px; font-weight:650; letter-spacing:.03em; }
-  .subtitle, .eyebrow, .source-help, .status, .made-by { color:var(--muted); font-size:12px; }
-  .subtitle { margin:0; }
-  .connection { display:flex; align-items:center; gap:7px; border:1px solid var(--line); border-radius:20px; padding:5px 9px; font-size:11px; flex-shrink:0; }
-  .connection::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--muted); }
-  .connection[data-state="connected"]::before { background:#8bd5a6; }
-  .connection[data-state="offline"]::before { background:var(--gold); }
-  .preview { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
-  .preview-label { display:flex; justify-content:space-between; gap:10px; margin-bottom:12px; }
-  .eyebrow { margin:0; font-weight:600; letter-spacing:.08em; text-transform:uppercase; font-size:10px; }
-  #playback-state { color:var(--gold); font-size:11px; }
-  .card { display:flex; gap:16px; align-items:center; }
-  .art-wrap { position:relative; width:88px; height:88px; flex:none; border-radius:10px; background:#292d37; display:grid; place-items:center; }
-  .art-placeholder { color:var(--gold); font-size:34px; }
-  .art { position:absolute; inset:0; width:100%; height:100%; border-radius:10px; object-fit:cover; }
-  .small-icon { position:absolute; right:-4px; bottom:-4px; width:26px; height:26px; border-radius:50%; border:2px solid var(--panel); background:#292d37; }
-  .body { min-width:0; flex:1; }
-  .head { color:var(--muted); font-size:12px; margin-bottom:3px; }
-  .det { font-size:18px; font-weight:650; line-height:1.3; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-  .st { color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:4px; }
-  .bar { height:4px; border-radius:3px; background:#343943; margin:12px 0 5px; overflow:hidden; }
-  .bar i { display:block; height:100%; background:var(--gold); width:0; transition:width 1s linear; }
-  .t { display:flex; justify-content:space-between; font-size:10px; color:var(--muted); font-variant-numeric:tabular-nums; }
-  #buttons { display:flex; flex-wrap:wrap; gap:7px; margin-top:14px; }
-  #buttons:empty { display:none; }
-  .btn { display:inline-flex; align-items:center; min-height:32px; padding:5px 10px; border:1px solid #48505d; border-radius:6px; color:var(--text); font-size:12px; overflow-wrap:anywhere; }
-  .btn:hover { background:#2a2f39; text-decoration:none; }
-  .preview-note { margin:10px 0 14px; color:var(--muted); font-size:11px; }
+  .wrap { width:min(620px,100%); margin:0 auto; padding:18px 22px 18px; }
+
+  .masthead { position:relative; display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; padding-bottom:12px; }
+  .masthead::after { content:""; position:absolute; left:0; right:0; bottom:0; height:var(--rule-height); background:var(--masthead-rule); }
+  .brand { display:flex; align-items:center; gap:11px; min-width:0; }
+  .mark { width:36px; height:36px; flex:none; display:grid; place-items:center; color:var(--accent); border:1px solid var(--accent-dim); border-radius:var(--radius-sm); background:var(--accent-wash); }
+  .mark svg { width:22px; height:22px; display:block; }
+  h1 { margin:0; color:var(--brand); font:var(--title-weight) 21px/1.15 var(--font-title); letter-spacing:.02em; }
+  .subtitle, .source-help, .status, .made-by { color:var(--muted); font-size:12px; }
+  .subtitle { margin:1px 0 0; font-family:var(--font-label); font-size:10px; letter-spacing:var(--label-track); text-transform:uppercase; color:var(--dim); }
+  .connection { display:flex; align-items:center; gap:7px; border:1px solid var(--line); border-radius:999px; padding:5px 10px; font:11px/1.3 var(--font-label); color:var(--muted); background:var(--panel); flex-shrink:0; }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .connection, :is([data-theme="uika"], [data-theme="sumimi"], [data-theme="confluence"], [data-theme="mariyaholic-98"]) .connection, :is([data-theme="astra"], [data-theme="astra-light"]) .connection { border-radius:var(--radius-sm); }
+  .connection::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--dim); flex:none; }
+  .connection[data-state="connected"]::before { background:var(--good); box-shadow:0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
+  .connection[data-state="offline"]::before { background:var(--warn); }
+
+  .eyebrow, .section-title, legend.section-title { margin:0; padding:0; font:500 10px/1.4 var(--font-label); letter-spacing:var(--label-track); text-transform:uppercase; color:var(--dim); }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .eyebrow, :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .section-title, [data-theme="uika"] .eyebrow, [data-theme="uika"] .section-title, [data-theme="sumimi"] .eyebrow, [data-theme="sumimi"] .section-title { color:var(--accent); }
+
+  .preview { position:relative; background:var(--panel); border:1px solid var(--line); border-radius:calc(var(--radius) + 4px); padding:16px; overflow:hidden; box-shadow:var(--panel-shadow); }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .preview, :is([data-theme="uika"], [data-theme="sumimi"], [data-theme="confluence"], [data-theme="mariyaholic-98"]) .preview, :is([data-theme="astra"], [data-theme="astra-light"]) .preview { border-radius:var(--radius); }
   .preview[data-stale="true"] { border-style:dashed; }
+  .preview-label { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+  #playback-state { display:inline-flex; align-items:center; gap:6px; color:var(--accent); font:500 10px/1.4 var(--font-label); letter-spacing:var(--label-track); text-transform:uppercase; }
+  #playback-state::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; opacity:.9; }
+  .card { display:flex; gap:16px; align-items:center; }
+  .art-wrap { position:relative; width:92px; height:92px; flex:none; border-radius:var(--radius-art); background:var(--panel-2); border:1px solid var(--line); display:grid; place-items:center; }
+  .art-placeholder { color:var(--accent); font-size:32px; }
+  .art { position:absolute; inset:0; width:100%; height:100%; border-radius:var(--radius-art); object-fit:cover; }
+  .small-icon { position:absolute; right:-5px; bottom:-5px; width:28px; height:28px; border-radius:50%; border:2px solid var(--panel); background:var(--panel-2); }
+  .body { min-width:0; flex:1; }
+  .head { color:var(--muted); font-size:12px; margin-bottom:2px; }
+  .det { font:650 18px/1.3 var(--font-ui); overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .st { color:var(--muted); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:3px; }
+  .bar { height:4px; border-radius:999px; background:var(--panel-2); box-shadow:inset 0 0 0 1px var(--line); margin:12px 0 5px; overflow:hidden; }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) .bar { border-radius:0; }
+  .bar i { display:block; height:100%; background:var(--accent); width:0; transition:width 1s linear; }
+  .t { display:flex; justify-content:space-between; font:10px/1.4 var(--font-label); color:var(--dim); font-variant-numeric:tabular-nums; }
+  #buttons { display:flex; flex-wrap:wrap; gap:7px; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
+  #buttons:empty { display:none; }
+  .btn { display:inline-flex; align-items:center; min-height:32px; padding:5px 11px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); color:var(--text); background:var(--panel-2); font-size:12px; overflow-wrap:anywhere; }
+  .btn:hover { background:var(--panel-hi); border-color:var(--accent-dim); text-decoration:none; }
+  .preview-note { margin:8px 2px 14px; color:var(--muted); font-size:11px; }
+
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px 14px 12px; margin-top:12px; box-shadow:var(--panel-shadow); }
   fieldset { margin:0; padding:0; border:0; min-width:0; }
-  legend { padding:0; font-size:15px; font-weight:650; margin-bottom:3px; }
-  .source-help { margin:4px 0 10px; }
+  legend.section-title { float:left; width:100%; margin-bottom:6px; }
+  legend.section-title + * { clear:both; }
+  .section-title { margin-bottom:6px; }
+  .source-help { margin:2px 0 8px; }
   .source-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
-  .source-option { display:flex; align-items:center; gap:9px; min-height:42px; padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:#191c23; cursor:pointer; }
-  .source-grid .source-option:has(input:checked) { background:#23251f; border-color:#625538; }
-  .source-option:has(input:focus-visible) { outline:2px solid var(--gold); outline-offset:2px; }
-  .source-option input { accent-color:var(--gold); width:16px; height:16px; margin:0; flex:none; }
+  .source-option { display:flex; align-items:center; gap:9px; min-height:42px; padding:7px 9px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--bg); cursor:pointer; transition:background-color .15s ease, border-color .15s ease; }
+  .source-grid .source-option:has(input:checked) { background:var(--accent-wash); border-color:var(--accent-dim); }
+  .source-option:has(input:focus-visible) { outline:2px solid var(--accent); outline-offset:2px; }
+  .source-option input { accent-color:var(--accent); width:16px; height:16px; margin:0; flex:none; }
   .source-option > span { flex:1; font-size:12px; cursor:pointer; }
-  .source-option small { display:block; color:var(--muted); font-size:10px; }
-  .dependency-note { color:var(--gold); font-size:12px; margin:8px 0; }
+  .source-option small { display:block; color:var(--dim); font-size:10px; }
+  .dependency-note { color:var(--warn); font-size:12px; margin:8px 0; }
   details { border-bottom:1px solid var(--line); }
-  summary { padding:11px 2px; font-size:12px; color:#c9cfda; }
+  summary { padding:11px 2px; font-size:12px; color:var(--muted); }
   summary:hover { color:var(--text); }
   details p { color:var(--muted); font-size:12px; margin:0 0 10px; }
   #source-order { list-style:none; margin:0 0 8px; padding:0; }
+  #source-order li { position:relative; display:flex; align-items:center; gap:6px; padding:4px 6px; border:1px solid var(--line); border-radius:var(--radius-sm); margin:5px 0; background:var(--bg); }
   #source-order .source-option { flex:1; min-width:0; border:0; padding:0; background:none; min-height:44px; }
-  #source-order li:has(input:checked) { background:#23251f; border-color:#625538; }
-  #source-order .drag-handle { width:44px; height:44px; flex:none; padding:0; touch-action:none; user-select:none; cursor:grab; color:var(--gold); background:transparent; border-color:transparent; }
-  #source-order .drag-handle:hover { border-color:#625538; background:#302c22; }
-  .grip { font-size:22px; letter-spacing:-3px; padding-right:3px; }
+  #source-order li:has(input:checked) { background:var(--accent-wash); border-color:var(--accent-dim); }
+  #source-order .drag-handle { width:40px; height:44px; flex:none; padding:0; touch-action:none; user-select:none; cursor:grab; color:var(--dim); background:transparent; border-color:transparent; }
+  #source-order .drag-handle:hover { color:var(--accent); border-color:var(--accent-dim); background:var(--panel-hi); }
+  .grip { font-size:20px; letter-spacing:-3px; padding-right:3px; }
   #source-order[data-dragging] .drag-handle { cursor:grabbing; }
-  #source-order li.drop-before::before, #source-order li.drop-after::after { content:""; position:absolute; left:0; right:0; height:3px; background:var(--gold); border-radius:3px; pointer-events:none; z-index:1; }
-  #source-order li.drop-before::before { top:-5px; }
-  #source-order li.drop-after::after { bottom:-5px; }
-  .drag-preview { position:fixed; z-index:10; max-width:min(260px,calc(100vw - 24px)); padding:8px 12px; border:1px solid var(--gold); border-radius:8px; background:#29271f; box-shadow:0 5px 20px #0008; color:var(--text); font-size:12px; pointer-events:none; }
-  .drag-preview small { display:block; color:var(--gold); }
+  #source-order li.drop-before::before, #source-order li.drop-after::after { content:""; position:absolute; left:0; right:0; height:3px; background:var(--accent); border-radius:3px; pointer-events:none; z-index:1; }
+  #source-order li.dragging { border-style:dashed; border-color:var(--accent); background:var(--panel-hi); }
+  #source-order .rank { color:var(--accent); min-width:1.2em; font:500 12px/1 var(--font-label); font-variant-numeric:tabular-nums; text-align:center; }
+  #source-order .move { margin-left:auto; display:flex; gap:5px; flex:none; }
+  .drag-preview { position:fixed; z-index:10; max-width:min(260px,calc(100vw - 24px)); padding:8px 12px; border:1px solid var(--accent); border-radius:var(--radius-sm); background:var(--panel-2); box-shadow:0 8px 24px rgba(0,0,0,.45); color:var(--text); font-size:12px; pointer-events:none; }
+  .drag-preview small { display:block; color:var(--accent); font-family:var(--font-label); }
   #order-status { margin:0 0 8px; }
   #order-status:empty { display:none; }
-  .source-subheading { margin:16px 0 7px; font-size:12px; font-weight:600; color:var(--muted); }
-  #source-order li { position:relative; display:flex; align-items:center; gap:6px; padding:4px 6px; border:1px solid var(--line); border-radius:7px; margin:5px 0; background:#191c23; }
-  #source-order li.dragging { border-style:dashed; border-color:var(--gold); background:#302c22; }
-  #source-order .rank { color:var(--gold); min-width:1em; font-size:12px; font-variant-numeric:tabular-nums; text-align:center; }
-  #source-order .move { margin-left:auto; display:flex; gap:5px; flex:none; }
-  button { border:1px solid #48505d; border-radius:6px; padding:6px 11px; background:#252a33; color:var(--text); font-size:12px; min-height:34px; }
-  button:hover:enabled { background:#343b47; }
-  #source-order .move button { width:34px; padding:4px; font-size:16px; }
+  .source-subheading { margin:14px 0 7px; font:500 10px/1.4 var(--font-label); letter-spacing:var(--label-track); text-transform:uppercase; color:var(--dim); }
+  button { border:1px solid var(--line-strong); border-radius:var(--radius-sm); padding:6px 12px; background:var(--panel-2); color:var(--text); font-size:12px; min-height:34px; }
+  button:hover:enabled { background:var(--panel-hi); border-color:var(--accent-dim); }
+  #source-order .move button { width:34px; padding:4px; font-size:15px; }
   .save-row { display:flex; align-items:center; gap:8px; margin-top:12px; }
-  #source-save { background:var(--gold); color:#1b1811; border-color:var(--gold); font-weight:650; }
-  #source-save:hover:enabled { background:#edca79; }
+  #source-save { background:var(--accent); color:var(--on-accent); border-color:var(--accent); font-weight:650; padding-inline:16px; }
+  #source-save:hover:enabled { background:var(--accent-strong); border-color:var(--accent-strong); }
   .status { margin:7px 0 0; min-height:18px; overflow-wrap:anywhere; }
-  .status[data-tone="error"], .err { color:#ffaaa3; }
-  .status[data-tone="pending"] { color:var(--gold); }
+  .status[data-tone="error"], .err { color:var(--bad); }
+  .status[data-tone="pending"] { color:var(--warn); }
   #source-retry { margin-top:8px; }
-  .startup { margin-top:18px; padding-top:14px; border-top:1px solid var(--line); }
   .startup .source-option { background:none; border:0; padding:0; min-height:32px; }
-  #autostart-status:empty { display:none; }
-  .diagnostics { margin-top:10px; }
-  .meta { color:var(--muted); font-size:11px; white-space:pre-wrap; overflow-wrap:anywhere; padding-bottom:10px; }
+  #autostart-status:empty, #theme-status:empty { display:none; }
+
+  .motion-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin-top:14px; }
+  .motion-label { font-size:12px; color:var(--text); }
+  .segmented { display:inline-flex; border:1px solid var(--line-strong); border-radius:var(--radius-sm); overflow:hidden; }
+  .segmented label { position:relative; display:flex; align-items:center; min-height:32px; padding:0 12px; font-size:12px; color:var(--muted); background:var(--bg); cursor:pointer; transition:background-color var(--dur) var(--ease), color var(--dur) var(--ease); }
+  .segmented label + label { border-left:1px solid var(--line-strong); }
+  .segmented label:hover { color:var(--text); }
+  .segmented label:has(input:checked) { background:var(--accent); color:var(--on-accent); font-weight:600; }
+  .segmented label:has(input:focus-visible) { outline:2px solid var(--accent); outline-offset:2px; z-index:1; }
+  .segmented input { position:absolute; opacity:0; width:1px; height:1px; margin:0; pointer-events:none; }
+  #motion-help { margin:6px 0 0; }
+  .theme-grid { margin-top:10px; display:grid; grid-template-columns:repeat(auto-fill, minmax(104px, 1fr)); gap:6px; }
+  .theme-option { position:relative; display:flex; flex-direction:column; gap:6px; padding:6px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--bg); cursor:pointer; transition:border-color .15s ease, background-color .15s ease; }
+  .theme-option:hover { border-color:var(--line-strong); }
+  .theme-option:has(input:checked) { border-color:var(--accent); background:var(--accent-wash); }
+  .theme-option:has(input:focus-visible) { outline:2px solid var(--accent); outline-offset:2px; }
+  .theme-option input { position:absolute; opacity:0; width:1px; height:1px; margin:0; pointer-events:none; }
+  .theme-option .name { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:2px 6px; font-size:12px; line-height:1.2; padding:0 2px 1px; }
+  .theme-option .name small { color:var(--dim); font:10px/1 var(--font-label); letter-spacing:.04em; text-transform:uppercase; }
+  .theme-option:has(input:checked) .name::after { content:"✓"; color:var(--accent); font-size:12px; margin-left:auto; }
+  .theme-option:has(input:checked) .name small { display:none; }
+  /* A swatch renders with its own theme's roles, so each tile previews the real palette. */
+  .swatch { display:grid; grid-template-columns:18px 1fr; grid-template-rows:auto auto auto; gap:4px 6px; align-items:center; padding:7px; background:var(--bg); border:1px solid var(--line); border-radius:var(--radius-sm); }
+  .swatch .s-art { grid-row:1 / 3; width:18px; height:18px; border-radius:var(--radius-sm); background:var(--accent); }
+  .swatch .s-line { height:5px; border-radius:3px; background:var(--text); width:80%; }
+  .swatch .s-line + .s-line { background:var(--muted); width:55%; }
+  .swatch .s-bar { grid-column:1 / 3; height:3px; background:var(--panel-2); position:relative; }
+  .swatch .s-bar::before { content:""; position:absolute; inset:0 55% 0 0; background:var(--accent); }
+
+  .diagnostics { margin-top:4px; border-bottom:0; }
+  .diagnostics summary { padding:2px; }
+  .meta { color:var(--muted); font:11px/1.6 var(--font-label); white-space:pre-wrap; overflow-wrap:anywhere; padding:8px 2px 2px; }
   .made-by a { text-decoration:underline; text-underline-offset:2px; }
-  .made-by { margin:14px 0 0; text-align:center; font-size:11px; }
-  @media (max-width:380px) { .wrap { padding:18px 14px; } .source-grid { grid-template-columns:1fr; } .masthead { gap:8px; } .art-wrap { width:64px; height:64px; } .card { gap:12px; } .preview { padding:13px; } .det { font-size:16px; } }
-  @media (prefers-reduced-motion:reduce) { .bar i { transition:none; } }
+  .made-by { margin:14px 0 0; text-align:center; font-size:11px; color:var(--dim); }
+  @media (max-width:380px) { .wrap { padding:16px 14px; } .source-grid { grid-template-columns:1fr; } .masthead { gap:8px; } .mark { width:30px; height:30px; } .mark svg { width:18px; height:18px; } .art-wrap { width:64px; height:64px; } .card { gap:12px; } .preview, .panel { padding:12px; } .det { font-size:16px; } .connection { padding:4px 8px; } .theme-grid { grid-template-columns:1fr 1fr; } }
+
+  /* ---- Motion. Everything here answers an event (a click, a drag, a track or save change); nothing loops at idle.
+     Tokens: --dur/--ease for hovers, --slide-dur/--slide-ease for rows, --part for the gap opened at a drop point. */
+  :root { --dur:.15s; --ease:ease; --slide-dur:200ms; --slide-ease:ease; --part:10px; --line-h:3px; --drag-grid:1; --glow-in:none; }
+  [data-theme="uika"], [data-theme="sumimi"] { --dur:.3s; --ease:cubic-bezier(.16,1,.3,1); --slide-dur:300ms; --slide-ease:cubic-bezier(.16,1,.3,1); }
+  [data-theme="uika"] { --glow-in:glow-in .5s cubic-bezier(.16,1,.3,1) both; }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) { --dur:.15s; --ease:ease; --slide-dur:0ms; }
+  :is([data-theme="astra"], [data-theme="astra-light"]) { --dur:120ms; --ease:linear; --slide-dur:0ms; --line-h:6px; }
+  [data-theme="confluence"] { --slide-dur:200ms; --slide-ease:cubic-bezier(.2,.7,.3,1); --line-h:2px; }
+  [data-theme="ledger"] { --line-h:4px; }
+  [data-theme="mariyaholic-98"] { --dur:80ms; --ease:steps(2, end); --slide-dur:160ms; --slide-ease:steps(4, end); --part:8px; --line-h:4px; --drag-grid:4; }
+
+  /* The page glow sits on its own layer so a theme can fade it in once. */
+  body::before { content:""; position:fixed; inset:0; z-index:-1; pointer-events:none; background:var(--page-glow); animation:var(--glow-in); }
+  @keyframes glow-in { from { opacity:0; } to { opacity:1; } }
+
+  button, .btn { transition:background-color var(--dur) var(--ease), border-color var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background-size var(--dur) var(--ease); }
+  #source-order li { transition:transform var(--slide-dur) var(--slide-ease), background-color var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+  #source-order { position:relative; }
+  #source-order li.parted { transform:translateY(var(--part)); }
+  #source-order li.drop-before::before, #source-order li.drop-after::after { height:var(--line-h); }
+  #source-order li.drop-before::before { top:calc((5px + var(--part)) / -2 - var(--line-h) / 2); }
+  #source-order li.drop-after::after { bottom:calc(-2.5px - var(--line-h) / 2); }
+
+  /* Night sky: lift on hover, glowing drop line, the crescent's star twinkles on a new track. */
+  [data-theme="yozora"] :is(button:hover:enabled:not(.drag-handle), .btn:hover) { transform:translateY(-1px); border-color:var(--accent); }
+  [data-theme="yozora"] .drag-preview { box-shadow:0 12px 30px rgba(0,0,0,.55); animation:lift-in .15s ease-out; }
+  [data-theme="yozora"] #source-order li:is(.drop-before, .drop-after)::before, [data-theme="yozora"] #source-order li.drop-after::after { box-shadow:0 0 10px var(--accent); }
+  .mark .star { transform-box:fill-box; transform-origin:center; }
+  [data-theme="yozora"] body.track-changed .mark .star { animation:twinkle .7s ease-out; }
+  :is([data-theme="yozora"], [data-theme="uika"]) body.track-changed .art { animation:art-in .5s var(--ease) both; }
+  @keyframes lift-in { from { transform:scale(.96); opacity:.6; } }
+  @keyframes twinkle { 40% { transform:scale(1.7) rotate(25deg); opacity:.55; } }
+  @keyframes art-in { from { opacity:0; } }
+
+  /* Uika: a gold underline sweeps in; the lifted row glows; rows glide on the canon curve. */
+  [data-theme="uika"] :is(button:not(.drag-handle):not(#source-save), .btn) { background-image:linear-gradient(var(--accent), var(--accent)); background-repeat:no-repeat; background-position:left bottom; background-size:0% 1px; }
+  [data-theme="uika"] :is(button:hover:enabled:not(.drag-handle):not(#source-save), .btn:hover) { background-size:100% 1px; }
+  [data-theme="uika"] .drag-preview { box-shadow:0 0 0 1px var(--accent), 0 0 22px rgba(187,153,85,.35); }
+
+  /* Argonaut Oak (Pine, Kurisu, Ava, Ledger): 0.15s, no easing on rows, a 2px accent edge on the active row,
+     and a live pulse on the status dot only while connected and playing. */
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) button:active:enabled { outline:1px solid var(--accent); outline-offset:2px; }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"], [data-theme="ledger"]) #source-order li.dragging { box-shadow:inset 2px 0 0 var(--accent); }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"]) .connection[data-state="connected"]::before { box-shadow:0 0 8px var(--good); }
+  :is([data-theme="pine"], [data-theme="kurisu"], [data-theme="ava"]) .connection[data-live="true"]::before { animation:live-pulse 1s ease-in-out infinite alternate; }
+  @keyframes live-pulse { to { opacity:.35; } }
+  /* Kurisu: new text warms up like a CRT; the drop line leaves an amber afterglow. */
+  [data-theme="kurisu"] body.track-changed :is(.head, .det, .st) { animation:phosphor .25s ease-out; }
+  [data-theme="kurisu"] #source-order li.drop-before::before, [data-theme="kurisu"] #source-order li.drop-after::after { box-shadow:0 0 8px var(--accent); }
+  @keyframes phosphor { from { opacity:.6; } }
+  /* Ava: readouts flash cyan when the track or play state changes; the drop line sweeps like a target lock. */
+  [data-theme="ava"] body:is(.track-changed, .state-changed) :is(.t, #playback-state) { animation:readout .45s ease-out; }
+  [data-theme="ava"] #source-order li.drop-before::before, [data-theme="ava"] #source-order li.drop-after::after { background:linear-gradient(90deg, transparent, var(--accent-strong), transparent) 0 0 / 35% 100% no-repeat, var(--accent); animation:sweep .9s linear infinite; }
+  @keyframes readout { from { color:var(--accent-strong); text-shadow:0 0 6px var(--accent); } }
+  @keyframes sweep { from { background-position:-60% 0, 0 0; } to { background-position:160% 0, 0 0; } }
+  /* Ledger: ink colour on hover; a double rule opens where the row will land. */
+  [data-theme="ledger"] :is(button:hover:enabled:not(#source-save), .btn:hover) { color:var(--accent); }
+  [data-theme="ledger"] #source-order li.drop-before::before, [data-theme="ledger"] #source-order li.drop-after::after { background:none; border-top:1px solid var(--accent); border-bottom:1px solid var(--accent); border-radius:0; transform-origin:left; animation:rule-open .16s ease-out; }
+  @keyframes rule-open { from { transform:scaleX(0); } }
+
+  /* Astra: colour changes only (120ms); the dragged row stays dashed and the drop point is a ruler tick. */
+  :is([data-theme="astra"], [data-theme="astra-light"]) :is(button, .btn) { transition:background-color var(--dur) linear, border-color var(--dur) linear, color var(--dur) linear; }
+  :is([data-theme="astra"], [data-theme="astra-light"]) #source-order li { transition:background-color var(--dur) linear, border-color var(--dur) linear; }
+  :is([data-theme="astra"], [data-theme="astra-light"]) #source-order li.drop-before::before, :is([data-theme="astra"], [data-theme="astra-light"]) #source-order li.drop-after::after { background:repeating-linear-gradient(90deg, var(--accent) 0 2px, transparent 2px 8px); border-radius:0; }
+
+  /* Mariyaholic-98: keys sink into hard shadows, motion moves in frames, a block cursor blinks while saving. */
+  [data-theme="mariyaholic-98"] :is(button:not(.drag-handle), .btn) { box-shadow:3px 3px 0 #000; }
+  [data-theme="mariyaholic-98"] :is(button:active:enabled:not(.drag-handle), .btn:active) { transform:translate(3px, 3px); box-shadow:none; }
+  [data-theme="mariyaholic-98"] .drag-preview { border:2px solid var(--accent); box-shadow:6px 6px 0 #000; border-radius:0; }
+  [data-theme="mariyaholic-98"] #source-order li.dragging { box-shadow:4px 4px 0 #000; }
+  [data-theme="mariyaholic-98"] #source-order li.drop-before::before, [data-theme="mariyaholic-98"] #source-order li.drop-after::after { border-radius:0; }
+  [data-theme="mariyaholic-98"] .status[data-busy="true"]::after { content:"█"; margin-left:4px; animation:caret 1s steps(1, end) infinite; }
+  @keyframes caret { 50% { opacity:0; } }
+
+  /* Sumimi: soft paper fades; a gold wash spreads from the point you pressed; rows lift like paper. */
+  @property --ink { syntax:"<percentage>"; inherits:false; initial-value:0%; }
+  [data-theme="sumimi"] body.track-changed .card { animation:paper-in .3s var(--ease); }
+  [data-theme="sumimi"] :is(button, .btn).pressed { background-image:radial-gradient(circle at var(--px, 50%) var(--py, 50%), var(--accent-wash) var(--ink), transparent calc(var(--ink) + 1%)); animation:ink-spread .45s ease-out; }
+  [data-theme="sumimi"] .drag-preview { box-shadow:0 8px 22px rgba(80,60,20,.2); }
+  @keyframes paper-in { from { opacity:.4; } }
+  @keyframes ink-spread { from { --ink:0%; } to { --ink:160%; } }
+
+  /* Confluence: an oxblood underline and drop rule; rows slide without fading. */
+  [data-theme="confluence"] :is(button:hover:enabled:not(.drag-handle):not(#source-save), .btn:hover) { text-decoration:underline 1px var(--accent); text-underline-offset:3px; }
+  [data-theme="confluence"] #source-order li.drop-before::before, [data-theme="confluence"] #source-order li.drop-after::after { border-radius:0; }
+  /* Motion mode: "reduced" always stills the panel, "full" keeps motion even when Windows asks for less,
+     "system" (default) follows Windows' Show animations setting. */
+  html[data-motion="reduced"] *, html[data-motion="reduced"] *::before, html[data-motion="reduced"] *::after { transition:none !important; animation:none !important; }
+  @media (prefers-reduced-motion:reduce) { html:not([data-motion="full"]) *, html:not([data-motion="full"]) *::before, html:not([data-motion="full"]) *::after { transition:none !important; animation:none !important; } }
 </style>
 </head>
 <body>
 <main class="wrap">
   <header class="masthead">
-    <div><h1>Yozora</h1><p class="subtitle">Discord Rich Presence</p></div>
+    <div class="brand">
+      <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M14.6 3.6a8.6 8.6 0 1 0 6 13.1 7 7 0 0 1-6-13.1Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path class="star" d="M18.2 3.4l.55 1.45 1.45.55-1.45.55-.55 1.45-.55-1.45-1.45-.55 1.45-.55Z" fill="currentColor"/></svg></span>
+      <div><h1>Yozora</h1><p class="subtitle">Discord Rich Presence</p></div>
+    </div>
     <div id="connection" class="connection" role="status">Connecting…</div>
   </header>
   <section class="preview" id="preview" aria-label="Detected media preview">
@@ -129,9 +377,9 @@
     <div id="buttons"></div>
   </section>
   <p class="preview-note" id="preview-note" role="status">Previewing media detected on this device.</p>
-  <form id="sources-form">
+  <form id="sources-form" class="panel">
     <fieldset id="source-fields" disabled aria-describedby="sources-help">
-      <legend>Sources &amp; priority</legend>
+      <legend class="section-title">Sources &amp; priority</legend>
       <p class="source-help" id="sources-help">Priority decides which source wins when several play at once. The first enabled, playing source appears.</p>
       <p class="source-help" id="order-help">Drag a grip to reorder. Use the arrow buttons, or focus a grip and press Up/Down. Changes save with Apply.</p>
       <ol id="source-order" aria-label="Source priority" aria-describedby="order-help">
@@ -164,14 +412,44 @@
     <p id="source-status" class="status" role="status" aria-live="polite">Loading saved sources…</p>
     <button type="button" id="source-retry" hidden>Retry loading sources</button>
   </form>
-  <div class="startup">
+  <section class="panel appearance" aria-labelledby="theme-title">
+    <fieldset id="theme-fields" disabled>
+      <legend class="section-title" id="theme-title">Appearance</legend>
+      <p class="source-help">Pick a palette. It applies at once and is saved for next time.</p>
+      <div class="theme-grid" role="radiogroup" aria-labelledby="theme-title">
+        <label class="theme-option"><input type="radio" name="theme" value="yozora"><span class="swatch" data-theme="yozora" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Night sky <small>Dark</small></span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="uika"><span class="swatch" data-theme="uika" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Uika <small>Dark</small></span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="pine"><span class="swatch" data-theme="pine" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Pine <small>Dark</small></span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="kurisu"><span class="swatch" data-theme="kurisu" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Kurisu <small>Dark</small></span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="ava"><span class="swatch" data-theme="ava" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Ava <small>Dark</small></span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="astra"><span class="swatch" data-theme="astra" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Astra <small>Dark</small></span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="mariyaholic-98"><span class="swatch" data-theme="mariyaholic-98" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Mariyaholic-98 <small>Dark</small></span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="sumimi"><span class="swatch" data-theme="sumimi" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Sumimi <small>Light</small></span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="ledger"><span class="swatch" data-theme="ledger" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Ledger <small>Light</small></span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="confluence"><span class="swatch" data-theme="confluence" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Confluence <small>Light</small></span></label>
+        <label class="theme-option"><input type="radio" name="theme" value="astra-light"><span class="swatch" data-theme="astra-light" aria-hidden="true"><i class="s-art"></i><i class="s-line"></i><i class="s-line"></i><i class="s-bar"></i></span><span class="name">Astra light <small>Light</small></span></label>
+      </div>
+      <div class="motion-row">
+        <span class="motion-label" id="motion-title">Motion</span>
+        <div class="segmented" role="radiogroup" aria-labelledby="motion-title" aria-describedby="motion-help">
+          <label><input type="radio" name="motion" value="system"><span>Follow Windows</span></label>
+          <label><input type="radio" name="motion" value="reduced"><span>Reduced</span></label>
+          <label><input type="radio" name="motion" value="full"><span>Full</span></label>
+        </div>
+      </div>
+      <p class="source-help" id="motion-help">Reduced turns off every animation and transition. Follow Windows uses its Show animations setting.</p>
+    </fieldset>
+    <p id="theme-status" class="status" role="status" aria-live="polite"></p>
+  </section>
+  <section class="panel startup" aria-label="Startup and diagnostics">
+    <h2 class="section-title">Startup</h2>
     <label class="source-option" for="autostart"><input type="checkbox" id="autostart" disabled><span>Start Yozora when I sign in to Windows</span></label>
     <p id="autostart-status" class="status" role="status" aria-live="polite"></p>
-  </div>
-  <details class="diagnostics">
-    <summary>Connection details</summary>
-    <div class="meta" id="meta">Waiting for status…</div>
-  </details>
+    <details class="diagnostics">
+      <summary>Connection details</summary>
+      <div class="meta" id="meta">Waiting for status…</div>
+    </details>
+  </section>
   <p class="made-by">Made with love by <a href="https://github.com/mariyaholic" target="_blank" rel="noopener noreferrer">Maria</a>.</p>
 </main>
 <script nonce="{{.Nonce}}">
@@ -241,6 +519,31 @@ const sourceOptions = Object.fromEntries(sourceKeys.map(source => [source, docum
 const orderList = document.getElementById("source-order");
 const orderStatus = document.getElementById("order-status");
 let drag = null;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+function motionReduced() {
+  const mode = document.documentElement.dataset.motion;
+  return mode === "reduced" || (mode !== "full" && reduceMotion.matches);
+}
+// Remember where each row is drawn now (transforms included), so a re-render can slide rows from there.
+function captureRows() {
+  return new Map([...orderList.children].map(row => [row.dataset.source, row.getBoundingClientRect().top]));
+}
+function playSlide(before) {
+  const duration = parseFloat(getComputedStyle(orderList).getPropertyValue("--slide-dur")) || 0;
+  if (!before || duration <= 0 || motionReduced()) return;
+  const moved = [];
+  for (const row of orderList.children) {
+    const from = before.get(row.dataset.source);
+    const delta = from === undefined ? 0 : from - row.getBoundingClientRect().top;
+    if (Math.abs(delta) < 1) continue;
+    row.style.transition = "none";
+    row.style.transform = `translateY(${delta}px)`;
+    moved.push(row);
+  }
+  if (!moved.length) return;
+  orderList.getBoundingClientRect(); // Commit the inverted positions before releasing them.
+  for (const row of moved) { row.style.transition = ""; row.style.transform = ""; }
+}
 function showOrder(order) {
   savedOrder = order.slice();
   renderOrder();
@@ -320,6 +623,7 @@ function moveDrag(event) {
     drag.hint = document.createElement("small");
     drag.preview.appendChild(drag.hint);
     document.body.appendChild(drag.preview);
+    drag.grid = Math.max(1, parseFloat(getComputedStyle(orderList).getPropertyValue("--drag-grid")) || 1);
     drag.lastFrame = performance.now();
     drag.frame = requestAnimationFrame(scrollDrag);
   }
@@ -330,12 +634,14 @@ function updateDragTarget() {
   const bounds = orderList.getBoundingClientRect();
   const rows = [...orderList.children].filter((_, index) => index !== drag.index);
   const inside = drag.x >= bounds.left && drag.x <= bounds.right && drag.y >= bounds.top - 48 && drag.y <= bounds.bottom + 48;
-  const to = inside ? rows.filter(row => { const r = row.getBoundingClientRect(); return drag.y > r.top + r.height / 2; }).length : null;
+  // Layout offsets ignore the parting transforms, so the target never flickers between two slots.
+  const to = inside ? rows.filter(row => drag.y > bounds.top + row.offsetTop + row.offsetHeight / 2).length : null;
   if (to !== drag.to) {
-    for (const row of orderList.children) row.classList.remove("drop-before", "drop-after");
+    for (const row of orderList.children) row.classList.remove("drop-before", "drop-after", "parted");
     if (to !== null && to !== drag.index) {
       if (to < rows.length) rows[to].classList.add("drop-before");
       else rows.at(-1)?.classList.add("drop-after");
+      rows.slice(to).forEach(row => row.classList.add("parted"));
     }
     drag.to = to;
     const hint = to === null ? "Outside list · release to cancel" : `Drop at priority ${to + 1}`;
@@ -344,8 +650,9 @@ function updateDragTarget() {
   }
   const width = drag.preview.offsetWidth;
   const height = drag.preview.offsetHeight;
-  drag.preview.style.left = Math.max(8, Math.min(innerWidth - width - 8, drag.x + 20)) + "px";
-  drag.preview.style.top = Math.max(8, Math.min(innerHeight - height - 8, drag.y - height - 12)) + "px";
+  const snap = value => Math.round(value / drag.grid) * drag.grid;
+  drag.preview.style.left = snap(Math.max(8, Math.min(innerWidth - width - 8, drag.x + 20))) + "px";
+  drag.preview.style.top = snap(Math.max(8, Math.min(innerHeight - height - 8, drag.y - height - 12))) + "px";
 }
 function scrollDrag(now) {
   if (!drag?.active) return;
@@ -367,15 +674,17 @@ function finishDrag(commit) {
   const finished = drag;
   drag = null;
   cancelAnimationFrame(finished.frame);
+  const before = finished.active ? captureRows() : null;
   finished.preview?.remove();
   delete orderList.dataset.dragging;
-  for (const row of orderList.children) row.classList.remove("dragging", "drop-before", "drop-after");
+  for (const row of orderList.children) row.classList.remove("dragging", "drop-before", "drop-after", "parted");
   if (finished.handle.hasPointerCapture(finished.pointerId)) finished.handle.releasePointerCapture(finished.pointerId);
   if (!finished.active) return;
   if (commit && !sourceFields.disabled && finished.to !== null && finished.to !== finished.index) {
     const [moved] = savedOrder.splice(finished.index, 1);
     savedOrder.splice(finished.to, 0, moved);
     renderOrder();
+    playSlide(before);
     orderList.children[finished.to]?.querySelector(".drag-handle").focus({preventScroll:true});
     updateStatus(orderStatus, "");
     updateDirty(`${sourceLabels[moved]} moved to priority ${finished.to + 1}. Apply to save.`, true);
@@ -392,9 +701,11 @@ function moveSource(index, delta, fromHandle = false) {
   finishDrag(false);
   const to = index + delta;
   if (sourceFields.disabled || to < 0 || to >= savedOrder.length) return;
+  const before = captureRows();
   const [moved] = savedOrder.splice(index, 1);
   savedOrder.splice(to, 0, moved);
   renderOrder();
+  playSlide(before);
   const items = document.getElementById("source-order").children;
   const row = items[to] || items[index];
   const direction = row?.querySelectorAll(".move button")[delta < 0 ? 0 : 1];
@@ -409,6 +720,7 @@ document.getElementById("sources-form").addEventListener("submit", async event =
   sourceFields.disabled = true;
   sourceSave.textContent = "Saving…";
   sourceMessage("Saving changes…");
+  sourceStatus.dataset.busy = "true";
   try {
     const r = await fetch(sourceURL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled, order:savedOrder})});
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -418,7 +730,7 @@ document.getElementById("sources-form").addEventListener("submit", async event =
     rememberSources();
     updateDirty("Saved. Discord activity may take a few seconds to update.");
   } catch (e) { sourceMessage(`Save failed: ${e}. Your changes were not confirmed; try again.`, "error"); }
-  finally { sourceFields.disabled = false; sourceSave.textContent = "Apply changes"; }
+  finally { delete sourceStatus.dataset.busy; sourceFields.disabled = false; sourceSave.textContent = "Apply changes"; }
 });
 sourceFields.addEventListener("change", () => updateDirty());
 sourceReset.addEventListener("click", () => {
@@ -443,12 +755,91 @@ autostartCall().then(() => { autostartBox.disabled = false; }).catch(e => { auto
 autostartBox.addEventListener("change", async () => {
   const want = autostartBox.checked;
   autostartBox.disabled = true;
+  autostartStatus.textContent = "Saving startup setting…";
+  autostartStatus.dataset.busy = "true";
   try {
     await autostartCall({method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled:want})});
     autostartStatus.textContent = autostartBox.checked ? "Yozora will start with Windows." : "Yozora will not start with Windows.";
   } catch (e) { autostartBox.checked = !want; autostartStatus.textContent = `Could not change startup setting: ${e}`; }
-  finally { autostartBox.disabled = false; }
+  finally { delete autostartStatus.dataset.busy; autostartBox.disabled = false; }
 });
+const themeFields = document.getElementById("theme-fields");
+const themeStatus = document.getElementById("theme-status");
+const appearanceURL = `/api/appearance?t=${encodeURIComponent(t)}`;
+const themeNames = Object.fromEntries([...document.querySelectorAll('input[name="theme"]')].map(input => [input.value, input.parentElement.querySelector(".name").firstChild.textContent.trim()]));
+const motionNames = Object.fromEntries([...document.querySelectorAll('input[name="motion"]')].map(input => [input.value, input.nextElementSibling.textContent.trim()]));
+function showChoice(name, value, names, fallback) {
+  if (!(value in names)) value = fallback;
+  document.documentElement.dataset[name] = value;
+  const input = document.querySelector(`input[name="${name}"][value="${value}"]`);
+  if (input) input.checked = true;
+  return value;
+}
+const showTheme = theme => showChoice("theme", theme, themeNames, "yozora");
+const showMotion = motion => showChoice("motion", motion, motionNames, "system");
+// The server rendered the saved appearance into <html>, so it is the starting saved state.
+const saved = {theme:showTheme(document.documentElement.dataset.theme), motion:showMotion(document.documentElement.dataset.motion)};
+const describe = () => `${themeNames[saved.theme]} with ${motionNames[saved.motion]} motion`;
+function showSaved(appearance) {
+  saved.theme = showTheme(appearance.theme);
+  saved.motion = showMotion(appearance.motion);
+}
+async function appearanceCall(init) {
+  const r = await fetch(appearanceURL, {cache:"no-store", ...init});
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+appearanceCall().then(appearance => { showSaved(appearance); themeFields.disabled = false; })
+  .catch(e => { themeFields.disabled = false; themeStatus.dataset.tone = "error"; updateStatus(themeStatus, `Could not confirm the saved appearance: ${e}. Showing ${describe()}.`); });
+themeFields.addEventListener("change", async event => {
+  const field = event.target.name;
+  if (field !== "theme" && field !== "motion") return;
+  const want = event.target.value;
+  const label = field === "theme" ? `${themeNames[want]} theme` : `${motionNames[want]} motion`;
+  (field === "theme" ? showTheme : showMotion)(want);
+  themeFields.disabled = true;
+  themeStatus.dataset.tone = "pending";
+  updateStatus(themeStatus, `Saving ${label}…`);
+  themeStatus.dataset.busy = "true";
+  try {
+    showSaved(await appearanceCall({method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({[field]:want})}));
+    themeStatus.dataset.tone = "";
+    updateStatus(themeStatus, `${label} saved.`);
+  } catch (e) {
+    showTheme(saved.theme);
+    showMotion(saved.motion);
+    themeStatus.dataset.tone = "error";
+    updateStatus(themeStatus, `Could not save the ${field}: ${e}. Kept ${describe()}.`);
+  } finally {
+    delete themeStatus.dataset.busy;
+    themeFields.disabled = false;
+    document.querySelector(`input[name="${field}"]:checked`)?.focus({preventScroll:true});
+  }
+});
+const pressTimers = new WeakMap();
+document.addEventListener("pointerdown", event => {
+  const target = event.target.closest?.("button, .btn");
+  if (!target || target.disabled || target.classList.contains("drag-handle")) return;
+  const box = target.getBoundingClientRect();
+  target.style.setProperty("--px", `${event.clientX - box.left}px`);
+  target.style.setProperty("--py", `${event.clientY - box.top}px`);
+  target.classList.remove("pressed");
+  void target.offsetWidth; // Restart the wash on a repeated press.
+  target.classList.add("pressed");
+  clearTimeout(pressTimers.get(target));
+  pressTimers.set(target, setTimeout(() => target.classList.remove("pressed"), 500));
+});
+// Track and play-state changes replay a one-shot animation; first load and reconnects do not.
+const cueTimers = {};
+function cue(name) {
+  document.body.classList.remove(name);
+  void document.body.offsetWidth;
+  document.body.classList.add(name);
+  clearTimeout(cueTimers[name]);
+  cueTimers[name] = setTimeout(() => document.body.classList.remove(name), 900);
+}
+let lastTrack = null;
+let lastPlayState = null;
 const fmt = s => { s = Math.max(0, Math.round(s||0)); const m = Math.floor(s/60);
   return m >= 60 ? `${Math.floor(m/60)}:${String(m%60).padStart(2,"0")}:${String(s%60).padStart(2,"0")}` : `${m}:${String(s%60).padStart(2,"0")}`; };
 const preview = document.getElementById("preview");
@@ -513,6 +904,12 @@ async function tick() {
     connection.dataset.state = s.discord_connected ? "connected" : "offline";
     updateStatus(connection, s.discord_connected ? "Discord connected" : "Discord offline");
     playbackState.textContent = hasTrack ? (s.playing ? "Playing" : "Paused") : "Idle";
+    connection.dataset.live = String(Boolean(s.discord_connected && hasTrack && s.playing));
+    const track = hasTrack ? [s.title, s.artist || "", s.album || "", s.service || ""].join("\u0001") : "";
+    if (lastTrack !== null && track !== lastTrack) cue("track-changed");
+    else if (lastPlayState !== null && playbackState.textContent !== lastPlayState) cue("state-changed");
+    lastTrack = track;
+    lastPlayState = playbackState.textContent;
     head.textContent = hasTrack ? `${s.activity_type === "watching" ? "Watching" : s.activity_type === "playing" ? "Playing" : "Listening to"} ${s.service || "Media Player"}` : "Nothing playing";
     det.textContent = s.title || "Ready when you are";
     det.title = s.title || "";
@@ -538,6 +935,7 @@ async function tick() {
   } catch (e) {
     preview.dataset.stale = "true";
     connection.dataset.state = "offline";
+    connection.dataset.live = "false";
     updateStatus(connection, "Panel offline");
     playbackState.textContent = hasPreview ? "Last known activity" : "Unavailable";
     updateStatus(previewNote, "Can't reach Yozora. Retrying automatically…");
