@@ -62,11 +62,24 @@
   summary { padding:11px 2px; font-size:12px; color:#c9cfda; }
   summary:hover { color:var(--text); }
   details p { color:var(--muted); font-size:12px; margin:0 0 10px; }
-  #source-order { list-style:none; margin:0 0 12px; padding:0; }
-  #source-order li { display:flex; align-items:center; gap:9px; padding:6px 8px; border:1px solid var(--line); border-radius:7px; margin:5px 0; background:#191c23; cursor:grab; }
-  #source-order li.dragging { opacity:.45; }
+  #source-order { list-style:none; margin:0 0 8px; padding:0; }
+  #source-order .source-option { flex:1; min-width:0; border:0; padding:0; background:none; min-height:44px; }
+  #source-order li:has(input:checked) { background:#23251f; border-color:#625538; }
+  #source-order .drag-handle { width:44px; height:44px; flex:none; padding:0; touch-action:none; user-select:none; cursor:grab; color:var(--gold); background:transparent; border-color:transparent; }
+  #source-order .drag-handle:hover { border-color:#625538; background:#302c22; }
+  .grip { font-size:22px; letter-spacing:-3px; padding-right:3px; }
+  #source-order[data-dragging] .drag-handle { cursor:grabbing; }
+  #source-order li.drop-before::before, #source-order li.drop-after::after { content:""; position:absolute; left:0; right:0; height:3px; background:var(--gold); border-radius:3px; pointer-events:none; z-index:1; }
+  #source-order li.drop-before::before { top:-5px; }
+  #source-order li.drop-after::after { bottom:-5px; }
+  .drag-preview { position:fixed; z-index:10; max-width:min(260px,calc(100vw - 24px)); padding:8px 12px; border:1px solid var(--gold); border-radius:8px; background:#29271f; box-shadow:0 5px 20px #0008; color:var(--text); font-size:12px; pointer-events:none; }
+  .drag-preview small { display:block; color:var(--gold); }
+  #order-status { margin:0 0 8px; }
+  #order-status:empty { display:none; }
+  .source-subheading { margin:16px 0 7px; font-size:12px; font-weight:600; color:var(--muted); }
+  #source-order li { position:relative; display:flex; align-items:center; gap:6px; padding:4px 6px; border:1px solid var(--line); border-radius:7px; margin:5px 0; background:#191c23; }
+  #source-order li.dragging { border-style:dashed; border-color:var(--gold); background:#302c22; }
   #source-order .rank { color:var(--gold); min-width:1em; font-size:12px; font-variant-numeric:tabular-nums; text-align:center; }
-  #source-order .source-label { font-size:12px; overflow-wrap:anywhere; }
   #source-order .move { margin-left:auto; display:flex; gap:5px; flex:none; }
   button { border:1px solid #48505d; border-radius:6px; padding:6px 11px; background:#252a33; color:var(--text); font-size:12px; min-height:34px; }
   button:hover:enabled { background:#343b47; }
@@ -118,15 +131,20 @@
   <p class="preview-note" id="preview-note" role="status">Previewing media detected on this device.</p>
   <form id="sources-form">
     <fieldset id="source-fields" disabled aria-describedby="sources-help">
-      <legend>Detected sources</legend>
-      <p class="source-help" id="sources-help">Choose what can appear in your activity.</p>
+      <legend>Sources &amp; priority</legend>
+      <p class="source-help" id="sources-help">Priority decides which source wins when several play at once. The first enabled, playing source appears.</p>
+      <p class="source-help" id="order-help">Drag a grip to reorder. Use the arrow buttons, or focus a grip and press Up/Down. Changes save with Apply.</p>
+      <ol id="source-order" aria-label="Source priority" aria-describedby="order-help">
+        <li data-source="applemusic"><label class="source-option" for="source-applemusic"><input type="checkbox" id="source-applemusic"><span>Apple Music</span></label></li>
+        <li data-source="spotify"><label class="source-option" for="source-spotify"><input type="checkbox" id="source-spotify"><span>Spotify <small>Desktop app</small></span></label></li>
+        <li data-source="spotifyapi"><label class="source-option" for="source-spotifyapi"><input type="checkbox" id="source-spotifyapi"><span>Spotify Web API <small>If configured</small></span></label></li>
+        <li data-source="youtubemusic"><label class="source-option" for="source-youtubemusic"><input type="checkbox" id="source-youtubemusic"><span>YouTube Music</span></label></li>
+        <li data-source="browser"><label class="source-option" for="source-browser"><input type="checkbox" id="source-browser"><span>Browser media / videos</span></label></li>
+        <li data-source="generic"><label class="source-option" for="source-generic"><input type="checkbox" id="source-generic"><span>Other media players</span></label></li>
+      </ol>
+      <p id="order-status" class="status" role="status" aria-live="polite"></p>
+      <h2 class="source-subheading">YouTube detection</h2>
       <div class="source-grid">
-        <label class="source-option" for="source-applemusic"><input type="checkbox" id="source-applemusic"><span>Apple Music</span></label>
-        <label class="source-option" for="source-spotify"><input type="checkbox" id="source-spotify"><span>Spotify <small>Desktop app</small></span></label>
-        <label class="source-option" for="source-spotifyapi"><input type="checkbox" id="source-spotifyapi"><span>Spotify Web API <small>If configured</small></span></label>
-        <label class="source-option" for="source-youtubemusic"><input type="checkbox" id="source-youtubemusic"><span>YouTube Music</span></label>
-        <label class="source-option" for="source-browser"><input type="checkbox" id="source-browser"><span>Browser media / videos</span></label>
-        <label class="source-option" for="source-generic"><input type="checkbox" id="source-generic"><span>Other media players</span></label>
         <label class="source-option" for="source-youtube"><input type="checkbox" id="source-youtube" aria-describedby="browser-dependency"><span>YouTube <small>Needs Browser media</small></span></label>
         <label class="source-option" for="source-youtube_tabs"><input type="checkbox" id="source-youtube_tabs"><span>Background Edge tabs <small>YouTube detection · symbol only</small></span></label>
       </div>
@@ -137,11 +155,6 @@
         <p>Detection checks when the browser track or its play/pause state changes, or while it is not yet classified. With YouTube on and exactly one matching window, Yozora reads that window’s address bar through Windows UI Automation and keeps only the video ID (active tab only, best effort). With YouTube off, matching tracks are hidden, even if several windows match.</p>
         <p>Background tab detection is off by default. When no window title matches, it reads tab names from up to 8 browser windows (designed for Edge) at the same checks. Matches use the symbol only, without a thumbnail or button; with YouTube off, matches only hide tracks.</p>
         <p>Custom app filters such as msedge still block the YouTube Music PWA; its source toggle cannot override them.</p>
-      </details>
-      <details id="priority-settings">
-        <summary>Source priority <span class="source-help">· choose which source appears</span></summary>
-        <p id="order-help">Priority decides which source wins when several play at once. Drag rows or use the arrow buttons. The first enabled, playing source wins.</p>
-        <ol id="source-order" aria-label="Source priority" aria-describedby="order-help"></ol>
       </details>
       <div class="save-row">
         <button type="submit" id="source-save" disabled>Apply changes</button>
@@ -224,26 +237,51 @@ async function loadSources() {
 }
 const sourceLabels = { applemusic:"Apple Music", spotify:"Spotify (desktop)", spotifyapi:"Spotify (Web API)", youtubemusic:"YouTube Music", browser:"Browser media / videos", generic:"Other media players" };
 let savedOrder = [];
-let dragFrom = -1;
+const sourceOptions = Object.fromEntries(sourceKeys.map(source => [source, document.getElementById(`source-${source}`).closest("label")]));
+const orderList = document.getElementById("source-order");
+const orderStatus = document.getElementById("order-status");
+let drag = null;
 function showOrder(order) {
   savedOrder = order.slice();
   renderOrder();
 }
 function renderOrder() {
-  const list = document.getElementById("source-order");
+  finishDrag(false);
+  updateStatus(orderStatus, "");
+  const list = orderList;
   list.replaceChildren();
   savedOrder.forEach((source, index) => {
     const li = document.createElement("li");
-    li.draggable = true;
+    li.draggable = false; // Pointer events support both mouse and touch; disable native HTML drag.
     li.tabIndex = -1;
     li.dataset.source = source;
     li.setAttribute("aria-label", `Priority ${index + 1}: ${sourceLabels[source] || source}`);
+    const handle = document.createElement("button");
+    handle.type = "button";
+    handle.className = "drag-handle";
+    handle.setAttribute("aria-label", `Reorder ${sourceLabels[source] || source}`);
+    handle.setAttribute("aria-describedby", "order-help");
+    handle.title = "Drag to reorder, or use Up and Down arrow keys";
+    const grip = document.createElement("span");
+    grip.className = "grip";
+    grip.setAttribute("aria-hidden", "true");
+    grip.textContent = "⋮⋮";
+    handle.appendChild(grip);
+    handle.addEventListener("pointerdown", event => beginDrag(event, index, handle));
+    handle.addEventListener("pointermove", moveDrag);
+    handle.addEventListener("pointerup", event => { if (drag?.pointerId === event.pointerId) finishDrag(true); });
+    handle.addEventListener("pointercancel", event => { if (drag?.pointerId === event.pointerId) finishDrag(false); });
+    handle.addEventListener("lostpointercapture", event => { if (drag?.pointerId === event.pointerId) finishDrag(false); });
+    handle.addEventListener("keydown", event => {
+      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+      event.preventDefault();
+      moveSource(index, event.key === "ArrowUp" ? -1 : 1, true);
+    });
     const rank = document.createElement("span");
     rank.className = "rank";
+    rank.setAttribute("aria-hidden", "true");
     rank.textContent = String(index + 1);
-    const label = document.createElement("span");
-    label.className = "source-label";
-    label.textContent = sourceLabels[source] || source;
+    const label = sourceOptions[source];
     const move = document.createElement("span");
     move.className = "move";
     const up = document.createElement("button");
@@ -255,25 +293,103 @@ function renderOrder() {
     down.setAttribute("aria-label", `Move ${sourceLabels[source] || source} down`);
     down.addEventListener("click", () => moveSource(index, 1));
     move.append(up, down);
-    li.append(rank, label, move);
-    li.addEventListener("dragstart", event => { if (sourceFields.disabled) { event.preventDefault(); return; } dragFrom = index; li.classList.add("dragging"); event.dataTransfer.effectAllowed = "move"; });
-    li.addEventListener("dragend", () => { dragFrom = -1; li.classList.remove("dragging"); });
-    li.addEventListener("dragover", event => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; });
-    li.addEventListener("drop", event => {
-      event.preventDefault();
-      const from = dragFrom;
-      dragFrom = -1;
-      if (sourceFields.disabled || !Number.isInteger(from) || from < 0 || from === index || from >= savedOrder.length) return;
-      const [moved] = savedOrder.splice(from, 1);
-      savedOrder.splice(index, 0, moved);
-      renderOrder();
-      updateDirty(`${sourceLabels[moved]} moved to priority ${index + 1}. Apply to save.`, true);
-      list.children[index]?.focus();
-    });
+    li.append(handle, rank, label, move);
     list.appendChild(li);
   });
 }
-function moveSource(index, delta) {
+function beginDrag(event, index, handle) {
+  if (sourceFields.disabled || drag || !event.isPrimary || event.button !== 0) return;
+  event.preventDefault();
+  handle.focus({preventScroll:true});
+  drag = {pointerId:event.pointerId, index, handle, x:event.clientX, y:event.clientY, startX:event.clientX, startY:event.clientY, active:false, to:undefined, frame:0};
+  handle.setPointerCapture(event.pointerId);
+}
+function moveDrag(event) {
+  if (!drag || drag.pointerId !== event.pointerId) return;
+  drag.x = event.clientX;
+  drag.y = event.clientY;
+  if (!drag.active && Math.hypot(drag.x - drag.startX, drag.y - drag.startY) < 6) return;
+  if (!drag.active) {
+    drag.active = true;
+    orderList.dataset.dragging = "true";
+    orderList.children[drag.index].classList.add("dragging");
+    drag.preview = document.createElement("div");
+    drag.preview.className = "drag-preview";
+    drag.preview.setAttribute("aria-hidden", "true");
+    drag.preview.textContent = sourceLabels[savedOrder[drag.index]];
+    drag.hint = document.createElement("small");
+    drag.preview.appendChild(drag.hint);
+    document.body.appendChild(drag.preview);
+    drag.lastFrame = performance.now();
+    drag.frame = requestAnimationFrame(scrollDrag);
+  }
+  updateDragTarget();
+}
+function updateDragTarget() {
+  if (!drag?.active) return;
+  const bounds = orderList.getBoundingClientRect();
+  const rows = [...orderList.children].filter((_, index) => index !== drag.index);
+  const inside = drag.x >= bounds.left && drag.x <= bounds.right && drag.y >= bounds.top - 48 && drag.y <= bounds.bottom + 48;
+  const to = inside ? rows.filter(row => { const r = row.getBoundingClientRect(); return drag.y > r.top + r.height / 2; }).length : null;
+  if (to !== drag.to) {
+    for (const row of orderList.children) row.classList.remove("drop-before", "drop-after");
+    if (to !== null && to !== drag.index) {
+      if (to < rows.length) rows[to].classList.add("drop-before");
+      else rows.at(-1)?.classList.add("drop-after");
+    }
+    drag.to = to;
+    const hint = to === null ? "Outside list · release to cancel" : `Drop at priority ${to + 1}`;
+    drag.hint.textContent = hint;
+    updateStatus(orderStatus, `${sourceLabels[savedOrder[drag.index]]}: ${hint}. Escape cancels.`);
+  }
+  const width = drag.preview.offsetWidth;
+  const height = drag.preview.offsetHeight;
+  drag.preview.style.left = Math.max(8, Math.min(innerWidth - width - 8, drag.x + 20)) + "px";
+  drag.preview.style.top = Math.max(8, Math.min(innerHeight - height - 8, drag.y - height - 12)) + "px";
+}
+function scrollDrag(now) {
+  if (!drag?.active) return;
+  const bounds = orderList.getBoundingClientRect();
+  if (drag.x >= bounds.left && drag.x <= bounds.right) {
+    const edge = 64;
+    const speed = drag.y < edge ? -Math.min(1, (edge - drag.y) / edge) : drag.y > innerHeight - edge ? Math.min(1, (drag.y - innerHeight + edge) / edge) : 0;
+    const distance = speed * 650 * Math.min(32, now - drag.lastFrame) / 1000;
+    // Reveal the hidden end of the list, without scrolling past the drop targets.
+    if (distance < 0 && bounds.top < 12) window.scrollBy(0, Math.max(distance, bounds.top - 12));
+    if (distance > 0 && bounds.bottom > innerHeight - 12) window.scrollBy(0, Math.min(distance, bounds.bottom - innerHeight + 12));
+  }
+  drag.lastFrame = now;
+  updateDragTarget();
+  drag.frame = requestAnimationFrame(scrollDrag);
+}
+function finishDrag(commit) {
+  if (!drag) return;
+  const finished = drag;
+  drag = null;
+  cancelAnimationFrame(finished.frame);
+  finished.preview?.remove();
+  delete orderList.dataset.dragging;
+  for (const row of orderList.children) row.classList.remove("dragging", "drop-before", "drop-after");
+  if (finished.handle.hasPointerCapture(finished.pointerId)) finished.handle.releasePointerCapture(finished.pointerId);
+  if (!finished.active) return;
+  if (commit && !sourceFields.disabled && finished.to !== null && finished.to !== finished.index) {
+    const [moved] = savedOrder.splice(finished.index, 1);
+    savedOrder.splice(finished.to, 0, moved);
+    renderOrder();
+    orderList.children[finished.to]?.querySelector(".drag-handle").focus({preventScroll:true});
+    updateStatus(orderStatus, "");
+    updateDirty(`${sourceLabels[moved]} moved to priority ${finished.to + 1}. Apply to save.`, true);
+  } else {
+    updateStatus(orderStatus, commit && finished.to === finished.index ? "Source order unchanged." : "Move cancelled. Source order unchanged.");
+  }
+}
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && drag) { event.preventDefault(); finishDrag(false); }
+});
+window.addEventListener("blur", () => finishDrag(false));
+document.addEventListener("visibilitychange", () => { if (document.hidden) finishDrag(false); });
+function moveSource(index, delta, fromHandle = false) {
+  finishDrag(false);
   const to = index + delta;
   if (sourceFields.disabled || to < 0 || to >= savedOrder.length) return;
   const [moved] = savedOrder.splice(index, 1);
@@ -281,13 +397,14 @@ function moveSource(index, delta) {
   renderOrder();
   const items = document.getElementById("source-order").children;
   const row = items[to] || items[index];
-  const direction = row?.querySelectorAll("button")[delta < 0 ? 0 : 1];
-  (direction && !direction.disabled ? direction : row)?.focus();
+  const direction = row?.querySelectorAll(".move button")[delta < 0 ? 0 : 1];
+  (fromHandle ? row?.querySelector(".drag-handle") : direction && !direction.disabled ? direction : row)?.focus();
   updateDirty(`${sourceLabels[moved]} moved to priority ${to + 1}. Apply to save.`, true);
 }
 document.getElementById("sources-form").addEventListener("submit", async event => {
   event.preventDefault();
   if (sourceFields.disabled || sourceSave.disabled) return;
+  finishDrag(false);
   const enabled = currentSources();
   sourceFields.disabled = true;
   sourceSave.textContent = "Saving…";

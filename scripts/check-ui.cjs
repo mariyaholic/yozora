@@ -88,8 +88,10 @@ const server = http.createServer(async (req, res) => {
     await waitText('#connection', 'Discord connected');
     assert.equal(await page.locator('#source-save').isDisabled(), true);
     await shot('playing-560');
-    const saveBounds = await page.locator('#source-save').boundingBox();
-    assert.ok(saveBounds.y + saveBounds.height <= 760, 'Apply must fit in the native viewport with a typical playing track');
+    assert.equal(await page.locator('#source-order li').count(), 6);
+    const firstRow = await page.locator('#source-order li').first().boundingBox();
+    assert.ok(firstRow.y + firstRow.height <= 760, 'the hierarchy must be visible immediately at native size');
+    assert.equal(await page.locator('#source-order .drag-handle').count(), 6);
     check('native-size playing layout and saved state');
 
     const firstLink = page.locator('#buttons a').first();
@@ -118,18 +120,17 @@ const server = http.createServer(async (req, res) => {
     assert.equal(await page.locator('#source-save').isDisabled(), true);
     check('unsaved changes, dependency hint, and discard');
 
-    await page.locator('#priority-settings summary').click();
     await page.getByRole('button', { name: 'Move Spotify (desktop) up', exact: true }).focus();
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('#source-order li').first().getAttribute('data-source'), 'spotify');
     assert.equal(await page.evaluate(() => document.activeElement.dataset.source), 'spotify');
     await page.keyboard.press('Tab');
-    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Move Spotify (desktop) down');
-    await page.keyboard.press('Enter');
-    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Move Spotify (desktop) down');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Reorder Spotify (desktop)');
+    await page.keyboard.press('ArrowDown');
+    assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), 'Reorder Spotify (desktop)');
     assert.equal(await page.locator('#source-save').isDisabled(), true, 'returning to the saved order should clear dirty state');
     assert.equal(await page.locator('#source-status').textContent(), 'All changes saved.');
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('ArrowDown');
     assert.equal(await page.locator('#source-order li').nth(2).getAttribute('data-source'), 'spotify');
     check('keyboard reorder, focus retention, and restoring saved order');
 
@@ -153,13 +154,54 @@ const server = http.createServer(async (req, res) => {
     saveDelay = 0;
     check('failed-save retry, exact payload, and reorder lock during save');
 
-    await page.locator('#source-order li').first().dragTo(page.locator('#source-order li').last());
+    await page.locator('#source-browser').check();
+    const togglesBeforeDrag = await page.evaluate(() => currentSources());
+    await page.locator('#source-order').evaluate(list => list.scrollIntoView({block:'center'}));
+    let handle = await page.locator('#source-order li').first().locator('.drag-handle').boundingBox();
+    let target = await page.locator('#source-order li').last().boundingBox();
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + handle.width / 2, target.y + target.height - 8, {steps:12});
+    assert.equal(await page.locator('.drag-preview').isVisible(), true);
+    assert.equal(await page.locator('.drop-after').count(), 1);
+    assert.deepEqual(await page.locator('#source-order li').evaluateAll(rows => rows.map(row => row.dataset.source)), beforeSavingOrder, 'previewing a drop must not mutate the order');
+    await shot('mouse-drag-560');
+    await page.mouse.up();
+    assert.equal(await page.locator('.drag-preview').count(), 0);
+    assert.deepEqual(await page.evaluate(() => currentSources()), togglesBeforeDrag, 'drag must retain every toggle value');
     assert.equal(await page.locator('#source-order li').last().getAttribute('data-source'), beforeSavingOrder[0]);
     assert.equal(await page.locator('#source-save').isEnabled(), true);
     await shot('priority-560');
+    await page.locator('#source-save').click();
+    await waitText('#source-status', 'Saved. Discord');
+    assert.deepEqual(posts.at(-1).enabled, togglesBeforeDrag);
+    assert.equal(posts.at(-1).order.at(-1), beforeSavingOrder[0]);
+    check('mouse drag feedback and toggle-then-drag saved payload');
+
+    const orderBeforeCancel = await page.locator('#source-order li').evaluateAll(rows => rows.map(row => row.dataset.source));
+    await page.locator('#source-order').evaluate(list => list.scrollIntoView({block:'center'}));
+    handle = await page.locator('#source-order li').last().locator('.drag-handle').boundingBox();
+    target = await page.locator('#source-order li').first().boundingBox();
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + handle.width / 2, target.y + 8, {steps:12});
+    assert.equal(await page.locator('.drop-before').count(), 1);
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    assert.deepEqual(await page.locator('#source-order li').evaluateAll(rows => rows.map(row => row.dataset.source)), orderBeforeCancel);
+    assert.equal(await page.locator('.drag-preview').count(), 0);
+    assert.equal(await page.locator('#source-save').isDisabled(), true);
+    // Releasing outside the list also cancels without changing settings.
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(2, target.y + 8, {steps:12});
+    await page.mouse.up();
+    assert.deepEqual(await page.locator('#source-order li').evaluateAll(rows => rows.map(row => row.dataset.source)), orderBeforeCancel);
+    await page.locator('#source-order li').first().locator('.move button').last().click();
+    assert.equal(await page.locator('#order-status').textContent(), '', 'a new reorder must clear stale cancellation feedback');
     await page.locator('#source-reset').click();
-    await page.locator('#priority-settings summary').click();
-    check('drag ordering and discard after save');
+    assert.deepEqual(await page.locator('#source-order li').evaluateAll(rows => rows.map(row => row.dataset.source)), orderBeforeCancel);
+    check('Escape and outside-list mouse cancellation');
 
     await page.locator('#autostart').check();
     await waitText('#autostart-status', 'will start');
@@ -225,6 +267,116 @@ const server = http.createServer(async (req, res) => {
     assert.equal(await page.locator('#source-applemusic').isEnabled(), true);
     assert.equal(await page.evaluate(() => document.activeElement.id), 'source-applemusic');
     check('broken-art fallback and initial settings-load retry');
+
+    // CDP dispatches actual touchscreen input through Chromium's event pipeline,
+    // including pointer capture, pointercancel, and native page scrolling.
+    state = { ...state, playing:true, title:'Night Walk', artist:'Mira', album:'After Hours', service:'Spotify', source:'spotify', elapsed_sec:82, duration_sec:243, discord_connected:true, art_url:'/test-art.svg' };
+    for (const width of [390, 320]) {
+      const touchContext = await browser.newContext({ viewport:{width, height:760}, hasTouch:true, isMobile:true, deviceScaleFactor:1, reducedMotion:'reduce' });
+      await touchContext.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+      await touchContext.addInitScript(() => {
+        window.cspViolations = [];
+        window.pointerTypes = [];
+        document.addEventListener('securitypolicyviolation', event => window.cspViolations.push(event.violatedDirective));
+        document.addEventListener('pointerdown', event => window.pointerTypes.push(event.pointerType));
+      });
+      const touchPage = await touchContext.newPage();
+      touchPage.on('pageerror', error => errors.push(error.message));
+      const cdp = await touchContext.newCDPSession(touchPage);
+      const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' || type === 'touchCancel' ? [] : [{x, y, id:1}] });
+      const slide = async (x, from, to) => {
+        for (let step = 1; step <= 12; step++) {
+          await touch('touchMove', x, from + (to - from) * step / 12);
+          await touchPage.waitForTimeout(16);
+        }
+      };
+      const touchOrder = () => touchPage.locator('#source-order li').evaluateAll(rows => rows.map(row => row.dataset.source));
+      const touchShot = async (name, activeDrag = false) => {
+        await touchPage.screenshot({path:path.join(output, `${name}.png`), fullPage:!activeDrag});
+        await touchPage.screenshot({path:path.join(output, `${name}-viewport.png`)});
+      };
+      const centerList = () => touchPage.locator('#source-order').evaluate(list => list.scrollIntoView({block:'center'}));
+      await touchPage.goto(`${origin}/?t=synthetic`);
+      await touchPage.waitForFunction(() => document.querySelector('#source-status').textContent.includes('All changes saved'));
+      assert.equal(await touchPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await touchShot(`phone-${width}`);
+      const initialOrder = await touchOrder();
+      const initialToggles = await touchPage.evaluate(() => currentSources());
+      await centerList();
+      let grip = await touchPage.locator('#source-order .drag-handle').first().boundingBox();
+      let row = await touchPage.locator('#source-order li').last().boundingBox();
+      const originalScroll = await touchPage.evaluate(() => scrollY);
+      await touch('touchStart', grip.x + 22, grip.y + 22);
+      await slide(grip.x + 22, grip.y + 22, row.y + row.height - 8);
+      assert.equal(await touchPage.locator('.drag-preview').isVisible(), true);
+      assert.equal(await touchPage.locator('.drop-after').count(), 1);
+      assert.deepEqual(await touchOrder(), initialOrder);
+      assert.equal(await touchPage.evaluate(() => scrollY), originalScroll, 'handle drag should not initiate native scrolling');
+      await touchShot(`touch-drag-${width}`, true);
+      await touch('touchEnd');
+      assert.deepEqual(await touchOrder(), [...initialOrder.slice(1), initialOrder[0]]);
+      assert.deepEqual(await touchPage.evaluate(() => currentSources()), initialToggles);
+      await touchPage.locator('#source-save').tap();
+      await touchPage.waitForFunction(() => document.querySelector('#source-status').textContent.includes('Saved. Discord'));
+      assert.deepEqual(posts.at(-1), {enabled:initialToggles, order:[...initialOrder.slice(1), initialOrder[0]]});
+      const savedTouchOrder = await touchOrder();
+
+      await centerList();
+      grip = await touchPage.locator('#source-order .drag-handle').first().boundingBox();
+      row = await touchPage.locator('#source-order li').last().boundingBox();
+      await touch('touchStart', grip.x + 22, grip.y + 22);
+      await slide(grip.x + 22, grip.y + 22, row.y + row.height - 8);
+      await touch('touchCancel');
+      assert.deepEqual(await touchOrder(), savedTouchOrder);
+      assert.equal(await touchPage.locator('.drag-preview').count(), 0);
+      assert.equal(await touchPage.locator('.drop-after').count(), 0);
+      assert.equal(await touchPage.locator('#source-save').isDisabled(), true);
+      await touchPage.locator('#source-order .drag-handle').first().tap();
+      assert.deepEqual(await touchOrder(), savedTouchOrder, 'a grip tap alone must not reorder');
+      assert.equal(await touchPage.locator('#source-save').isDisabled(), true);
+
+      // A swipe on a row's label must scroll, never drag or toggle it.
+      await centerList();
+      const label = await touchPage.locator('#source-order .source-option').nth(3).boundingBox();
+      const scrollBeforeSwipe = await touchPage.evaluate(() => scrollY);
+      await touch('touchStart', label.x + label.width / 2, label.y + label.height / 2);
+      await slide(label.x + label.width / 2, label.y + label.height / 2, label.y - 100);
+      await touch('touchEnd');
+      await touchPage.waitForFunction(before => scrollY > before + 30, scrollBeforeSwipe);
+      assert.deepEqual(await touchOrder(), savedTouchOrder);
+      assert.deepEqual(await touchPage.evaluate(() => currentSources()), initialToggles);
+      assert.equal(await touchPage.locator('.drag-preview').count(), 0);
+      assert.ok((await touchPage.evaluate(() => window.pointerTypes)).every(type => type === 'touch'));
+      check(`${width}px real-touch drag, saved payload, cancellation, and native row scrolling`);
+
+      // A short viewport forces both ends of the hierarchy off-screen in turn.
+      await touchPage.setViewportSize({width, height:300});
+      await touchPage.locator('#source-order').evaluate(list => scrollTo(0, scrollY + list.getBoundingClientRect().top - 110));
+      grip = await touchPage.locator('#source-order .drag-handle').first().boundingBox();
+      const scrollBeforeDown = await touchPage.evaluate(() => scrollY);
+      await touch('touchStart', grip.x + 22, grip.y + 22);
+      await slide(grip.x + 22, grip.y + 22, 284);
+      await touchPage.waitForFunction(() => document.getElementById('source-order').getBoundingClientRect().bottom <= innerHeight - 10);
+      assert.ok(await touchPage.evaluate(before => scrollY > before + 50, scrollBeforeDown));
+      assert.deepEqual(await touchOrder(), savedTouchOrder, 'edge scrolling must only preview the order');
+      await touch('touchEnd');
+      const afterDown = [...savedTouchOrder.slice(1), savedTouchOrder[0]];
+      assert.deepEqual(await touchOrder(), afterDown);
+      grip = await touchPage.locator('#source-order .drag-handle').last().boundingBox();
+      const scrollBeforeUp = await touchPage.evaluate(() => scrollY);
+      await touch('touchStart', grip.x + 22, grip.y + 22);
+      await slide(grip.x + 22, grip.y + 22, 16);
+      await touchPage.waitForFunction(() => document.getElementById('source-order').getBoundingClientRect().top >= 10);
+      assert.ok(await touchPage.evaluate(before => scrollY < before - 30, scrollBeforeUp));
+      assert.deepEqual(await touchOrder(), afterDown);
+      await touch('touchEnd');
+      assert.deepEqual(await touchOrder(), savedTouchOrder);
+      assert.equal(await touchPage.locator('#source-save').isDisabled(), true);
+      assert.equal(await touchPage.locator('.drag-preview').count(), 0);
+      check(`${width}px touch edge scrolling reaches both ends without changing order until release`);
+      violations.push(...await touchPage.evaluate(() => window.cspViolations));
+      await touchContext.close();
+    }
 
     violations.push(...await page.evaluate(() => window.cspViolations));
     assert.deepEqual(errors, [], 'no browser runtime exceptions');
