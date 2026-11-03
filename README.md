@@ -81,11 +81,60 @@ Browser videos use only the thumbnail the browser itself supplies through Window
 
 The Windows detector reads once at startup, then polls every second by default. Its one-slot queue retains the newest snapshot, not a stale queued one. The presence engine checks every 250 ms; the brief debounce suppresses rapid skip bursts. Discord sends remain spaced by at least five seconds, so fast detection is not a promise of an immediate Discord-visible update. Artwork can arrive as a later enriched update.
 
+## Appearance
+
+The control panel's **Appearance** section offers 11 themes. Choosing one applies it at once and saves it in `cadence.toml`:
+
+```toml
+[ui]
+  theme = "yozora"
+  motion = "system"
+```
+
+| Theme id | Name | Mode | Palette source |
+| --- | --- | --- | --- |
+| `yozora` (default) | Night sky | Dark | Yozora |
+| `uika` | Uika | Dark | Omoi / Uika canon |
+| `pine` | Pine | Dark | Argonaut Oak |
+| `kurisu` | Kurisu | Dark | Argonaut Oak |
+| `ava` | Ava | Dark | Argonaut Oak |
+| `astra` | Astra | Dark | Ad Astra (Console) |
+| `mariyaholic-98` | Mariyaholic-98 | Dark | Omoi |
+| `sumimi` | Sumimi | Light | Omoi / Uika canon |
+| `ledger` | Ledger | Light | Argonaut Oak (Paper) |
+| `confluence` | Confluence | Light | Omoi |
+| `astra-light` | Astra light | Light | Ad Astra (Paper) |
+
+All 11 appear in one grid, dark themes first. Themes that looked nearly identical were merged: Omoi Panel into Night sky, and Residual Night and Paper into Astra and Astra light. Saved ids `panel`, `residual` and `residual-light` load as the theme that absorbed them. Where a source called a theme "Paper", "Night" or "Console", it is renamed so each name is unique. Omoi palettes come from `prototype/tokens.css` and `prototype/inspiration.css`.
+
+Colours are copied exactly from each source. Where a source colour would fall below 4.5:1 as text in this panel, a lighter or darker value is used instead and marked `derived` in `internal/server/ui.html`. This happens for a few error and hover colours. The browser check measures text, muted, link, error and button contrast in every theme. The panel loads no web fonts, so each theme falls back to fonts installed with Windows (Segoe UI, Consolas, Georgia). An unknown or missing `theme` value loads as `yozora`.
+
+### Motion
+
+Motion only answers an event: a hover or press, a drag, a reorder, a new track or play state, or a save in progress. Nothing animates while the panel sits idle. The one repeating animation is the status dot in Pine, Kurisu and Ava, which pulses only while Discord is connected and a track is playing. The **Motion** setting under Appearance chooses how much of this runs:
+
+- **Follow Windows** (`system`, the default) uses Windows' "Show animations" setting (`prefers-reduced-motion`).
+- **Reduced** (`reduced`) turns every animation and transition off, whatever Windows says.
+- **Full** (`full`) keeps the panel's motion on even when Windows asks for reduced motion.
+
+Like the theme, it applies at once and is saved in `cadence.toml`; an unknown value loads as `system`.
+
+| Theme | On events | Buttons | Drag and reorder |
+| --- | --- | --- | --- |
+| Night sky | New track: artwork fades in, the crescent's star twinkles | Lift 1px, gold border | Rows part around the drop point; glowing drop line; rows slide 200ms |
+| Uika | Wine glow fades in once when the theme loads; new track: artwork fades in | Gold underline sweeps in | Lifted row glows gold; rows glide 300ms on the canon ease-out |
+| Pine, Kurisu, Ava | Live status dot. Kurisu: new text warms up. Ava: readouts flash on track or play-state change | 0.15s colour, 1px accent outline on press | 2px accent edge on the dragged row; rows snap. Kurisu: amber afterglow. Ava: the drop line sweeps |
+| Ledger | None | Ink colour | A double rule opens at the drop point; rows snap |
+| Astra, Astra light | None (colour changes only, 120ms) | Colour only | Dashed placeholder, ruler-tick drop line; rows snap |
+| Mariyaholic-98 | A block cursor blinks while a save is in flight | Keys sink into their hard shadow | Hard-shadow preview on a 4px grid; rows move in four frames |
+| Sumimi | New track: the card fades in | A gold wash spreads from the press point | Paper-lift preview; rows ease 300ms |
+| Confluence | None | Oxblood underline | Oxblood drop rule; rows slide 200ms |
+
 ## Verification
 
 Private Windows named-pipe regression tests exercise simultaneous read/write using a unique `yozora-test-*` pipe, not the live Discord client. Ordinary `go test ./...` never publishes experimental activity to a Discord profile. Tests also cover slow artwork, session gaps and out-of-order lookups, coherent track/art transitions, paused clear/resume and visibility-policy reloads under the send-rate gate, label-only Discord button readback, loopback-art filtering, source-toggle API validation and concurrency, launcher endpoint validation, service names, icon placement, platform-specific links, button ordering, display enums, config bounds, and newest-snapshot retention.
 
-The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, connection states, responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
+The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, every theme (applied, saved, rolled back on failure, and checked for 4.5:1 text), motion (no animation at idle in any theme, cues fire once per change and never on reconnect, every drag, cancel and reorder ends with no leftover transform or running animation, busy cursors clear after failed saves, Windows reduced motion and the Reduced mode each disable everything, and Full overrides Windows), mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, connection states, responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
 
 ```sh
 npm install --prefix /tmp/yozora-ui-tools --no-save --no-package-lock playwright@1.62.1

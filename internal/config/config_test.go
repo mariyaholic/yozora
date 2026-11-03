@@ -316,3 +316,51 @@ func TestCommitThreeTabsMigration(t *testing.T) {
 		t.Fatal("reblocked enabled tabs")
 	}
 }
+
+func TestLoadNormalizesPanelMotion(t *testing.T) {
+	if Defaults().UI.Motion != DefaultMotion {
+		t.Fatalf("default motion = %q, want %q", Defaults().UI.Motion, DefaultMotion)
+	}
+	for raw, want := range map[string]string{"": DefaultMotion, "slow": DefaultMotion, " Reduced ": "reduced", "full": "full", "system": "system"} {
+		path := filepath.Join(t.TempDir(), "cadence.toml")
+		if err := os.WriteFile(path, []byte("[ui]\nmotion = \""+raw+"\"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.UI.Motion != want {
+			t.Errorf("motion %q loaded as %q, want %q", raw, cfg.UI.Motion, want)
+		}
+	}
+}
+
+func TestLoadNormalizesPanelTheme(t *testing.T) {
+	if Defaults().UI.Theme != DefaultTheme {
+		t.Fatalf("default theme = %q, want %q", Defaults().UI.Theme, DefaultTheme)
+	}
+	for raw, want := range map[string]string{
+		"":                 DefaultTheme,
+		"neon":             DefaultTheme,
+		"ao-ava":           DefaultTheme,
+		" Ava ":            "ava",
+		"residual-light":   "astra-light",
+		"residual":         "astra",
+		"panel":            DefaultTheme,
+		"mariyaholic-98":   "mariyaholic-98",
+		"../../etc/passwd": DefaultTheme,
+	} {
+		path := filepath.Join(t.TempDir(), "cadence.toml")
+		if err := os.WriteFile(path, []byte("[ui]\ntheme = \""+raw+"\"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.UI.Theme != want {
+			t.Errorf("theme %q loaded as %q, want %q", raw, cfg.UI.Theme, want)
+		}
+	}
+}

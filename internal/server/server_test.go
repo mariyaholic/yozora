@@ -254,3 +254,99 @@ func TestYouTubeToggleAcceptedButNotPriority(t *testing.T) {
 		t.Fatal("priority changed")
 	}
 }
+
+func TestAppearanceSavesKnownThemesOnly(t *testing.T) {
+	h, cfg := fixtureHandler(t)
+	if w := request(h, "GET", "/api/appearance", "", false); w.Code != 401 {
+		t.Fatalf("unauthenticated theme read = %d", w.Code)
+	}
+	w := request(h, "GET", "/api/appearance", "", true)
+	var got struct {
+		Theme   string   `json:"theme"`
+		Themes  []string `json:"themes"`
+		Motion  string   `json:"motion"`
+		Motions []string `json:"motions"`
+	}
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &got) != nil || got.Theme != config.DefaultTheme || !reflect.DeepEqual(got.Themes, config.Themes) || got.Motion != config.DefaultMotion || !reflect.DeepEqual(got.Motions, config.Motions) {
+		t.Fatalf("theme read = %d %s", w.Code, w.Body.String())
+	}
+	before := cfg.Get()
+	for _, body := range []string{`{}`, `null`, `{"theme":null}`, `{"theme":"neon"}`, `{"theme":"ao-ava"}`, `{"theme":"panel"}`, `{"theme":"AVA"}`, `{"theme":1}`, `{"theme":"ava","extra":true}`, `{"theme":"ava"} {}`, strings.Repeat(" ", 300) + `{"theme":"ava"}`,
+		`{"motion":null}`, `{"motion":"slow"}`, `{"motion":"Reduced"}`, `{"motion":false}`, `{"theme":"ava","motion":"slow"}`, `{"theme":"neon","motion":"reduced"}`} {
+		if w := request(h, "POST", "/api/appearance", body, true); w.Code != 400 {
+			t.Errorf("accepted %q: %d", body[:min(len(body), 60)], w.Code)
+		}
+		if cfg.Get() != before {
+			t.Fatal("rejected theme changed config")
+		}
+	}
+	w = request(h, "POST", "/api/appearance", `{"theme":"ava"}`, true)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"theme":"ava"`) {
+		t.Fatalf("theme save = %d %s", w.Code, w.Body.String())
+	}
+	loaded, err := config.Load(cfg.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.UI.Theme != "ava" || cfg.Get().UI.Theme != "ava" {
+		t.Fatalf("theme not persisted: file %q, holder %q", loaded.UI.Theme, cfg.Get().UI.Theme)
+	}
+	if loaded.Template.State != "custom template" || loaded.Spotify.Market != "fixture-market" || !reflect.DeepEqual(loaded.Sources.Blocked, before.Sources.Blocked) {
+		t.Fatal("theme save changed unrelated settings")
+	}
+	page := request(h, "GET", "/?t=fixture-token", "", false).Body.String()
+	if !strings.Contains(page, `<html lang="en" data-theme="ava" data-motion="system">`) {
+		t.Fatal("dashboard does not render the saved theme before scripts run")
+	}
+}
+
+func TestAppearanceSavesMotionWithoutTouchingTheme(t *testing.T) {
+	h, cfg := fixtureHandler(t)
+	if w := request(h, "POST", "/api/appearance", `{"theme":"ledger"}`, true); w.Code != 200 {
+		t.Fatalf("theme save = %d", w.Code)
+	}
+	for _, motion := range []string{"reduced", "full", "system", "reduced"} {
+		w := request(h, "POST", "/api/appearance", `{"motion":"`+motion+`"}`, true)
+		if w.Code != 200 || !strings.Contains(w.Body.String(), `"motion":"`+motion+`"`) || !strings.Contains(w.Body.String(), `"theme":"ledger"`) {
+			t.Fatalf("motion %s save = %d %s", motion, w.Code, w.Body.String())
+		}
+	}
+	loaded, err := config.Load(cfg.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.UI.Motion != "reduced" || loaded.UI.Theme != "ledger" || cfg.Get().UI.Motion != "reduced" {
+		t.Fatalf("appearance not persisted: %+v", loaded.UI)
+	}
+	if w := request(h, "POST", "/api/appearance", `{"theme":"pine","motion":"full"}`, true); w.Code != 200 || cfg.Get().UI.Theme != "pine" || cfg.Get().UI.Motion != "full" {
+		t.Fatalf("combined save = %d %+v", w.Code, cfg.Get().UI)
+	}
+	page := request(h, "GET", "/?t=fixture-token", "", false).Body.String()
+	if !strings.Contains(page, `<html lang="en" data-theme="pine" data-motion="full">`) {
+		t.Fatal("dashboard does not render the saved motion mode before scripts run")
+	}
+}
+
+func TestDashboardOffersEveryMotionMode(t *testing.T) {
+	for _, id := range config.Motions {
+		if !strings.Contains(uiHTML, `name="motion" value="`+id+`"`) {
+			t.Errorf("motion mode %q has no picker option", id)
+		}
+	}
+	for _, marker := range []string{`html[data-motion="reduced"] *`, `html:not([data-motion="full"]) *`, `motionReduced()`} {
+		if !strings.Contains(uiHTML, marker) {
+			t.Errorf("missing motion-mode rule %q", marker)
+		}
+	}
+}
+
+func TestDashboardOffersEveryTheme(t *testing.T) {
+	for _, id := range config.Themes {
+		if !strings.Contains(uiHTML, `[data-theme="`+id+`"]`) || !strings.Contains(uiHTML, `name="theme" value="`+id+`"`) || !strings.Contains(uiHTML, `class="swatch" data-theme="`+id+`"`) {
+			t.Errorf("theme %q lacks a palette, picker option or swatch", id)
+		}
+	}
+	if got := strings.Count(uiHTML, `name="theme" value="`); got != len(config.Themes) {
+		t.Errorf("picker offers %d themes, config allows %d", got, len(config.Themes))
+	}
+}

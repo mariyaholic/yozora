@@ -11,7 +11,7 @@ const root = path.resolve(__dirname, '..');
 const output = path.resolve(process.env.UI_EVIDENCE_DIR || path.join(os.tmpdir(), 'yozora-ui-check'));
 fs.mkdirSync(output, { recursive: true });
 const nonce = 'synthetic-ui-test';
-const html = fs.readFileSync(path.join(root, 'internal/server/ui.html'), 'utf8').replace('{{.Nonce}}', nonce);
+const html = fs.readFileSync(path.join(root, 'internal/server/ui.html'), 'utf8').replace('{{.Nonce}}', nonce).replace('{{.Theme}}', 'yozora').replace('{{.Motion}}', 'system');
 // Use the production policy, including its nonce and restriction on image URLs.
 const serverSource = fs.readFileSync(path.join(root, 'internal/server/server.go'), 'utf8');
 const cspExpression = serverSource.match(/Set\("Content-Security-Policy", (.+)\)/)[1];
@@ -24,6 +24,10 @@ let sourceGetHTTP = 200;
 let sourcePostHTTP = 200;
 let autostartHTTP = 200;
 let autostart = false;
+let theme = 'yozora';
+let motion = 'system';
+let themeHTTP = 200;
+const themePosts = [];
 let saveDelay = 0;
 const posts = [];
 const errors = [];
@@ -49,6 +53,15 @@ const server = http.createServer(async (req, res) => {
       if (sourcePostHTTP === 200) sources = posted;
       json(sources, sourcePostHTTP);
     } else json(sources, sourceGetHTTP);
+  } else if (url.pathname === '/api/appearance') {
+    if (req.method === 'POST') {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const posted = JSON.parse(body);
+      themePosts.push(posted);
+      if (themeHTTP === 200) { theme = posted.theme ?? theme; motion = posted.motion ?? motion; }
+    }
+    json({ theme, themes: [], motion, motions: [] }, themeHTTP);
   } else if (url.pathname === '/api/autostart') {
     if (req.method === 'POST') {
       let body = '';
@@ -212,6 +225,50 @@ const server = http.createServer(async (req, res) => {
     autostartHTTP = 200;
     check('startup save and failed-save rollback');
 
+    // Themes: each one applies at once, saves, rolls back on failure and keeps text readable.
+    const themeIds = await page.locator('input[name="theme"]').evaluateAll(inputs => inputs.map(input => input.value));
+    assert.deepEqual(themeIds, ['yozora', 'uika', 'pine', 'kurisu', 'ava', 'astra', 'mariyaholic-98', 'sumimi', 'ledger', 'confluence', 'astra-light']);
+    assert.equal(await page.locator('input[name="theme"][value="yozora"]').isChecked(), true);
+    const ratio = (a, b) => {
+      const lum = hex => { const v = hex.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+      const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+      return (x + 0.05) / (y + 0.05);
+    };
+    const applyTheme = async id => {
+      await page.locator(`input[name="theme"][value="${id}"]`).evaluate(input => input.closest('label').scrollIntoView({block:'center'}));
+      await page.locator('label.theme-option', { has: page.locator(`input[value="${id}"]`) }).click();
+      await waitText('#theme-status', 'theme saved');
+      assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), id);
+      assert.deepEqual(themePosts.at(-1), { theme: id });
+      const roles = await page.evaluate(() => {
+        const probe = document.createElement('i');
+        document.body.appendChild(probe);
+        const read = name => { probe.style.color = `var(${name})`; return getComputedStyle(probe).color; };
+        const out = Object.fromEntries(['--bg', '--panel', '--panel-2', '--text', '--muted', '--dim', '--accent', '--on-accent', '--link', '--good', '--bad', '--warn', '--line-strong'].map(name => [name, read(name)]));
+        probe.remove();
+        return out;
+      });
+      for (const ground of ['--bg', '--panel']) {
+        for (const ink of ['--text', '--muted', '--dim', '--accent', '--link', '--bad', '--warn']) {
+          assert.ok(ratio(roles[ink], roles[ground]) >= 4.5, `${id}: ${ink} on ${ground} is ${ratio(roles[ink], roles[ground]).toFixed(2)}:1`);
+        }
+      }
+      assert.ok(ratio(roles['--on-accent'], roles['--accent']) >= 4.5, `${id}: primary button text is ${ratio(roles['--on-accent'], roles['--accent']).toFixed(2)}:1`);
+      assert.ok(ratio(roles['--text'], roles['--panel-2']) >= 4.5, `${id}: button text`);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await page.evaluate(() => scrollTo(0, 0));
+      await shot(`theme-${id}-560`);
+    };
+    for (const id of themeIds.slice(1)) await applyTheme(id);
+    themeHTTP = 500;
+    await page.locator('label.theme-option', { has: page.locator('input[value="ava"]') }).click();
+    await waitText('#theme-status', 'Could not save');
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'astra-light', 'a failed save must restore the saved theme');
+    assert.equal(await page.locator('input[name="theme"][value="astra-light"]').isChecked(), true);
+    themeHTTP = 200;
+    await applyTheme('yozora');
+    check('eleven design-system themes apply, save, roll back, and keep 4.5:1 text');
+
     state = { ...state, playing: true, title: 'A very long synthetic track title — ' + 'unbroken'.repeat(15), artist: 'Synthetic artist name '.repeat(12), published_activity: { buttons: [{ label: 'Unsafe', url: 'javascript:alert(1)' }, { label: 'Credentials', url: 'https://name:password@example.test' }, { label: 'Yozora', url: 'https://github.com/mariyaholic/yozora' }] } };
     await refresh();
     assert.equal(await page.locator('#buttons a').count(), 1);
@@ -267,6 +324,216 @@ const server = http.createServer(async (req, res) => {
     assert.equal(await page.locator('#source-applemusic').isEnabled(), true);
     assert.equal(await page.evaluate(() => document.activeElement.id), 'source-applemusic');
     check('broken-art fallback and initial settings-load retry');
+
+    // Motion, with reduced motion off. Every theme must be still at idle, animate only on events,
+    // and leave no transform, class or running animation behind once an interaction ends.
+    {
+      const motion = await browser.newContext({ viewport:{ width:560, height:760 } });
+      await motion.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+      const m = await motion.newPage();
+      m.on('pageerror', error => errors.push(error.message));
+      const mText = (selector, text) => m.waitForFunction(([selector, text]) => document.querySelector(selector).textContent.includes(text), [selector, text]);
+      const mRefresh = () => m.evaluate(async () => { while (polling) await new Promise(resolve => setTimeout(resolve, 10)); await tick(); });
+      const running = () => m.evaluate(() => document.getAnimations().filter(a => a.playState === 'running').map(a => a.animationName || a.transitionProperty));
+      const loops = () => m.evaluate(() => document.getAnimations().filter(a => a.playState === 'running' && a.effect.getComputedTiming().iterations === Infinity).map(a => a.animationName));
+      const order = () => m.locator('#source-order li').evaluateAll(rows => rows.map(row => row.dataset.source));
+      const settled = async (label = '') => {
+        // Wait until still (a hover fade may follow a slide), but fail on anything that keeps running.
+        // Stillness must hold across two samples 300ms apart (Chromium may start a hover fade late after
+        // rows re-render under a still cursor). The live dot is the one sanctioned loop while music plays.
+        const moving = () => m.evaluate(() => document.getAnimations().filter(a => a.playState === 'running' && a.animationName !== 'live-pulse').map(a => `${a.animationName || a.transitionProperty}@${a.effect.target.id || a.effect.target.className || a.effect.target.tagName}:${a.effect.target.textContent.slice(0, 12)}`));
+        let left = await moving();
+        for (let tries = 0; tries < 6; tries++) {
+          if (!left.length) { await m.waitForTimeout(300); left = await moving(); if (!left.length) break; }
+          else { await m.waitForTimeout(300); left = await moving(); }
+        }
+        assert.deepEqual(left, [], `${label}: an interaction left an animation running`);
+        assert.equal(await m.locator('#source-order li.parted, #source-order li.dragging, .drag-preview, .drop-before, .drop-after').count(), 0);
+        assert.equal(await m.locator('#source-order li').evaluateAll(rows => rows.every(row => !row.style.transform && !row.style.transition && getComputedStyle(row).transform === 'none')), true, 'rows must return to their layout position');
+      };
+      const pick = async id => {
+        await m.locator('label.theme-option', { has: m.locator(`input[value="${id}"]`) }).click();
+        await mText('#theme-status', 'theme saved');
+      };
+      const playing = { ...state, playing:true, title:'Night Walk', artist:'Mira', album:'After Hours', service:'Spotify', source:'spotify', elapsed_sec:82, duration_sec:243, discord_connected:true, art_url:'/test-art.svg' };
+      state = { playing:false, title:'', discord_connected:true, sends:12 };
+      await m.goto(`${origin}/?t=synthetic`);
+      await mText('#source-status', 'All changes saved');
+      for (const id of themeIds) {
+        if (id !== 'yozora') await pick(id);
+        state = { playing:false, title:'', discord_connected:true, sends:12 };
+        await mRefresh();
+        await m.waitForTimeout(700);
+        assert.deepEqual(await running(), [], `${id}: something animates at idle`);
+        state = playing;
+        await mRefresh();
+        await m.waitForTimeout(700);
+        assert.deepEqual(await loops(), ['pine', 'kurisu', 'ava'].includes(id) ? ['live-pulse'] : [], `${id}: only Argonaut Oak's live dot may loop, and only while playing`);
+      }
+      check('every theme is still at idle; only the live dot loops, only while playing');
+
+      await pick('yozora');
+      state = { ...playing, title:'Second Track' };
+      await mRefresh();
+      assert.equal(await m.evaluate(() => document.body.classList.contains('track-changed')), true);
+      assert.ok((await running()).includes('twinkle') && (await running()).includes('art-in'), 'Night sky cues the star and artwork on a new track');
+      await m.waitForTimeout(1000);
+      assert.equal(await m.evaluate(() => document.body.classList.contains('track-changed')), false);
+      stateHTTP = 503; await mRefresh(); stateHTTP = 200; await mRefresh();
+      assert.equal(await m.evaluate(() => document.body.classList.contains('track-changed') || document.body.classList.contains('state-changed')), false, 'a reconnect must not replay the cue');
+      await pick('ava');
+      state = { ...state, playing:false };
+      await mRefresh();
+      assert.ok((await running()).includes('readout'), 'Ava flashes its readouts on a play-state change');
+      await m.waitForTimeout(1000);
+      await pick('kurisu');
+      state = { ...state, playing:true, title:'Third Track' };
+      await mRefresh();
+      assert.ok((await running()).includes('phosphor'));
+      await m.waitForTimeout(1000);
+      check('track and play-state cues fire once per change and never on reconnect');
+
+      const dragTo = async (from, toRow, edge = 'top') => {
+        await m.locator('#source-order').evaluate(list => list.scrollIntoView({ block:'center' }));
+        const handle = await m.locator('#source-order li').nth(from).locator('.drag-handle').boundingBox();
+        const target = await m.locator('#source-order li').nth(toRow).boundingBox();
+        await m.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+        await m.mouse.down();
+        await m.mouse.move(handle.x + handle.width / 2, edge === 'top' ? target.y + 4 : target.y + target.height - 4, { steps:10 });
+      };
+      for (const id of ['yozora', 'uika', 'sumimi', 'confluence', 'mariyaholic-98', 'pine', 'astra', 'ledger', 'ava']) {
+        await pick(id);
+        const start = await order();
+        await dragTo(0, 3);
+        assert.equal(await m.locator('#source-order li.parted').count(), 3, `${id}: rows from the drop point part`);
+        await m.waitForTimeout(400);
+        assert.notEqual(await m.locator('#source-order li').nth(3).evaluate(row => getComputedStyle(row).transform), 'none');
+        assert.deepEqual(await order(), start, `${id}: parting must not reorder`);
+        if (id === 'mariyaholic-98') assert.equal(await m.locator('.drag-preview').evaluate(node => parseFloat(node.style.left) % 4 === 0 && parseFloat(node.style.top) % 4 === 0), true, 'the PC-98 preview moves on a 4px grid');
+        if (id === 'ava') assert.deepEqual(await loops(), ['live-pulse', 'sweep'], 'Ava sweeps only while a drop line is shown');
+        await m.screenshot({ path:path.join(output, `motion-drag-${id}-viewport.png`) });
+        await m.keyboard.press('Escape');
+        await m.mouse.up();
+        assert.deepEqual(await order(), start);
+        await settled(`${id} cancel`);
+        await dragTo(0, 3);
+        await m.mouse.up();
+        assert.deepEqual(await order(), [start[1], start[2], start[0], ...start.slice(3)], `${id}: drop lands between the parted rows`);
+        await settled(`${id} drop`);
+        await m.locator('#source-order li').nth(0).locator('.move button').last().click();
+        const slid = await m.evaluate(() => document.getAnimations().some(a => a.transitionProperty === 'transform'));
+        assert.equal(slid, ['pine', 'astra', 'ledger', 'ava'].includes(id) ? false : true, `${id}: rows ${slid ? 'slid' : 'snapped'} on an arrow move`);
+        await settled(`${id} arrow`);
+        await m.locator('#source-reset').click();
+        assert.deepEqual(await order(), start);
+        await settled(`${id} discard`);
+      }
+      check('drag parts rows, drops between them, cancels cleanly, and each theme slides or snaps as designed');
+
+      await pick('mariyaholic-98');
+      await m.locator('#source-generic').check();
+      saveDelay = 300;
+      await m.locator('#source-save').click();
+      await m.waitForFunction(() => document.getElementById('source-status').dataset.busy === 'true');
+      assert.equal(await m.locator('#source-status').evaluate(node => getComputedStyle(node, '::after').content), '"█"');
+      assert.ok((await loops()).includes('caret'));
+      await mText('#source-status', 'Saved. Discord');
+      saveDelay = 0;
+      assert.equal(await m.locator('#source-status[data-busy]').count(), 0);
+      assert.equal((await loops()).includes('caret'), false, 'the cursor stops when the save ends');
+      sourcePostHTTP = 500;
+      await m.locator('#source-generic').uncheck();
+      await m.locator('#source-save').click();
+      await mText('#source-status', 'Save failed');
+      assert.equal(await m.locator('#source-status[data-busy]').count(), 0, 'a failed save also clears the busy cursor');
+      sourcePostHTTP = 200;
+      await m.locator('#source-save').click();
+      await mText('#source-status', 'Saved. Discord');
+      check('PC-98 busy cursor exists only while a save is in flight, including failures');
+
+      await pick('sumimi');
+      const button = m.locator('#source-order li').nth(1).locator('.move button').first();
+      await button.evaluate(node => { const box = node.getBoundingClientRect(); node.dispatchEvent(new PointerEvent('pointerdown', { bubbles:true, clientX:box.left + 4, clientY:box.top + 4 })); });
+      assert.equal(await button.evaluate(node => node.classList.contains('pressed') && node.style.getPropertyValue('--px') === '4px'), true);
+      assert.ok((await running()).includes('ink-spread'));
+      await m.waitForTimeout(600);
+      assert.equal(await button.evaluate(node => node.classList.contains('pressed')), false);
+      check('Sumimi press wash starts at the pointer and clears itself');
+
+      // Motion mode: Reduced stills everything even though this context allows motion; a failed save keeps the old mode.
+      const allAnimations = page => page.evaluate(() => document.getAnimations().map(a => a.animationName || a.transitionProperty));
+      const setMotion = async (page, value, name) => {
+        await page.locator('.segmented label', { has: page.locator(`input[value="${value}"]`) }).click();
+        await page.waitForFunction(text => document.querySelector('#theme-status').textContent.includes(text), `${name} motion saved`);
+      };
+      await pick('yozora');
+      await setMotion(m, 'reduced', 'Reduced');
+      assert.deepEqual(themePosts.at(-1), { motion:'reduced' }, 'a motion change posts only the motion field');
+      assert.deepEqual(await m.evaluate(() => [document.documentElement.dataset.theme, document.documentElement.dataset.motion]), ['yozora', 'reduced']);
+      await m.waitForTimeout(400);
+      state = { ...playing, title:'Reduced Mode Track' };
+      await mRefresh();
+      await m.locator('#source-order li').nth(0).locator('.move button').last().click();
+      assert.deepEqual(await allAnimations(m), [], 'Reduced mode: no cue, slide or hover transition');
+      await m.locator('#source-reset').click();
+      await pick('pine');
+      await m.waitForTimeout(300);
+      assert.deepEqual(await loops(), [], 'Reduced mode stops the live dot');
+      themeHTTP = 500;
+      await m.locator('.segmented label', { has: m.locator('input[value="full"]') }).click();
+      await mText('#theme-status', 'Could not save the motion');
+      assert.equal(await m.evaluate(() => document.documentElement.dataset.motion), 'reduced');
+      assert.equal(await m.locator('input[name="motion"][value="reduced"]').isChecked(), true);
+      themeHTTP = 200;
+      await setMotion(m, 'system', 'Follow Windows');
+      await m.waitForTimeout(300);
+      assert.deepEqual(await loops(), ['live-pulse'], 'Follow Windows restores motion when Windows allows it');
+      await pick('yozora');
+      assert.equal(await m.locator('#source-order li').evaluateAll(rows => rows.every(row => !row.style.transform)), true);
+      check('Reduced motion mode stills the panel when Windows allows motion; a failed save keeps the previous mode');
+
+      themeHTTP = 500;
+      await m.reload();
+      await mText('#theme-status', 'Could not confirm');
+      assert.equal(await m.locator('#theme-fields').isEnabled(), true, 'a failed theme read must not lock the picker');
+      themeHTTP = 200;
+      await pick('pine');
+      await pick('yozora');
+      check('a failed theme read leaves the picker usable with the server-rendered theme');
+      violations.push(...await m.evaluate(() => window.cspViolations || []));
+      await motion.close();
+
+      const still = await browser.newContext({ viewport:{ width:560, height:760 }, reducedMotion:'reduce' });
+      await still.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+      const r = await still.newPage();
+      r.on('pageerror', error => errors.push(error.message));
+      await r.goto(`${origin}/?t=synthetic`);
+      await r.waitForFunction(() => document.querySelector('#source-status').textContent.includes('All changes saved'));
+      state = { ...playing, title:'Reduced Motion Track' };
+      await r.evaluate(async () => { while (polling) await new Promise(resolve => setTimeout(resolve, 10)); await tick(); });
+      await r.locator('#source-order li').nth(0).locator('.move button').last().click();
+      assert.deepEqual(await r.evaluate(() => document.getAnimations().map(a => a.animationName || a.transitionProperty)), [], 'reduced motion turns every animation off');
+      await r.locator('#source-reset').click();
+      check('reduced motion: no animation or transition at all');
+      // Full overrides Windows' reduced setting; Follow Windows goes back to still.
+      await setMotion(r, 'full', 'Full');
+      state = { ...playing, title:'Full Mode Track' };
+      await r.evaluate(async () => { while (polling) await new Promise(resolve => setTimeout(resolve, 10)); await tick(); });
+      assert.ok((await allAnimations(r)).includes('twinkle'), 'Full mode cues the track change despite Windows reduced motion');
+      await r.waitForTimeout(1000);
+      await r.locator('#source-order li').nth(0).locator('.move button').last().click();
+      assert.ok((await allAnimations(r)).includes('transform'), 'Full mode slides rows');
+      await r.waitForTimeout(600);
+      await r.locator('#source-reset').click();
+      await r.waitForTimeout(600);
+      await setMotion(r, 'system', 'Follow Windows');
+      await r.locator('#source-order li').nth(0).locator('.move button').last().click();
+      assert.deepEqual(await allAnimations(r), [], 'Follow Windows is still again');
+      await r.locator('#source-reset').click();
+      await still.close();
+      check('Full motion mode overrides Windows reduced motion; Follow Windows returns to it');
+      state = playing;
+    }
 
     // CDP dispatches actual touchscreen input through Chromium's event pipeline,
     // including pointer capture, pointercancel, and native page scrolling.
