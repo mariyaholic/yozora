@@ -67,7 +67,7 @@ func TestDashboardEndpointRoundTripAndAuthenticatedProbe(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"name":"Yozora","enabled":{"applemusic":true,"spotify":true,"spotifyapi":true,"youtubemusic":true,"youtube":false,"youtube_tabs":false,"browser":false,"generic":false}}`))
+		_, _ = w.Write([]byte(`{"name":"Yozora","enabled":{"applemusic":true,"spotify":true,"spotifyapi":true,"youtubemusic":true,"youtube":false,"youtube_tabs":false,"twitch":false,"browser":false,"generic":false}}`))
 	}))
 	defer server.Close()
 	endpoint := dashboardEndpoint{BaseURL: server.URL, Token: fixtureDashboardToken, PID: 1}
