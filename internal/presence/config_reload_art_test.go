@@ -106,3 +106,35 @@ func TestVerifiedYouTubeContinuitySurvivesDisablingTabDiscovery(t *testing.T) {
 		assertBackgroundYouTube(t, e, backgroundVideoID)
 	})
 }
+
+func TestDisablingTabsReclassifiesColdBlockedYouTubeItem(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		now := time.Now()
+		track := player.Track{Source: "browser", AppID: "msedge", Title: "Video", Playing: true, LastUpdated: now}
+		e, resolver := newArtworkTestEngine(t, track)
+		e.Cfg.Get().Sources.Blocked = []string{"youtube"}
+		e.EnumerateWindows = func() []browserwin.Window { return []browserwin.Window{{HWND: 1, Title: "Unrelated - Microsoft Edge"}} }
+		reads := 0
+		e.ReadTabNames = func(uintptr, int) ([]string, error) { reads++; return []string{"Video - YouTube - Audio playing"}, nil }
+		e.ReadAddressBar = func(uintptr) (string, error) { t.Fatal("background address read"); return "", nil }
+		e.step(now)
+		nextArtworkRequest(t, resolver, track.Title).result <- art.Lookup{}
+		synctest.Wait()
+		e.step(now.Add(7 * time.Second))
+		if e.cur != nil || len(e.ipc.(*recordingActivityClient).activities) != 0 {
+			t.Fatal("blocked YouTube item was published")
+		}
+		e.Cfg.Get().Sources.Blocked = []string{"youtube", "youtube_tabs"}
+		e.step(now.Add(14 * time.Second))
+		nextArtworkRequest(t, resolver, track.Title).result <- art.Lookup{ImageURL: "https://example.test/browser.jpg"}
+		synctest.Wait()
+		e.step(now.Add(21 * time.Second))
+		frames := e.ipc.(*recordingActivityClient).activities
+		if e.cur == nil || e.cur.Service != "" || len(frames) != 1 || frames[0] == nil || frames[0].Name == "YouTube" {
+			t.Fatal("disabled discovery left browser item suppressed or leaked a YouTube card")
+		}
+		if reads != 1 {
+			t.Fatalf("scanned disabled tabs: %d", reads)
+		}
+	})
+}
