@@ -126,6 +126,7 @@ func TestSlowArtworkDoesNotDelayMetadataAndIsPublishedWhenReady(t *testing.T) {
 }
 
 type artworkRequest struct {
+	prefer string
 	track  art.Track
 	result chan art.Lookup
 }
@@ -135,8 +136,8 @@ type queuedArtwork struct {
 	release  chan struct{}
 }
 
-func (a *queuedArtwork) Resolve(track art.Track, _ string) art.Lookup {
-	request := artworkRequest{track: track, result: make(chan art.Lookup, 1)}
+func (a *queuedArtwork) Resolve(track art.Track, prefer string) art.Lookup {
+	request := artworkRequest{prefer: prefer, track: track, result: make(chan art.Lookup, 1)}
 	a.requests <- request
 	select {
 	case lookup := <-request.result:

@@ -108,8 +108,8 @@ func TestYouTubeTabsResolution(t *testing.T) {
 					t.Fatalf("activities: %d", len(client.activities))
 				}
 				a := client.activities[0]
-				if (mode == "enabled" || mode == "prefixed" || mode == "duplicates" || mode == "multiwindow" || mode == "cap-edge") && e.Status().ArtURL != art.YouTubeSymbolURL {
-					t.Fatal("tab match retained thumbnail")
+				if (mode == "enabled" || mode == "prefixed" || mode == "duplicates" || mode == "multiwindow" || mode == "cap-edge") && e.Status().ArtURL != "https://example.test/media-thumbnail.jpg" {
+					t.Fatal("tab match discarded the media session thumbnail")
 				}
 				if mode == "enabled" || mode == "prefixed" || mode == "duplicates" || mode == "multiwindow" || mode == "cap-edge" || mode == "title" {
 					if a.Type != 3 || a.Assets.LargeImage != art.YouTubeSymbolURL || e.browserCache[track.Identity()].VideoID != "" {
