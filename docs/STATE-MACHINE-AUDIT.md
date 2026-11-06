@@ -87,3 +87,7 @@ exercise real credentials, contact Discord or prove Windows compatibility.
   in `internal/credman/credman.go` (two), `internal/smtc/thumbnail_test.go` and
   `internal/wrt/wrt.go`. The unchanged theme base has the same diagnostics. These
   are not suppressed and require a separate review.
+
+## Independent review: live artwork settings
+
+Artwork preference and browser-discovery/source-toggle changes now advance the resolver generation for the unchanged item. Late results from a prior configuration are discarded. Cold tab-title-only classification is re-evaluated on `youtube_tabs` changes; verified video continuity for the same continuously selected item survives disabling background discovery. No background address bar is read and disabled tab scanning stays disabled. Regression tests exercise repeated toggles, stale in-flight artwork and retained verified-video presentation. These are injected Windows-decision tests, not a real Edge/UIA/SMTC runtime claim.
