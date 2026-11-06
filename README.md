@@ -85,7 +85,7 @@ The Windows detector reads once at startup, then polls every second by default. 
 
 ## Appearance
 
-The **Appearance** button in the panel's header opens a dialog with 11 themes and the motion setting. Each theme tile previews its colours and title face. Choosing one applies it at once and saves it in `cadence.toml`:
+The **Appearance** button in the panel's header opens a dialog with 37 themes and the motion setting. Each theme tile previews its colours and title face. Choosing one applies it at once and saves it in `cadence.toml`:
 
 ```toml
 [ui]
@@ -159,3 +159,8 @@ YouTube Music is a dedicated source, enabled by default, for its browser PWA and
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+## Shared application catalog
+
+See [theme catalog adoption](docs/THEME-CATALOG.md) for the shared 37-theme set,
+renderer compatibility, regeneration and validation limits.
