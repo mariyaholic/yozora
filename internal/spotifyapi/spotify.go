@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"uika-resonance/internal/credman"
@@ -33,6 +34,7 @@ type Provider struct {
 	http      *http.Client
 	access    string
 	accessExp time.Time
+	errMu     sync.RWMutex
 	lastErr   string
 }
 
@@ -181,37 +183,74 @@ func firstImage(imgs []struct {
 	return best
 }
 
+// publishLatest replaces a stale queued snapshot instead of blocking the
+// poller or allowing an older track to win after the consumer catches up.
+func publishLatest(out chan player.Track, track player.Track) {
+	select {
+	case out <- track:
+		return
+	default:
+	}
+	select {
+	case <-out:
+	default:
+	}
+	select {
+	case out <- track:
+	default:
+	}
+}
+
 func (p *Provider) RunLoop(stop <-chan struct{}) {
-	last := time.Time{}
+	p.runLoop(stop, p.Poll)
+}
+
+func (p *Provider) runLoop(stop <-chan struct{}, poll func() (*player.Track, error)) {
+	ticker := time.NewTicker(p.PollEvery)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-stop:
 			return
-		case <-time.After(p.PollEvery):
+		case <-ticker.C:
 		}
-		t, err := p.Poll()
+		// If shutdown won the race with the tick, do not start another poll.
+		select {
+		case <-stop:
+			return
+		default:
+		}
+		t, err := poll()
+		// The HTTP request has its own timeout. Discard a result that arrives
+		// after shutdown rather than publishing it into the next lifecycle.
+		select {
+		case <-stop:
+			return
+		default:
+		}
+		p.errMu.Lock()
+		if err != nil {
+			p.lastErr = err.Error()
+		} else {
+			p.lastErr = ""
+		}
+		p.errMu.Unlock()
 		if err != nil {
 			if !strings.Contains(err.Error(), "no refresh token") {
 				log.Printf("spotify: %v", err)
 			}
-			p.lastErr = err.Error()
 			continue
 		}
-		p.lastErr = ""
 		if t == nil {
-
-			if last.IsZero() || time.Since(last) > 60*time.Second {
-				p.Out <- player.Track{Source: "spotifyapi", Player: "Spotify", Title: " ", LastUpdated: time.Now()}
-				last = time.Now()
-			}
-			continue
+			// A successful no-content response means there is no active item now.
+			t = &player.Track{Source: "spotifyapi", Player: "Spotify", LastUpdated: time.Now()}
 		}
-		last = time.Now()
-		select {
-		case p.Out <- *t:
-		default:
-		}
+		publishLatest(p.Out, *t)
 	}
 }
 
-func (p *Provider) Err() string { return p.lastErr }
+func (p *Provider) Err() string {
+	p.errMu.RLock()
+	defer p.errMu.RUnlock()
+	return p.lastErr
+}
