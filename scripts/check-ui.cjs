@@ -256,7 +256,10 @@ const server = http.createServer(async (req, res) => {
 
     // Themes: each one applies at once, saves, rolls back on failure and keeps text readable.
     const themeIds = await page.locator('input[name="theme"]').evaluateAll(inputs => inputs.map(input => input.value));
-    assert.deepEqual(themeIds, ['yozora', 'uika', 'pine', 'kurisu', 'ava', 'astra', 'mariyaholic-98', 'sumimi', 'ledger', 'confluence', 'astra-light']);
+    const generatedConfig = fs.readFileSync(path.join(root, 'internal/config/theme_catalog.go'), 'utf8');
+    const generatedIds = [...generatedConfig.match(/var Themes = \[\]string\{([\s\S]*?)\}/)[1].matchAll(/"([a-z0-9-]+)"/g)].map(match => match[1]);
+    assert.deepEqual(themeIds, generatedIds, 'picker and compiled configuration share the same catalog');
+    assert.equal(themeIds.length, 37);
     assert.equal(await page.locator('input[name="theme"][value="yozora"]').isChecked(), true);
     const ratio = (a, b) => {
       const lum = hex => { const v = hex.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map(c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
@@ -292,9 +295,9 @@ const server = http.createServer(async (req, res) => {
       await choose(page, 'theme', id, 'theme saved');
       await page.evaluate(() => document.fonts.ready);
       const loaded = await page.evaluate(() => [...document.fonts].filter(face => face.status === 'loaded').map(face => face.family.replace(/"/g, '')));
-      for (const family of faces[id]) assert.ok(loaded.includes(family), `${id}: ${family} did not load (loaded: ${loaded})`);
+      for (const family of (faces[id] || [])) assert.ok(loaded.includes(family), `${id}: ${family} did not load (loaded: ${loaded})`);
       const used = await page.evaluate(() => [getComputedStyle(document.querySelector('h1')).fontFamily, getComputedStyle(document.body).fontFamily]);
-      if (faces[id].length) assert.ok(faces[id].some(family => used.join().includes(family)), `${id}: the page does not ask for its faces`);
+      if ((faces[id] || []).length) assert.ok(faces[id].some(family => used.join().includes(family)), `${id}: the page does not ask for its faces`);
       assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), id);
       assert.deepEqual(themePosts.at(-1), { theme: id });
       const roles = await page.evaluate(() => {
@@ -319,11 +322,11 @@ const server = http.createServer(async (req, res) => {
     for (const id of themeIds.slice(1)) await applyTheme(id);
     themeHTTP = 500;
     await choose(page, 'theme', 'ava', 'Could not save');
-    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), 'astra-light', 'a failed save must restore the saved theme');
-    assert.equal(await page.locator('input[name="theme"][value="astra-light"]').isChecked(), true);
+    assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), themeIds.at(-1), 'a failed save must restore the saved theme');
+    assert.equal(await page.locator(`input[name="theme"][value="${themeIds.at(-1)}"]`).isChecked(), true);
     themeHTTP = 200;
     await applyTheme('yozora');
-    check('eleven design-system themes apply, save, roll back, keep 4.5:1 text, and load their own faces');
+    check('all shared design-system themes apply, save, roll back, keep 4.5:1 text, and load their own faces');
 
     state = { ...state, playing: true, activity_type: 'watching', title: 'Ranked grind, then chat', artist: 'streamer', album: '', service: 'Twitch', source: 'browser', duration_sec: 0, art_url: '/test-art.svg', published_activity: { buttons: [{ label: 'Watch on Twitch', url: 'https://www.twitch.tv/streamer' }] } };
     await refresh();

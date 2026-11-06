@@ -100,19 +100,7 @@ var Motions = []string{DefaultMotion, "reduced", "full"}
 // ValidMotion reports whether id names a control panel motion mode.
 func ValidMotion(id string) bool { return slices.Contains(Motions, id) }
 
-// DefaultTheme is Yozora's own night palette.
-const DefaultTheme = "yozora"
-
-// Themes lists the control panel palettes in picker order: dark, then light. The ids match
-// the data-theme blocks in internal/server/ui.html.
-var Themes = []string{
-	DefaultTheme, "uika", "pine", "kurisu", "ava", "astra", "mariyaholic-98",
-	"sumimi", "ledger", "confluence", "astra-light",
-}
-
-// mergedThemes maps retired theme ids to the theme that absorbed them.
-var mergedThemes = map[string]string{"panel": DefaultTheme, "residual": "astra", "residual-light": "astra-light"}
-
+// Theme identifiers and retired aliases live in generated theme_catalog.go.
 // ValidTheme reports whether id names a control panel theme.
 func ValidTheme(id string) bool { return slices.Contains(Themes, id) }
 
