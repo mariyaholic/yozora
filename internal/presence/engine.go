@@ -216,6 +216,22 @@ func (e *Engine) step(now time.Time) {
 		e.classifyPending = false
 		// Keep prior classification for source revocation checks until the
 		// replacement resolver commits; publishing is held while it runs.
+		// Tab-only cache entries may currently suppress selection when YouTube
+		// is blocked. Remove those on discovery disable so the unchanged
+		// browser item can be reclassified rather than staying stuck at nil.
+		tabsDisabled := slices.ContainsFunc(cfg.Sources.Blocked, func(value string) bool {
+			return strings.EqualFold(strings.TrimSpace(value), "youtube_tabs")
+		})
+		if tabsDisabled {
+			for key, classification := range e.browserCache {
+				if classification.Service == "youtube" && classification.VideoID == "" {
+					if e.publishedTrack != nil && browserIdentity(*e.publishedTrack) == key {
+						e.publishedTrack.Service = classification.Service
+					}
+					delete(e.browserCache, key)
+				}
+			}
+		}
 		// Only verified video evidence survives discovery-setting changes.
 		// A tab-title-only classification must be re-evaluated when disabled.
 		if e.browserPrior.VideoID == "" {
