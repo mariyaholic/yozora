@@ -99,6 +99,7 @@ type Engine struct {
 	lastListenURL     string
 	lastVia           string
 	artGeneration     uint64
+	artConfig         string
 	sentArtURL        string
 	sentConfig        string
 	published         *discordipc.Activity
@@ -206,6 +207,23 @@ func (e *Engine) pick(now time.Time) *player.Track {
 
 func (e *Engine) step(now time.Time) {
 	cfg := e.Cfg.Get()
+	resolverKey := artworkConfigKey(cfg)
+	e.mu.Lock()
+	resolverConfigChanged := e.Art != nil && e.artConfig != resolverKey
+	if resolverConfigChanged {
+		e.artConfig = resolverKey
+		e.artGeneration++
+		e.classifyPending = false
+		// Keep prior classification for source revocation checks until the
+		// replacement resolver commits; publishing is held while it runs.
+		// Only verified video evidence survives discovery-setting changes.
+		// A tab-title-only classification must be re-evaluated when disabled.
+		if e.browserPrior.VideoID == "" {
+			e.browserPrior = browserClassification{}
+			e.browserPriorArt = art.Lookup{}
+		}
+	}
+	e.mu.Unlock()
 	cur := e.pick(now)
 	id := identityOf(cur)
 	e.mu.Lock()
@@ -269,7 +287,7 @@ func (e *Engine) step(now time.Time) {
 	_, classified := e.browserCache[browserIdentity(*cur)]
 	needsClassification := e.Art != nil && cur.Source == "browser" && !classified && !e.classifyPending
 	e.mu.Unlock()
-	if identityChanged || needsClassification {
+	if identityChanged || needsClassification || resolverConfigChanged {
 		// A browser replacement is about to be classified; do not leave a revoked card up meanwhile.
 		if revoked && cur.Source == "browser" && (lastSend.IsZero() || now.Sub(lastSend) >= time.Duration(cfg.Presence.MinUpdateSecs)*time.Second) {
 			e.clear(now, "")
@@ -506,6 +524,21 @@ func (e *Engine) clear(now time.Time, identity string) {
 	e.writeState()
 }
 
+// Artwork preferences and browser discovery toggles apply to the current item,
+// not just the next track. Normalize ordering/case to avoid redundant restarts.
+func artworkConfigKey(cfg *config.Config) string {
+	blocked := make([]string, len(cfg.Sources.Blocked))
+	for i, value := range cfg.Sources.Blocked {
+		blocked[i] = strings.ToLower(strings.TrimSpace(value))
+	}
+	slices.Sort(blocked)
+	key, _ := json.Marshal(struct {
+		Prefer  string
+		Blocked []string
+	}{cfg.Art.Prefer, blocked})
+	return string(key)
+}
+
 // presentationConfigKey captures only settings used to construct a Discord
 // activity. A live config reload must refresh an unchanged track as well.
 func presentationConfigKey(cfg *config.Config) string {
@@ -514,7 +547,8 @@ func presentationConfigKey(cfg *config.Config) string {
 		Type, StatusDisplay, PausedMode string
 		Template                        config.Template
 		Buttons                         config.Buttons
-	}{cfg.Discord, cfg.Presence.Type, cfg.Presence.StatusDisplay, cfg.Presence.PausedMode, cfg.Template, cfg.Buttons})
+		Artwork                         string
+	}{cfg.Discord, cfg.Presence.Type, cfg.Presence.StatusDisplay, cfg.Presence.PausedMode, cfg.Template, cfg.Buttons, artworkConfigKey(cfg)})
 	return string(key)
 }
 
@@ -628,6 +662,7 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 	}
 	e.mu.Lock()
 	generation := e.artGeneration
+	resolverKey := artworkConfigKey(e.Cfg.Get())
 	previous, previousArt := e.browserPrior, e.browserPriorArt
 	e.classifyPending = t.Source == "browser"
 	enumerate := e.EnumerateWindows
@@ -775,7 +810,7 @@ func (e *Engine) resolveArtAsync(t player.Track, prefer, identity string) {
 			}
 		}
 		e.mu.Lock()
-		current := e.artGeneration == generation && e.cur != nil && identityOf(e.cur) == identity
+		current := e.artGeneration == generation && artworkConfigKey(e.Cfg.Get()) == resolverKey && e.cur != nil && identityOf(e.cur) == identity
 		if current {
 			if t.Source == "browser" {
 				if e.browserCache == nil || len(e.browserCache) >= 16 {
