@@ -1,0 +1,36 @@
+name: verify
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test native Windows packages
+        run: go test ./... -count=1
+      - name: Stress state transitions with race detection
+        run: go test -race ./internal/presence ./internal/spotifyapi -count=20
+      - name: Build Windows app without publishing
+        run: go build -trimpath -ldflags "-s -w -H=windowsgui" -o Yozora.exe ./cmd/yozora
+  linux-logic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Test portable logic with explicit Windows stubs
+        run: bash scripts/check-state-linux-shadow.sh
