@@ -73,6 +73,20 @@ func applyLogLevel(level string) {
 	}
 }
 
+// watchLogLevel re-applies log.level whenever the config reloads with a change. Reload covers
+// both the file watcher and panel saves, so this needs no polling of its own.
+func watchLogLevel(h *config.Holder) {
+	h.OnChange(func(c *config.Config) { applyLogLevel(c.Log.Level) })
+}
+
+// artCountry is the iTunes storefront: [art] country if set, else the Windows region.
+func artCountry(cfg *config.Config) string {
+	if c := art.CountryCode(cfg.Art.Country); c != "" {
+		return c
+	}
+	return art.CountryCode(sysutil.UserRegion())
+}
+
 func tokenOf() (string, error) {
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
@@ -181,8 +195,11 @@ func serve() int {
 	}
 	cfg := holder.Get()
 	applyLogLevel(cfg.Log.Level)
+	watchLogLevel(holder)
 
 	res := art.New(cacheDir, int64(cfg.Art.CacheMB)<<20)
+	res.SetCountry(artCountry(cfg))
+	holder.OnChange(func(c *config.Config) { res.SetCountry(artCountry(c)) })
 	base, err := res.StartServer(cfg.Art.Port)
 	if err != nil {
 		log.Printf("art server: %v (SMTC art disabled)", err)
@@ -369,32 +386,19 @@ func setup() int {
 	}
 	fmt.Println()
 	fmt.Println("2) Optional: Spotify Web API for richer data (track links, exact art).")
-	fmt.Println("   Needs your own Spotify developer app (client id + secret). Leave blank to skip.")
-	if cid := prompt("Spotify client id", ""); trim(cid) != "" {
-		fmt.Print("Spotify client secret: ")
-		line, _ := rd.ReadString('\n')
-		secret := trim(line)
-		port := "8977"
-		fmt.Println("Opening browser for Spotify authorization…")
-		state, err := spotifyapi.NewOAuthState()
-		if err != nil {
-			fmt.Println("spotify setup failed:", err)
-			return 1
-		}
-		openBrowser(spotifyapi.AuthorizeURL(cid, port, state))
-		code, err := spotifyapi.WaitForCode(port, state)
-		if err != nil {
+	fmt.Println("   Needs your own Spotify developer app (client ID only, no secret). Leave blank to skip.")
+	fmt.Printf("   Add this Redirect URI to the app first: http://127.0.0.1:%d%s\n", setupSpotifyPort, setupSpotifyPath)
+	if cid := trim(prompt("Spotify client ID", "")); cid != "" {
+		if !spotifyapi.ValidClientID(cid) {
+			fmt.Println("spotify setup failed: a client ID is 32 characters, 0-9 and a-f")
+		} else if err := connectSpotifyTerminal(cid); err != nil {
 			fmt.Println("spotify setup failed:", err)
 		} else {
-			p := spotifyapi.New(cid, 12*time.Second)
-			if err := p.Exchange(code, port); err != nil {
-				fmt.Println("spotify token exchange failed:", err)
-			} else {
-				_ = credman.Set("spotify-secret", secret)
-				cfg.Spotify.Mode = "api"
-				cfg.Spotify.ClientID = cid
-				fmt.Println("spotify: connected (refresh token stored in Credential Manager)")
-			}
+			cfg.Spotify.Mode = "api"
+			cfg.Spotify.ClientID = cid
+			// An older setup stored a client secret that nothing reads any more.
+			_ = credman.Delete("spotify-secret")
+			fmt.Println("spotify: connected (refresh token stored in Credential Manager)")
 		}
 	}
 	if err := config.Save(cfg, cfgPath); err != nil {

@@ -147,6 +147,34 @@ func Handler(d Deps) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(stateResponse{Status: d.Engine.Status(), Spotify: d.spotifyState(), Restored: d.Cfg.Restored()})
 	}))
+	// Tracks published to Discord this run, newest first. It lives in memory only.
+	mux.HandleFunc("/api/recent", auth(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method", 405)
+			return
+		}
+		list := []presence.RecentTrack{}
+		if d.Engine != nil {
+			list = append(list, d.Engine.Recent()...)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = json.NewEncoder(w).Encode(map[string]any{"recent": list})
+	}))
+	// A plain-text report the panel copies for bug reports; see buildDiagnostics for what stays out.
+	mux.HandleFunc("/api/diagnostics", auth(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method", 405)
+			return
+		}
+		var st presence.Status
+		if d.Engine != nil {
+			st = d.Engine.Status()
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = io.WriteString(w, buildDiagnostics(diagInput{Version: version.Version, OSBuild: osBuild(), Status: st, Cfg: d.Cfg.Get()}))
+	}))
 	mux.HandleFunc("/api/sources", auth(func(w http.ResponseWriter, r *http.Request) {
 		configMu.Lock()
 		defer configMu.Unlock()

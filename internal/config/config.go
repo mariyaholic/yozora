@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -77,6 +78,8 @@ type Art struct {
 	Prefer  string `toml:"prefer"`
 	CacheMB int    `toml:"cache_mb"`
 	Port    int    `toml:"port"`
+	// Country is the iTunes storefront (ISO 3166 alpha-2). Empty follows the Windows region.
+	Country string `toml:"country"`
 }
 
 type Server struct {
@@ -404,6 +407,17 @@ type Holder struct {
 	path     string
 	val      atomic.Pointer[Config]
 	restored *Restore
+
+	hookMu  sync.Mutex
+	onApply []func(*Config)
+}
+
+// OnChange registers fn to run, with the new config, each time a reload actually changes it.
+// Reload is the single place a changed file or a panel save lands, so this needs no polling.
+func (h *Holder) OnChange(fn func(*Config)) {
+	h.hookMu.Lock()
+	h.onApply = append(h.onApply, fn)
+	h.hookMu.Unlock()
 }
 
 // NewHolder loads the config. If the file exists but no longer parses, it falls
@@ -448,6 +462,12 @@ func (h *Holder) Reload() (bool, error) {
 	changed := !reflect.DeepEqual(old, c)
 	if changed {
 		h.val.Store(c)
+		h.hookMu.Lock()
+		hooks := slices.Clone(h.onApply)
+		h.hookMu.Unlock()
+		for _, fn := range hooks {
+			fn(c)
+		}
 	}
 	return changed, nil
 }

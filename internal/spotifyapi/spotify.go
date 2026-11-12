@@ -25,7 +25,6 @@ const (
 
 type Provider struct {
 	ClientID  string
-	Secret    string
 	Market    string
 	PollEvery time.Duration
 
@@ -78,9 +77,6 @@ func (p *Provider) Token() (string, error) {
 	}
 	req, _ := http.NewRequest(http.MethodPost, tokenURL, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if p.Secret != "" {
-		req.SetBasicAuth(p.ClientID, p.Secret)
-	}
 	resp, err := p.http.Do(req)
 	if err != nil {
 		return "", err
