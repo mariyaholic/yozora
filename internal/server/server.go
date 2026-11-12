@@ -22,6 +22,7 @@ import (
 	"uika-resonance/internal/presence"
 	"uika-resonance/internal/spotifyapi"
 	"uika-resonance/internal/sysutil"
+	"uika-resonance/internal/update"
 	"uika-resonance/internal/version"
 )
 
@@ -47,6 +48,15 @@ type Deps struct {
 	OpenURL           func(string) error
 	// RedirectBase is the panel's own loopback origin; Start fills it in.
 	RedirectBase string
+
+	// Update backs /api/update. Nil (or a dev build) reports no update.
+	Update Updater
+}
+
+// Updater is the update service as the panel sees it.
+type Updater interface {
+	Status() update.Status
+	StartInstall() error
 }
 
 func validateSourceOrder(order, canonical []string) error {
@@ -315,6 +325,7 @@ func Handler(d Deps) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]bool{"enabled": sysutil.AutostartEnabled()})
 	}))
+	registerUpdate(mux, d, auth)
 	registerSetup(mux, d, &configMu, auth)
 	registerPause(mux, d, auth)
 	return mux

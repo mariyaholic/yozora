@@ -124,7 +124,7 @@ func labelsOf(rows []menuRow) []string {
 }
 
 func TestBuildMenuWithoutControllerKeepsFixedRows(t *testing.T) {
-	got := labelsOf(buildMenu("en", nil))
+	got := labelsOf(buildMenu("en", nil, ""))
 	if !reflect.DeepEqual(got, []string{"Open control panel", "Quit Yozora"}) {
 		t.Fatalf("menu = %q", got)
 	}
@@ -149,7 +149,7 @@ func TestBuildMenuStates(t *testing.T) {
 			"-", "YouTube", "Twitch", "バックグラウンドの Edge タブ", "-", "Yozora を終了"}},
 	} {
 		st := c.st
-		if got := labelsOf(buildMenu(c.lang, &st)); !reflect.DeepEqual(got, c.want) {
+		if got := labelsOf(buildMenu(c.lang, &st, "")); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s:\n got %q\nwant %q", c.name, got, c.want)
 		}
 	}
@@ -158,7 +158,7 @@ func TestBuildMenuStates(t *testing.T) {
 func TestBuildMenuRowIDsAreDistinct(t *testing.T) {
 	st := State{}
 	seen := map[uintptr]bool{}
-	for _, r := range buildMenu("en", &st) {
+	for _, r := range buildMenu("en", &st, "") {
 		if r.Separator {
 			continue
 		}
@@ -266,19 +266,66 @@ func TestTrayTooltipShape(t *testing.T) {
 }
 
 func TestMenuLabelsShape(t *testing.T) {
-	index := map[uintptr]int{}
-	for i, item := range menuItems {
-		index[item.ID] = i
+	labelOf := func(lang string, id uintptr) string {
+		for i, item := range menuItems {
+			if item.ID == id {
+				return menuLabels(lang)[i]
+			}
+		}
+		t.Fatalf("no menu item %d", id)
+		return ""
 	}
-	open, quit := index[cmdOpenPanel], index[cmdQuit]
-	if got := menuLabels("en"); got[open] != "Open control panel" || got[quit] != "Quit Yozora" {
-		t.Fatalf("English labels = %q", got)
+	if got := labelOf("en", cmdOpenPanel); got != "Open control panel" {
+		t.Fatalf("English open label = %q", got)
 	}
-	if got := menuLabels("ja"); got[open] != "コントロールパネルを開く" || got[quit] != "Yozora を終了" {
-		t.Fatalf("Japanese labels = %q", got)
+	if got := labelOf("en", cmdQuit); got != "Quit Yozora" {
+		t.Fatalf("English quit label = %q", got)
 	}
-	if got := menuLabels("fr"); got[open] != "Open control panel" {
+	if got := labelOf("ja", cmdOpenPanel); got != "コントロールパネルを開く" {
+		t.Fatalf("Japanese open label = %q", got)
+	}
+	if got := labelOf("ja", cmdQuit); got != "Yozora を終了" {
+		t.Fatalf("Japanese quit label = %q", got)
+	}
+	if got := labelOf("fr", cmdOpenPanel); got != "Open control panel" {
 		t.Fatalf("unknown language labels = %q", got)
+	}
+	if menuItems[0].ID != cmdOpenPanel || menuItems[len(menuItems)-1].ID != cmdQuit {
+		t.Fatal("Open control panel must stay first and Quit last")
+	}
+}
+
+type updateActions struct {
+	fakeActions
+	version string
+}
+
+func (u *updateActions) UpdateVersion() string { return u.version }
+func (u *updateActions) InstallUpdate()        { u.fired = append(u.fired, "update") }
+
+func TestTrayMenuUpdateRow(t *testing.T) {
+	a := &updateActions{version: "0.1.9"}
+	p := New(a)
+	if got := p.updateVersion(); got != "0.1.9" {
+		t.Fatalf("updateVersion = %q", got)
+	}
+	if !p.Dispatch(wmCommand, cmdUpdate) || len(a.fired) != 1 || a.fired[0] != "update" {
+		t.Fatalf("update row dispatched %v", a.fired)
+	}
+	for lang, want := range map[string]string{"en": "Update to 0.1.9", "ja": "0.1.9 に更新"} {
+		for i, item := range menuItems {
+			if item.ID == cmdUpdate && fmt.Sprintf(menuLabels(lang)[i], "0.1.9") != want {
+				t.Errorf("%s update label = %q", lang, menuLabels(lang)[i])
+			}
+		}
+	}
+	// Nothing to offer, or an owner that cannot update: no row, and the command does nothing.
+	if v := New(&updateActions{}).updateVersion(); v != "" {
+		t.Fatalf("empty offer = %q", v)
+	}
+	plain, pa := newTestPanel()
+	if plain.updateVersion() != "" || !plain.Dispatch(wmCommand, cmdUpdate) || len(pa.fired) != 0 {
+		t.Fatalf("plain actions: version %q, fired %v", plain.updateVersion(), pa.fired)
 	}
 }
 
@@ -367,5 +414,21 @@ func TestRunStopsOnPostClose(t *testing.T) {
 	}
 	if p.HostHandle() != 0 {
 		t.Fatal("host window survived Run")
+	}
+}
+
+func TestBuildMenuUpdateRowOnlyWhenOffered(t *testing.T) {
+	st := State{Title: "Song", Artist: "Band"}
+	for _, r := range buildMenu("en", &st, "") {
+		if r.ID == cmdUpdate {
+			t.Fatal("update row shown with nothing to offer")
+		}
+	}
+	rows := buildMenu("ja", &st, "0.1.9")
+	if rows[0].ID != cmdHeader || rows[1].ID != cmdOpenPanel || rows[2].ID != cmdUpdate || rows[2].Label != "0.1.9 に更新" {
+		t.Fatalf("rows = %+v", rows[:3])
+	}
+	if got := buildMenu("en", nil, "0.1.9"); len(got) != 3 || got[1].Label != "Update to 0.1.9" {
+		t.Fatalf("no-controller rows = %+v", got)
 	}
 }
