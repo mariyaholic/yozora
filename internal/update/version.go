@@ -11,7 +11,7 @@ import (
 // Repo is the GitHub repository releases are read from.
 const Repo = "mariyaholic/yozora"
 
-// ParseVersion reads "0.1.N" or "v0.1.N". Anything else, including "dev",
+// ParseVersion reads "0.2.N" or "v0.2.N". Anything else, including "dev",
 // is not a release version.
 func ParseVersion(s string) (v [3]int, ok bool) {
 	parts := strings.Split(strings.TrimPrefix(s, "v"), ".")

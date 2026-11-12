@@ -12,7 +12,7 @@ type State struct {
 	// CheckedAt is the last successful check; AttemptAt the last try of any kind.
 	CheckedAt time.Time `json:"checked_at"`
 	AttemptAt time.Time `json:"attempt_at"`
-	// Latest is the newest release seen, as "0.1.N".
+	// Latest is the newest release seen, as "0.2.N".
 	Latest string `json:"latest"`
 }
 
