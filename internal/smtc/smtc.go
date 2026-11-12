@@ -167,13 +167,17 @@ func (m *Manager) Close() {
 
 type Watcher struct {
 	Interval time.Duration
-	Out      chan []Track
+	// IdleInterval replaces Interval after IdleAfter with no media session.
+	// An IdleInterval no longer than Interval disables the slowdown.
+	IdleInterval time.Duration
+	IdleAfter    time.Duration
+	Out          chan []Track
 
 	onErr func(error)
 }
 
 func NewWatcher(interval time.Duration) *Watcher {
-	return &Watcher{Interval: interval, Out: make(chan []Track, 1)}
+	return &Watcher{Interval: interval, IdleInterval: DefaultIdleInterval, IdleAfter: DefaultIdleAfter, Out: make(chan []Track, 1)}
 }
 
 func (w *Watcher) OnError(f func(error)) { w.onErr = f }
@@ -214,6 +218,7 @@ func (w *Watcher) Run(ctx context.Context) {
 			continue
 		}
 		tick := time.NewTicker(w.Interval)
+		idle := idleBackoff{active: w.Interval, idle: w.IdleInterval, after: w.IdleAfter}
 		run := func() {
 			defer tick.Stop()
 			for {
@@ -229,6 +234,9 @@ func (w *Watcher) Run(ctx context.Context) {
 					return
 				}
 				publishLatest(w.Out, tracks)
+				if d, changed := idle.observe(time.Now(), len(tracks) > 0); changed {
+					tick.Reset(d)
+				}
 				select {
 				case <-ctx.Done():
 					return

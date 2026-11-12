@@ -105,6 +105,7 @@ type Engine struct {
 	published         *discordipc.Activity
 	publishedTrack    *player.Track
 	acknowledged      json.RawMessage
+	tickEvery         atomic.Int64
 }
 
 func New(cfg *config.Holder, a *art.Resolver, smtcCh <-chan []smtc.Track, spotifyCh <-chan player.Track, stateDir string) *Engine {
@@ -116,8 +117,23 @@ func New(cfg *config.Holder, a *art.Resolver, smtcCh <-chan []smtc.Track, spotif
 }
 
 func (e *Engine) Run(ctx context.Context) {
-	tick := time.NewTicker(250 * time.Millisecond)
+	tick := time.NewTicker(tickActive)
 	defer tick.Stop()
+	idle := idleBackoff{active: tickActive, idle: tickIdle, after: idleAfter}
+	e.tickEvery.Store(int64(tickActive))
+	retick := func(busy bool) {
+		d, changed := idle.observe(time.Now(), busy)
+		if !changed {
+			return
+		}
+		tick.Reset(d)
+		e.tickEvery.Store(int64(d))
+		if d == tickIdle {
+			log.Printf("presence: idle, checking every %s", d)
+		} else {
+			log.Printf("presence: media found, checking every %s", d)
+		}
+	}
 
 	e.writeState()
 	for {
@@ -132,6 +148,9 @@ func (e *Engine) Run(ctx context.Context) {
 				continue
 			}
 			e.ingest(tracks)
+			if len(tracks) > 0 {
+				retick(true)
+			}
 		case tr, ok := <-e.spotifyCh:
 			if !ok {
 				e.spotifyCh = nil
@@ -144,10 +163,24 @@ func (e *Engine) Run(ctx context.Context) {
 			e.mu.Lock()
 			e.spotify = &sp
 			e.mu.Unlock()
+			// The Web API reports "nothing playing" as an untitled track on every poll.
+			retick(strings.TrimSpace(sp.Title) != "")
 		case <-tick.C:
 			e.step(time.Now())
+			retick(!e.quiet())
 		}
 	}
+}
+
+// quiet reports whether a step has nothing to do: no media session, no Spotify
+// track and nothing on the Discord profile. A card left up keeps full speed so
+// its idle clear is not delayed.
+func (e *Engine) quiet() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	shown := e.published != nil && e.ipc != nil && e.ipc.Alive()
+	spotify := e.spotify != nil && strings.TrimSpace(e.spotify.Title) != ""
+	return len(e.lastSMTCSessions) == 0 && !spotify && !shown
 }
 
 func (e *Engine) ingest(tracks []smtc.Track) {
