@@ -46,6 +46,8 @@ type Status struct {
 	TestCard     *TestCard            `json:"test_card,omitempty"`
 	Paused       bool                 `json:"paused"`
 	PausedUntil  *time.Time           `json:"paused_until,omitempty"`
+	// Hidden marks a detected track that a [sources] hidden rule keeps off Discord.
+	Hidden bool `json:"hidden,omitempty"`
 }
 
 type artworkResolver interface {
@@ -345,6 +347,19 @@ func (e *Engine) step(now time.Time) {
 	}
 	e.lastActivity = now
 
+	// A hidden track is never published, and nothing is looked up for it either. Whatever is
+	// still on the profile (the previous track, or this one before the rule existed) is
+	// withdrawn at the rate gate, like a revoked source.
+	if player.IsHidden(*cur, cfg.Sources.Hidden) {
+		e.mu.Lock()
+		shown := e.published != nil
+		e.mu.Unlock()
+		if shown && (lastSend.IsZero() || now.Sub(lastSend) >= time.Duration(cfg.Presence.MinUpdateSecs)*time.Second) {
+			e.clear(now, "")
+		}
+		return
+	}
+
 	e.mu.Lock()
 	_, classified := e.browserCache[browserIdentity(*cur)]
 	needsClassification := e.Art != nil && cur.Source == "browser" && !classified && !e.classifyPending
@@ -627,7 +642,7 @@ func discordClientID(cfg *config.Config, t *player.Track) string {
 
 func (e *Engine) send(t *player.Track, now time.Time) {
 	cfg := e.Cfg.Get()
-	if player.IsBlocked(*t, cfg.Sources.Blocked) {
+	if player.IsBlocked(*t, cfg.Sources.Blocked) || player.IsHidden(*t, cfg.Sources.Hidden) {
 		return
 	}
 	clientID := discordClientID(cfg, t)
@@ -953,8 +968,22 @@ func (e *Engine) Status() Status {
 		s.Album = e.cur.Album
 		s.Elapsed = e.cur.ElapsedSec(now)
 		s.Duration = e.cur.DurationSec
+		s.Hidden = e.Cfg != nil && player.IsHidden(*e.cur, e.Cfg.Get().Sources.Hidden)
 	}
 	return s
+}
+
+// CurrentTrack is a copy of the track the panel is showing, for rendering card text
+// against it. It reports false when nothing is detected.
+func (e *Engine) CurrentTrack() (player.Track, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.cur == nil {
+		return player.Track{}, false
+	}
+	t := *e.cur
+	t.Thumb = nil
+	return t, true
 }
 
 func (e *Engine) writeState() {

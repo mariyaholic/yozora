@@ -80,3 +80,16 @@ func TestLongFieldsTruncated(t *testing.T) {
 		t.Fatalf("details overflow: %d", len([]rune(details)))
 	}
 }
+
+func TestValidate(t *testing.T) {
+	for _, ok := range []string{"", "{{.Title}}", "⏸ {{.Title}} {{.ElapsedFmt}}/{{.DurationFmt}}", `{{bar 8 "▰" "▱"}}`, `{{default "Unknown" .Artist | upper}}`} {
+		if err := Validate(ok); err != nil {
+			t.Errorf("Validate(%q) = %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"{{.Title", "{{.Nope}}", "{{nosuchfunc .Title}}", "{{end}}", "{{if .Playing}}x"} {
+		if Validate(bad) == nil {
+			t.Errorf("Validate(%q) accepted", bad)
+		}
+	}
+}

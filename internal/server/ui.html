@@ -252,6 +252,35 @@
   .startup .source-option { background:none; border:0; padding:0; min-height:32px; }
   #autostart-status:empty, #theme-status:empty, #source-status:empty { display:none; }
 
+  /* Discord card form, the hide controls on the preview, and the hidden list. */
+  /* The legend floats full width, so whatever shows first after it must clear it; the note above may be empty. */
+  .cf legend.section-title ~ * { clear:both; }
+  .card-texts, .card-buttons { display:grid; grid-template-columns:minmax(0, 1fr); gap:10px; margin-bottom:12px; }
+  .card-texts > *, .card-buttons > *, .card-grid > * { min-width:0; }
+  .cf label.cf-label, .cf-label { display:block; margin:0 0 4px; font-size:12px; color:var(--muted); }
+  .cf-input, .cf-select { width:100%; min-height:34px; padding:5px 9px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font:12px/1.4 var(--font-label); }
+  .cf-select { font-family:var(--font-ui); }
+  .cf-input[aria-invalid="true"] { border-color:var(--bad); }
+  .rendered { margin:4px 0 0; padding-left:2px; color:var(--text); font-size:12px; overflow-wrap:anywhere; }
+  .rendered:empty { display:none; }
+  .rendered::before { content:"\2192\00a0"; color:var(--dim); }
+  .card-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap:10px; margin-bottom:12px; }
+  #card-note:empty, #card-status:empty, #hide-status:empty { display:none; }
+  #card-note { margin:0 0 10px; }
+  #card-placeholder-list { list-style:none; margin:0 0 10px; padding:0; display:grid; gap:4px; font-size:12px; color:var(--muted); }
+  #card-placeholder-list code { font:12px/1.4 var(--font-label); color:var(--text); overflow-wrap:anywhere; }
+  #card-placeholder-list li { display:flex; flex-wrap:wrap; gap:2px 10px; }
+  #hidden-list { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+  #hidden-list li { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px 4px 4px 10px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--bg); font-size:12px; }
+  #hidden-list li span { min-width:0; overflow-wrap:anywhere; }
+  #hidden-list button { flex:none; min-height:28px; padding:2px 10px; }
+  #card-hidden { margin-bottom:10px; }
+  .hide-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+  .hide-row button { min-height:30px; padding:3px 11px; }
+  #hide-menu { display:inline-flex; flex-wrap:wrap; gap:8px; }
+  .hidden-mark { color:var(--warn); font-size:12px; font-weight:600; }
+  #hide-status { flex-basis:100%; margin:0; }
+
   /* Appearance lives in a dialog off the masthead: it is set once, so it should not sit between the daily controls. */
   dialog.appearance { width:min(560px, calc(100vw - 24px)); max-height:calc(100vh - 24px); padding:16px; color:var(--text); background:var(--panel); border:1px solid var(--line-strong); border-radius:var(--radius); box-shadow:var(--panel-shadow), 0 18px 48px rgba(0,0,0,.45); }
   dialog.appearance::backdrop { background:rgba(4,5,10,.55); }
@@ -452,6 +481,8 @@
     .checks li[data-state="done"]::before { forced-color-adjust:none; background:Highlight; border-color:Highlight; color:HighlightText; }
     .checks li[data-state="busy"]::before { border-color:Highlight; }
     .checks li[data-state="problem"]::before { color:CanvasText; border-color:CanvasText; border-width:2px; }
+    .hidden-mark { color:CanvasText; border-inline-start:3px solid CanvasText; padding-inline-start:6px; }
+    .cf-input, .cf-select, #hidden-list li { border-color:ButtonText; }
     a { color:LinkText; }
   }
   /* Motion mode: "reduced" always stills the panel, "full" keeps motion even when Windows asks for less,
@@ -512,6 +543,12 @@
       </div>
     </div>
     <div id="buttons"></div>
+    <div class="hide-row" id="hide-row" hidden>
+      <span class="hidden-mark" id="hidden-mark" role="status" tabindex="-1" hidden data-i18n="hide.marked">Hidden from Discord</span>
+      <button type="button" id="hide-open" aria-expanded="false" aria-controls="hide-menu" data-i18n="hide.open">Hide this track</button>
+      <span id="hide-menu" hidden><button type="button" id="hide-song" data-i18n="hide.song">Hide this song</button><button type="button" id="hide-artist" data-i18n="hide.artist">Hide this artist</button></span>
+      <p class="status" id="hide-status" role="status" aria-live="polite"></p>
+    </div>
   </section>
   <p class="preview-note" id="preview-note" role="status"></p>
   <p class="preview-note restored" id="restored-note" role="status" hidden><span id="restored-text"></span><button type="button" class="dialog-close" id="restored-dismiss" aria-label="Dismiss" data-i18n-attr="aria-label:dismiss">×</button></p>
@@ -548,6 +585,44 @@
     </fieldset>
     <p id="source-status" class="status" role="status" aria-live="polite" data-i18n="sources.loading">Loading saved sources…</p>
     <button type="button" id="source-retry" hidden data-i18n="sources.retry">Retry loading sources</button>
+  </form>
+  <form id="card-form" class="panel cf">
+    <fieldset id="card-fields" disabled>
+      <legend class="section-title" data-i18n="card.title">Discord card</legend>
+      <p id="card-note" class="status" role="status" aria-live="polite"></p>
+      <div class="card-texts">
+        <div><label class="cf-label" for="cf-details" data-i18n="card.details">Top line</label><input class="cf-input" id="cf-details" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="cf-r-details"><p class="rendered" id="cf-r-details"></p></div>
+        <div><label class="cf-label" for="cf-state" data-i18n="card.state">Second line</label><input class="cf-input" id="cf-state" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="cf-r-state"><p class="rendered" id="cf-r-state"></p></div>
+        <div><label class="cf-label" for="cf-large_text" data-i18n="card.large">Image text</label><input class="cf-input" id="cf-large_text" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="cf-r-large_text"><p class="rendered" id="cf-r-large_text"></p></div>
+        <div><label class="cf-label" for="cf-small_text" data-i18n="card.small">Icon text</label><input class="cf-input" id="cf-small_text" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="cf-r-small_text"><p class="rendered" id="cf-r-small_text"></p></div>
+        <div><label class="cf-label" for="cf-paused_details" data-i18n="card.pausedDetails">Top line when paused</label><input class="cf-input" id="cf-paused_details" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="cf-r-paused_details"><p class="rendered" id="cf-r-paused_details"></p></div>
+      </div>
+      <details id="card-placeholders">
+        <summary data-i18n="card.placeholders">Placeholders</summary>
+        <ul id="card-placeholder-list"></ul>
+      </details>
+      <div class="card-grid">
+        <div><label class="cf-label" for="cf-paused_mode" data-i18n="card.pausedMode">When paused</label><select class="cf-select" id="cf-paused_mode"><option value="show" data-i18n="card.pausedShow">Show the card</option><option value="hide" data-i18n="card.pausedHide">Hide the card</option></select></div>
+        <div><label class="cf-label" for="cf-type" data-i18n="card.type">Activity</label><select class="cf-select" id="cf-type"><option value="listening" data-i18n="card.type.listening">Listening</option><option value="watching" data-i18n="card.type.watching">Watching</option><option value="playing" data-i18n="card.type.playing">Playing</option></select></div>
+        <div><label class="cf-label" for="cf-status_display" data-i18n="card.statusDisplay">Status text</label><select class="cf-select" id="cf-status_display"><option value="app" data-i18n="card.status.app">App name</option><option value="state" data-i18n="card.status.state">Second line</option><option value="details" data-i18n="card.status.details">Top line</option></select></div>
+      </div>
+      <div class="card-buttons">
+        <label class="source-option" for="cf-buttons_enabled"><input type="checkbox" id="cf-buttons_enabled"><span data-i18n="card.buttonsOn">Show buttons</span></label>
+        <div><label class="cf-label" for="cf-button_label" data-i18n="card.buttonLabel">Button label</label><input class="cf-input" id="cf-button_label" maxlength="32" autocomplete="off" spellcheck="false"></div>
+        <label class="source-option" for="cf-spotify_search_fallback"><input type="checkbox" id="cf-spotify_search_fallback"><span data-i18n="card.spotifySearch">Link to a Spotify search when there is no track link</span></label>
+      </div>
+      <div id="card-hidden" hidden>
+        <h2 class="source-subheading" data-i18n="hidden.title">Hidden from Discord</h2>
+        <ul id="hidden-list"></ul>
+      </div>
+      <div class="save-row">
+        <button type="submit" id="card-save" disabled data-i18n="sources.apply">Apply changes</button>
+        <button type="button" id="card-discard" hidden data-i18n="sources.discard">Discard changes</button>
+        <button type="button" id="card-reset" data-i18n="card.reset">Reset to defaults</button>
+      </div>
+    </fieldset>
+    <p id="card-status" class="status" role="status" aria-live="polite" data-i18n="card.loading">Loading the card settings…</p>
+    <button type="button" id="card-retry" hidden data-i18n="card.retry">Retry loading</button>
   </form>
   <section class="panel" id="spotify" aria-labelledby="spotify-title" hidden>
     <div class="row-head"><h2 class="section-title" id="spotify-title">Spotify Web API</h2><span class="row-state" id="spotify-state" data-i18n="spotify.off">Not connected</span></div>
@@ -663,6 +738,21 @@ const strings = {
     "spotify.connect":"Connect", "spotify.redirect":"Redirect URI", "spotify.finish":"Finish signing in to Spotify in your browser.", "spotify.disconnect":"Disconnect", "spotify.clientShort":"Client {id}…",
     "spotify.silent":"Spotify isn’t answering: {error}", "spotify.notConnected":"Spotify wasn’t connected: {error}", "spotify.signInFailed":"Could not start Spotify sign-in: {error}", "spotify.changeFailed":"Could not change Spotify: {error}",
     "spotify.invalid":"A client ID is 32 characters, 0-9 and a-f.", "spotify.copied":"Redirect URI copied.", "spotify.copyFailed":"Could not copy. Select the address instead.",
+    "card.title":"Discord card", "card.details":"Top line", "card.state":"Second line", "card.large":"Image text", "card.small":"Icon text", "card.pausedDetails":"Top line when paused",
+    "card.pausedMode":"When paused", "card.pausedShow":"Show the card", "card.pausedHide":"Hide the card",
+    "card.type":"Activity", "card.type.listening":"Listening", "card.type.watching":"Watching", "card.type.playing":"Playing",
+    "card.statusDisplay":"Status text", "card.status.app":"App name", "card.status.state":"Second line", "card.status.details":"Top line",
+    "card.buttonsOn":"Show buttons", "card.buttonLabel":"Button label", "card.spotifySearch":"Link to a Spotify search when there is no track link",
+    "card.placeholders":"Placeholders", "card.reset":"Reset to defaults", "card.retry":"Retry loading",
+    "ph.title":"Track title", "ph.artist":"Artist", "ph.album":"Album", "ph.player":"Player name", "ph.source":"Source id, such as spotify", "ph.number":"Track number",
+    "ph.time":"Time as 1:23", "ph.playing":"True while playing, for if", "ph.bar":"Progress bar, 10 characters", "ph.funcs":"Text helpers: lower, upper, strip, default",
+    "card.loading":"Loading the card settings…", "card.loadFailed":"Could not load the card settings: {error}. Retry to load them.", "card.unsaved":"Unsaved changes.",
+    "card.saving":"Saving changes…", "card.saved":"Saved. The card updates within a few seconds.", "card.saveFailed":"Save failed: {error}. Your changes were not confirmed; try again.",
+    "card.discarded":"Changes discarded. Saved settings restored.", "card.resetDone":"Defaults filled in. Apply to save them.", "card.invalid":"Cannot apply yet: {error}",
+    "card.sample":"Showing a sample track, since nothing is playing.", "card.pausedNote":"A paused track is not shown on Discord.", "card.trackHidden":"This track is hidden, so no card is shown on Discord.",
+    "hidden.title":"Hidden from Discord", "hidden.artist":"Artist: {artist}", "hidden.titleOnly":"Song: {title}", "hidden.both":"{artist} · {title}", "hidden.remove":"Remove",
+    "hidden.removeRule":"Stop hiding {rule}", "hidden.removed":"No longer hidden.", "hidden.removeFailed":"Could not remove the rule: {error}",
+    "hide.open":"Hide this track", "hide.song":"Hide this song", "hide.artist":"Hide this artist", "hide.marked":"Hidden from Discord", "hide.failed":"Could not hide it: {error}",
     "startup.label":"Startup and diagnostics", "startup.title":"Startup", "startup.autostart":"Start Yozora when I sign in to Windows", "diagnostics":"Diagnostics", "diagnostics.waiting":"Waiting for status…",
     "startup.readFailed":"Could not read startup setting: {error}", "startup.saving":"Saving startup setting…", "startup.on":"Yozora will start with Windows.", "startup.off":"Yozora will not start with Windows.", "startup.failed":"Could not change startup setting: {error}",
     "footer.before":"Made with love by ", "footer.after":"",
@@ -718,6 +808,21 @@ const strings = {
     "spotify.connect":"接続", "spotify.redirect":"リダイレクト URI", "spotify.finish":"ブラウザーで Spotify へのサインインを完了してください。", "spotify.disconnect":"接続を解除", "spotify.clientShort":"クライアント {id}…",
     "spotify.silent":"Spotify から応答がありません: {error}", "spotify.notConnected":"Spotify に接続できませんでした: {error}", "spotify.signInFailed":"Spotify のサインインを開始できませんでした: {error}", "spotify.changeFailed":"Spotify の設定を変更できませんでした: {error}",
     "spotify.invalid":"クライアント ID は 0〜9 と a〜f の 32 文字です。", "spotify.copied":"リダイレクト URI をコピーしました。", "spotify.copyFailed":"コピーできませんでした。アドレスを選択してコピーしてください。",
+    "card.title":"Discord のカード", "card.details":"1行目", "card.state":"2行目", "card.large":"画像のテキスト", "card.small":"アイコンのテキスト", "card.pausedDetails":"一時停止中の1行目",
+    "card.pausedMode":"一時停止中", "card.pausedShow":"カードを表示", "card.pausedHide":"カードを隠す",
+    "card.type":"アクティビティ", "card.type.listening":"聴いている", "card.type.watching":"視聴している", "card.type.playing":"プレイしている",
+    "card.statusDisplay":"ステータスの文言", "card.status.app":"アプリ名", "card.status.state":"2行目", "card.status.details":"1行目",
+    "card.buttonsOn":"ボタンを表示", "card.buttonLabel":"ボタンの名前", "card.spotifySearch":"曲のリンクがないときは Spotify の検索へ",
+    "card.placeholders":"差し込みの一覧", "card.reset":"初期設定に戻す", "card.retry":"再読み込み",
+    "ph.title":"曲名", "ph.artist":"アーティスト", "ph.album":"アルバム", "ph.player":"プレーヤー名", "ph.source":"ソース ID（spotify など）", "ph.number":"トラック番号",
+    "ph.time":"1:23 の形式の時間", "ph.playing":"再生中は true（if 用）", "ph.bar":"進行バー（10 文字）", "ph.funcs":"文字の関数: lower, upper, strip, default",
+    "card.loading":"カードの設定を読み込み中…", "card.loadFailed":"カードの設定を読み込めませんでした: {error}。再読み込みしてください。", "card.unsaved":"未保存の変更があります。",
+    "card.saving":"保存中…", "card.saved":"保存しました。カードは数秒で更新されます。", "card.saveFailed":"保存できませんでした: {error}。変更は確認できていません。もう一度お試しください。",
+    "card.discarded":"変更を破棄し、保存済みの設定に戻しました。", "card.resetDone":"初期設定を入力しました。保存するには適用してください。", "card.invalid":"まだ適用できません: {error}",
+    "card.sample":"再生中の曲がないため、サンプルの曲で表示しています。", "card.pausedNote":"一時停止中の曲は Discord に表示されません。", "card.trackHidden":"この曲は非表示のため、Discord にカードは表示されません。",
+    "hidden.title":"Discord に表示しない曲", "hidden.artist":"アーティスト: {artist}", "hidden.titleOnly":"曲名: {title}", "hidden.both":"{artist} · {title}", "hidden.remove":"削除",
+    "hidden.removeRule":"{rule} の非表示をやめる", "hidden.removed":"非表示をやめました。", "hidden.removeFailed":"ルールを削除できませんでした: {error}",
+    "hide.open":"この曲を非表示", "hide.song":"この曲を隠す", "hide.artist":"このアーティストを隠す", "hide.marked":"Discord には表示されません", "hide.failed":"非表示にできませんでした: {error}",
     "startup.label":"起動と診断", "startup.title":"起動", "startup.autostart":"Windows へのサインイン時に Yozora を起動", "diagnostics":"診断情報", "diagnostics.waiting":"状態を取得中…",
     "startup.readFailed":"起動設定を読み込めませんでした: {error}", "startup.saving":"起動設定を保存中…", "startup.on":"Windows の起動時に Yozora を開始します。", "startup.off":"Windows の起動時に Yozora を開始しません。", "startup.failed":"起動設定を変更できませんでした: {error}",
     "footer.before":"", "footer.after":" が心を込めて作りました",
@@ -1123,6 +1228,9 @@ function relocalize() {
   if (savedOrder.length && !drag) renderOrder();
   updateDirty();
   drawRecent();
+  renderHidden(hiddenRules);
+  updateCardDirty();
+  updateCardNote();
   refreshSoon();
 }
 // The server rendered the saved appearance into <html>, so it is the starting saved state.
@@ -1547,6 +1655,262 @@ pauseChoices.addEventListener("keydown", e => { if (e.key === "Escape") { showPa
 document.getElementById("pause-hour").addEventListener("click", () => setPause({action:"pause", minutes:60}));
 document.getElementById("pause-open-ended").addEventListener("click", () => setPause({action:"pause"}));
 document.getElementById("pause-resume").addEventListener("click", () => setPause({action:"resume"}));
+// Discord card: the TOML-only presence, button and template settings, with a preview rendered by the
+// same template engine the card is sent with. Hidden rules sit beside it; they save one at a time.
+const cardFieldIds = ["paused_mode", "type", "status_display", "buttons_enabled", "button_label", "spotify_search_fallback", "details", "state", "large_text", "small_text", "paused_details"];
+const cardTextIds = ["details", "state", "large_text", "small_text", "paused_details"];
+const cardFields = document.getElementById("card-fields");
+const cardSave = document.getElementById("card-save");
+const cardDiscard = document.getElementById("card-discard");
+const cardStatus = document.getElementById("card-status");
+const cardRetry = document.getElementById("card-retry");
+const cardNote = document.getElementById("card-note");
+const cardURL = `/api/card?t=${encodeURIComponent(token)}`;
+const cardPreviewURL = `/api/card/preview?t=${encodeURIComponent(token)}`;
+const hiddenURL = `/api/hidden?t=${encodeURIComponent(token)}`;
+let savedCard = null;
+let cardDefaults = null;
+let cardInvalid = false;
+let hiddenRules = [];
+let cardPreviewTimer = 0;
+let cardPreviewSeq = 0;
+let previewInfo = {sample: false, playing: true, hidden: false};
+const cardEl = id => document.getElementById(`cf-${id}`);
+function cardMessage(message, tone = "") {
+  setText(cardStatus, message);
+  cardStatus.dataset.tone = tone;
+}
+function currentCard() {
+  return Object.fromEntries(cardFieldIds.map(id => {
+    const el = cardEl(id);
+    return [id, el.type === "checkbox" ? el.checked : el.value];
+  }));
+}
+function showCard(card) {
+  for (const id of cardFieldIds) {
+    const el = cardEl(id);
+    if (el.type === "checkbox") el.checked = card[id] === true;
+    else el.value = card[id] ?? "";
+  }
+}
+function syncCardButtons() {
+  const dirty = JSON.stringify(currentCard()) !== savedCard;
+  cardSave.disabled = !dirty || cardInvalid;
+  cardDiscard.hidden = !dirty;
+  return dirty;
+}
+function updateCardDirty(message, onlyWhenDirty = false) {
+  if (!savedCard) return;
+  const dirty = syncCardButtons();
+  if (cardInvalid) return;
+  cardMessage((!onlyWhenDirty || dirty ? message : "") || (dirty ? t("card.unsaved") : ""), dirty ? "pending" : "");
+}
+function updateCardNote() {
+  let key = "";
+  if (previewInfo.hidden) key = "card.trackHidden";
+  else if (previewInfo.sample) key = "card.sample";
+  else if (!previewInfo.playing && cardEl("paused_mode").value !== "show") key = "card.pausedNote";
+  updateStatus(cardNote, key ? t(key) : "");
+}
+async function previewCard() {
+  if (!savedCard) return;
+  const seq = ++cardPreviewSeq;
+  try {
+    const r = await fetch(cardPreviewURL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(currentCard())});
+    if (seq !== cardPreviewSeq) return;
+    if (!r.ok) throw new Error((await r.text()).trim() || `HTTP ${r.status}`);
+    const p = await r.json();
+    if (seq !== cardPreviewSeq) return;
+    const wasInvalid = cardInvalid;
+    cardInvalid = false;
+    for (const id of cardTextIds) {
+      document.getElementById(`cf-r-${id}`).textContent = p[id] || "";
+      cardEl(id).removeAttribute("aria-invalid");
+    }
+    previewInfo = {sample: p.sample, playing: p.playing, hidden: p.hidden};
+    // Keep a "Saved" message up unless this preview is what cleared an error.
+    if (wasInvalid) updateCardDirty(); else syncCardButtons();
+    updateCardNote();
+  } catch (e) {
+    if (seq !== cardPreviewSeq) return;
+    cardInvalid = true;
+    cardSave.disabled = true;
+    cardMessage(t("card.invalid", {error:e.message}), "error");
+  }
+}
+function schedulePreview() {
+  clearTimeout(cardPreviewTimer);
+  cardPreviewTimer = setTimeout(previewCard, 200);
+}
+function renderHidden(rules) {
+  hiddenRules = rules || [];
+  const list = document.getElementById("hidden-list");
+  list.replaceChildren();
+  for (const rule of hiddenRules) {
+    const label = rule.artist && rule.title ? t("hidden.both", rule) : rule.artist ? t("hidden.artist", rule) : t("hidden.titleOnly", rule);
+    const item = document.createElement("li");
+    const text = document.createElement("span");
+    text.textContent = label;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = t("hidden.remove");
+    remove.setAttribute("aria-label", t("hidden.removeRule", {rule:label}));
+    remove.addEventListener("click", () => removeHidden(rule, item));
+    item.append(text, remove);
+    list.appendChild(item);
+  }
+  document.getElementById("card-hidden").hidden = hiddenRules.length === 0;
+}
+async function hiddenCall(body) {
+  const r = await fetch(hiddenURL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+  if (!r.ok) throw new Error((await r.text()).trim() || `HTTP ${r.status}`);
+  return (await r.json()).hidden;
+}
+async function removeHidden(rule, item) {
+  const next = item.nextElementSibling || item.previousElementSibling;
+  try {
+    renderHidden(await hiddenCall({remove:rule}));
+    cardMessage(t("hidden.removed"));
+    (next?.querySelector("button") || cardEl("details")).focus();
+    refreshSoon();
+  } catch (e) { cardMessage(t("hidden.removeFailed", {error:e.message}), "error"); }
+}
+async function loadCard() {
+  const retrying = !cardRetry.hidden;
+  cardRetry.hidden = true;
+  cardMessage(t("card.loading"));
+  try {
+    const r = await fetch(cardURL, {cache:"no-store"});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    cardDefaults = data.defaults;
+    showCard(data.card);
+    renderHidden(data.hidden);
+    savedCard = JSON.stringify(currentCard());
+    cardFields.disabled = false;
+    cardInvalid = false;
+    updateCardDirty();
+    previewCard();
+    if (retrying) cardEl("details").focus();
+  } catch (e) {
+    cardMessage(t("card.loadFailed", {error:e.message}), "error");
+    cardRetry.hidden = false;
+  }
+}
+cardFields.addEventListener("input", () => { updateCardDirty(); schedulePreview(); });
+cardFields.addEventListener("change", () => { updateCardDirty(); schedulePreview(); });
+cardRetry.addEventListener("click", loadCard);
+cardDiscard.addEventListener("click", () => {
+  if (!savedCard) return;
+  showCard(JSON.parse(savedCard));
+  cardInvalid = false;
+  updateCardDirty(t("card.discarded"));
+  previewCard();
+  cardEl("details").focus();
+});
+document.getElementById("card-reset").addEventListener("click", () => {
+  if (!cardDefaults) return;
+  showCard(cardDefaults);
+  cardInvalid = false;
+  updateCardDirty(t("card.resetDone"));
+  previewCard();
+  cardEl("details").focus();
+});
+document.getElementById("card-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (cardFields.disabled || cardSave.disabled) return;
+  const card = currentCard();
+  cardFields.disabled = true;
+  setKey(cardSave, "saving");
+  cardMessage(t("card.saving"));
+  try {
+    const r = await fetch(cardURL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(card)});
+    if (!r.ok) throw new Error((await r.text()).trim() || `HTTP ${r.status}`);
+    const data = await r.json();
+    showCard(data.card);
+    renderHidden(data.hidden);
+    savedCard = JSON.stringify(currentCard());
+    updateCardDirty(t("card.saved"));
+    previewCard();
+  } catch (e) { cardMessage(t("card.saveFailed", {error:e.message}), "error"); }
+  finally { cardFields.disabled = false; setKey(cardSave, "sources.apply"); syncCardButtons(); }
+});
+// Placeholders are built here because the page itself is a Go template and cannot hold the braces literally.
+(() => {
+  const open = "{" + "{", close = "}" + "}";
+  const rows = [
+    [".Title", "ph.title"], [".Artist", "ph.artist"], [".Album", "ph.album"], [".Player", "ph.player"], [".Source", "ph.source"], [".TrackNumber", "ph.number"],
+    [".ElapsedFmt  .DurationFmt  .RemainingFmt", "ph.time"], [".Playing", "ph.playing"], ['bar 10 "▰" "▱"', "ph.bar"], ["", "ph.funcs"],
+  ];
+  const list = document.getElementById("card-placeholder-list");
+  for (const [code, key] of rows) {
+    const item = document.createElement("li");
+    if (code) {
+      const c = document.createElement("code");
+      c.textContent = code.split(/\s{2,}/).map(part => open + part + close).join("  ");
+      item.appendChild(c);
+    }
+    const d = document.createElement("span");
+    d.dataset.i18n = key;
+    d.textContent = t(key);
+    item.appendChild(d);
+    list.appendChild(item);
+  }
+})();
+
+// Hiding the track on the preview.
+const hideRow = document.getElementById("hide-row");
+const hideOpen = document.getElementById("hide-open");
+const hideMenu = document.getElementById("hide-menu");
+const hideMark = document.getElementById("hidden-mark");
+const hideStatus = document.getElementById("hide-status");
+let hideTrack = null;
+let cardTrackKey = null;
+function closeHideMenu() {
+  hideMenu.hidden = true;
+  hideOpen.setAttribute("aria-expanded", "false");
+}
+function updateCardTrack(s) {
+  const hasTrack = Boolean(s.title);
+  hideTrack = hasTrack ? {artist:s.artist || "", title:s.title} : null;
+  hideRow.hidden = !hasTrack;
+  const hidden = hasTrack && s.hidden === true;
+  hideMark.hidden = !hidden;
+  hideOpen.hidden = hidden;
+  if (hidden || !hasTrack) closeHideMenu();
+  document.getElementById("hide-artist").hidden = !hideTrack?.artist;
+  if (!hasTrack || hidden) updateStatus(hideStatus, "");
+  // The card preview follows the track, not the clock, so it is asked again only when the track, its play state
+  // or whether it is hidden changes.
+  const key = [hasTrack ? s.title : "", s.artist || "", s.album || "", s.service || "", s.playing, hidden].join("\u0001");
+  if (key !== cardTrackKey) {
+    cardTrackKey = key;
+    schedulePreview();
+  }
+}
+hideOpen.addEventListener("click", () => {
+  const open = hideMenu.hidden;
+  hideMenu.hidden = !open;
+  hideOpen.setAttribute("aria-expanded", String(open));
+  if (open) document.getElementById("hide-song").focus();
+});
+hideRow.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !hideMenu.hidden) { closeHideMenu(); hideOpen.focus(); }
+});
+async function hideCurrent(rule) {
+  closeHideMenu();
+  try {
+    renderHidden(await hiddenCall({add:rule}));
+    updateStatus(hideStatus, "");
+    await refreshSoon();
+    if (!hideMark.hidden) hideMark.focus();
+  } catch (e) {
+    updateStatus(hideStatus, t("hide.failed", {error:e.message}));
+    hideOpen.focus();
+  }
+}
+document.getElementById("hide-song").addEventListener("click", () => hideTrack && hideCurrent({artist:hideTrack.artist, title:hideTrack.title}));
+document.getElementById("hide-artist").addEventListener("click", () => hideTrack?.artist && hideCurrent({artist:hideTrack.artist, title:""}));
 async function tick() {
   if (polling) return;
   polling = true;
@@ -1577,6 +1941,7 @@ async function tick() {
     updateImage(art, hasTrack ? s.art_url : "");
     updateImage(badge, hasTrack ? s.small_image : "");
     updateButtons(s.published_activity);
+    updateCardTrack(s);
     const p = s.duration_sec > 0 ? Math.max(0, Math.min(100, 100 * (s.elapsed_sec || 0) / s.duration_sec)) : 0;
     fill.style.width = p + "%";
     elapsed.textContent = fmt(s.elapsed_sec); duration.textContent = fmt(s.duration_sec);
@@ -1685,6 +2050,7 @@ async function refreshSoon() {
   while (polling) await new Promise(resolve => setTimeout(resolve, 20));
   await tick();
 }
+loadCard();
 tick(); setInterval(() => { tick(); updateTick(); }, 1000);
 </script>
 </body>
