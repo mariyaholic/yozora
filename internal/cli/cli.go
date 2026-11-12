@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -19,8 +20,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"uika-resonance/internal/player"
 
 	"uika-resonance/internal/art"
 	"uika-resonance/internal/config"
@@ -199,16 +198,15 @@ func serve() int {
 	w.OnError(func(err error) { log.Printf("smtc: %v", err) })
 	go w.Run(ctx)
 
-	var spotifyCh <-chan player.Track
+	// The panel can connect or disconnect the Web API later, so the poller lives behind a manager.
+	spotify := spotifyapi.NewManager()
 	if cfg.Spotify.Mode == "api" && cfg.Spotify.ClientID != "" {
-		p := spotifyapi.New(cfg.Spotify.ClientID, time.Duration(cfg.Spotify.PollSecs)*time.Second)
-		p.Market = cfg.Spotify.Market
-		spotifyCh = p.Out
-		go p.RunLoop(ctx.Done())
-		log.Printf("spotify: api mode (poll %s)", p.PollEvery)
+		spotify.Start(cfg.Spotify.ClientID, cfg.Spotify.Market, time.Duration(cfg.Spotify.PollSecs)*time.Second)
+		log.Printf("spotify: api mode (poll %ds)", cfg.Spotify.PollSecs)
 	}
+	go func() { <-ctx.Done(); spotify.Stop() }()
 
-	eng := presence.New(holder, res, w.Out, spotifyCh, dataDir)
+	eng := presence.New(holder, res, w.Out, spotify.Out(), dataDir)
 
 	panelLive := false
 	if cfg.Server.Enabled {
@@ -218,6 +216,7 @@ func serve() int {
 		} else if base, err := server.Start(server.Deps{
 			Engine: eng, Cfg: holder, CfgPath: cfgPath, Token: tok,
 			DiscordApp: cfg.Discord.AppName,
+			Spotify:    spotify, SpotifyLink: &spotifyapi.Link{}, OpenURL: openURL,
 		}, cfg.Server.Port); err == nil {
 			log.Printf("dashboard: %s (session token redacted)", base)
 			endpointPath := dashboardEndpointPath(dataDir)
@@ -412,6 +411,15 @@ func trim(s string) string {
 		s = s[:len(s)-1]
 	}
 	return s
+}
+
+// openURL hands an https URL to the system browser; the panel's WebView never opens it.
+func openURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" {
+		return errors.New("only https URLs open in the browser")
+	}
+	return exec.Command("rundll32", "url.dll,FileProtocolHandler", raw).Start()
 }
 
 func openBrowser(raw string) {

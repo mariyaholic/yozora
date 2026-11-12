@@ -82,6 +82,30 @@ When more than one detected source is playing at once, the **priority list** dec
 
 For this local Rich Presence path, desktop Discord must be running; no Discord client secret is required.
 
+## First-run checklist
+
+Until setup is done, the panel opens with a short checklist above the preview: **Discord found and connected**, **Media detected** and **Card visible on Discord**. It reads the same once-a-second state update as the preview and adds no polling of its own. A check that still needs something says what; a passing one says nothing.
+
+- **Send test card** publishes a card titled "Yozora test card" for 15 seconds, then Yozora clears it and the normal card returns at the next update. The engine's own loop sends it, so it never races a real update, and the card is cleared outright when time is up, so no other rule can leave it standing. Quitting Yozora closes the Discord connection, which removes it too.
+- If Discord accepts the card but does not echo it back, the checklist points at Discord's own **Share my activity** setting (Settings, Activity Privacy). Yozora cannot see your profile, so this is the closest it can get to confirming.
+- The checklist also offers **Start with Windows**, the same switch as the Startup section.
+- Yozora's own Discord application ID is built in, so nothing needs entering. If Discord refuses the handshake (for example a custom `discord.client_id` that does not exist), the checklist shows an application ID field; it accepts 17 to 20 digits, and an empty value goes back to Yozora's app.
+- When every check passes, the checklist saves `onboarded = true` under `[ui]` in `cadence.toml` and folds away for good. Its close button does the same. **Show setup checklist** under Diagnostics brings it back.
+
+The terminal `setup` command still exists for scripted installs.
+
+## Spotify Web API
+
+The desktop Spotify app is detected through Windows media controls with no setup. The optional **Spotify Web API** source adds exact artwork and track links. Connect it from the panel:
+
+1. Create an app at the [Spotify developer dashboard](https://developer.spotify.com/dashboard) with the Web API enabled, and add the **Redirect URI** the panel shows (`http://127.0.0.1:<panel port>/spotify/callback`). No client secret is needed.
+2. Paste the app's client ID (32 characters, 0-9 and a-f) into the panel and press **Connect**. Your normal browser opens Spotify's sign-in page.
+3. After you agree, Spotify returns to the panel's own loopback address, Yozora stores the refresh token in Windows Credential Manager and starts polling at once. No restart is needed. **Disconnect** stops polling, deletes the token and sets `spotify.mode` back to `system`.
+
+The flow is Authorization Code with PKCE (S256). The code verifier stays in memory only and expires after 10 minutes; the `state` value is random, checked in constant time and works once, so a replayed or forged callback is refused without contacting Spotify. Starting again or pressing Cancel invalidates the earlier attempt. Tokens and codes are never logged or shown. The panel picks a free port each run unless `[server] port` is set, and Spotify checks the redirect URI against the ones registered for the app, so set a fixed port if you reconnect often; an existing connection keeps working whatever the port.
+
+This flow is covered by tests against a local fake token endpoint; it has not yet been tried against Spotify itself.
+
 ## Card layout
 
 - Header: **Listening to Spotify**, **Listening to Apple Music**, or the player's name. Browser sessions show the browser (Microsoft Edge, Google Chrome, Firefox and so on) rather than a guess at the streaming service playing in it.
@@ -171,7 +195,7 @@ Settings live in `%APPDATA%\uika-resonance\cadence.toml`. Each time it loads or 
 
 Private Windows named-pipe regression tests exercise simultaneous read/write using a unique `yozora-test-*` pipe, not the live Discord client. Ordinary `go test ./...` never publishes experimental activity to a Discord profile. Tests also cover slow artwork, session gaps and out-of-order lookups, coherent track/art transitions, paused clear/resume and visibility-policy reloads under the send-rate gate, label-only Discord button readback, loopback-art filtering, source-toggle API validation and concurrency, launcher endpoint validation, service names, icon placement, platform-specific links, button ordering, display enums, config bounds, and newest-snapshot retention.
 
-The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, every theme (applied, saved, rolled back on failure, and checked for 4.5:1 text), motion (no animation at idle in any theme, cues fire once per change and never on reconnect, every drag, cancel and reorder ends with no leftover transform or running animation, busy cursors clear after failed saves, Windows reduced motion and the Reduced mode each disable everything, and Full overrides Windows), mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, the Appearance dialog, that each theme loads its own fonts, the Twitch card, Discord-offline and panel-offline notes, responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
+The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, every theme (applied, saved, rolled back on failure, and checked for 4.5:1 text), motion (no animation at idle in any theme, cues fire once per change and never on reconnect, every drag, cancel and reorder ends with no leftover transform or running animation, busy cursors clear after failed saves, Windows reduced motion and the Reduced mode each disable everything, and Full overrides Windows), mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, the Appearance dialog, that each theme loads its own fonts, the Twitch card, the first-run checklist (test card states, the unconfirmed-card hint, application ID validation, completion, reopening) and the Spotify connect states, Discord-offline and panel-offline notes, responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
 
 ```sh
 npm install --prefix /tmp/yozora-ui-tools --no-save --no-package-lock playwright@1.62.1

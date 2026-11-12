@@ -263,6 +263,35 @@
   .swatch .s-bar { grid-column:1 / 3; height:3px; background:var(--panel-2); position:relative; }
   .swatch .s-bar::before { content:""; position:absolute; inset:0 55% 0 0; background:var(--accent); }
 
+  /* First-run checklist and Spotify connect. A row's note appears only while that row still needs something. */
+  .panel.setup { margin:0 0 12px; }
+  .row-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:6px; }
+  .row-head .section-title { margin:0; }
+  .row-head .dialog-close { width:30px; min-height:30px; font-size:16px; }
+  .row-state { font:500 10px/1.4 var(--font-label); letter-spacing:var(--label-track); text-transform:uppercase; color:var(--dim); }
+  .row-state[data-tone="good"] { color:var(--good); }
+  .checks { list-style:none; margin:0; padding:0; }
+  .checks li { display:flex; gap:10px; align-items:flex-start; padding:7px 0; border-top:1px solid var(--line); }
+  .checks li:first-child { border-top:0; }
+  .checks li::before { content:""; flex:none; width:18px; height:18px; margin-top:1px; border:1.5px solid var(--line-strong); border-radius:50%; display:grid; place-items:center; font:700 11px/1 var(--font-ui); }
+  .checks li[data-state="done"]::before { content:"✓"; color:var(--bg); background:var(--good); border-color:var(--good); }
+  .checks li[data-state="busy"]::before { border-color:var(--accent); border-style:dashed; }
+  .checks li[data-state="problem"]::before { content:"!"; color:var(--bad); border-color:var(--bad); }
+  .check-text { min-width:0; font-size:13px; }
+  .check-text small { display:block; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+  .check-text small:empty { display:none; }
+  .setup-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; margin-top:8px; padding-top:10px; border-top:1px solid var(--line); }
+  .setup-actions .source-option { background:none; border:0; padding:0; min-height:32px; }
+  .field-label { display:block; margin:10px 0 4px; font-size:12px; color:var(--muted); }
+  .field { display:flex; gap:8px; }
+  .field input { flex:1; min-width:0; min-height:34px; padding:5px 9px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font:12px/1.4 var(--font-label); }
+  .field input[aria-invalid="true"] { border-color:var(--bad); }
+  .redirect { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; margin:8px 0 0; font-size:12px; color:var(--muted); }
+  .redirect code { color:var(--text); font:11px/1.5 var(--font-label); overflow-wrap:anywhere; }
+  .redirect button { min-height:28px; padding:2px 9px; }
+  .spotify-line { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; font-size:12px; color:var(--muted); }
+  #setup-status:empty, #app-id-status:empty, #spotify-status:empty { display:none; }
+  #setup-reopen { margin:4px 2px 2px; }
   .diagnostics { margin-top:4px; border-bottom:0; }
   .diagnostics summary { padding:2px; }
   .meta { color:var(--muted); font:11px/1.6 var(--font-label); white-space:pre-wrap; overflow-wrap:anywhere; padding:8px 2px 2px; }
@@ -369,6 +398,27 @@
     </div>
     <button type="button" class="appearance-open" id="appearance-open" aria-haspopup="dialog" aria-controls="appearance" aria-label="Appearance"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5C21 6.5 17 3 12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="7.5" cy="11" r="1.3" fill="currentColor"/><circle cx="10.5" cy="7.2" r="1.3" fill="currentColor"/><circle cx="15.2" cy="7.6" r="1.3" fill="currentColor"/></svg><span>Appearance</span></button>
   </header>
+  <section class="panel setup" id="setup" aria-labelledby="setup-title" hidden>
+    <div class="row-head">
+      <h2 class="section-title" id="setup-title">Get started</h2>
+      <button type="button" class="dialog-close" id="setup-hide" aria-label="Hide setup checklist">×</button>
+    </div>
+    <ol class="checks">
+      <li id="check-discord" data-state="todo"><div class="check-text">Discord found and connected<small id="check-discord-note"></small></div></li>
+      <li id="check-media" data-state="todo"><div class="check-text">Media detected<small id="check-media-note"></small></div></li>
+      <li id="check-card" data-state="todo"><div class="check-text">Card visible on Discord<small id="check-card-note"></small></div></li>
+    </ol>
+    <form id="app-id-form" hidden>
+      <label class="field-label" for="app-id">Discord application ID</label>
+      <div class="field"><input id="app-id" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="20" placeholder="Empty uses Yozora’s app"><button type="submit" id="app-id-save">Save</button></div>
+      <p id="app-id-status" class="status" role="status" aria-live="polite"></p>
+    </form>
+    <div class="setup-actions">
+      <button type="button" id="test-card">Send test card</button>
+      <label class="source-option" for="setup-autostart"><input type="checkbox" id="setup-autostart" disabled><span>Start with Windows</span></label>
+    </div>
+    <p id="setup-status" class="status" role="status" aria-live="polite"></p>
+  </section>
   <section class="preview" id="preview" aria-label="Detected media preview">
     <div class="preview-label"><h2 class="eyebrow">Detected media</h2><span id="playback-state">Loading…</span></div>
     <div class="card">
@@ -424,6 +474,17 @@
     <p id="source-status" class="status" role="status" aria-live="polite">Loading saved sources…</p>
     <button type="button" id="source-retry" hidden>Retry loading sources</button>
   </form>
+  <section class="panel" id="spotify" aria-labelledby="spotify-title" hidden>
+    <div class="row-head"><h2 class="section-title" id="spotify-title">Spotify Web API</h2><span class="row-state" id="spotify-state">Not connected</span></div>
+    <form id="spotify-form">
+      <label class="field-label" for="spotify-id">Client ID</label>
+      <div class="field"><input id="spotify-id" autocomplete="off" spellcheck="false" maxlength="32" placeholder="From your Spotify developer app"><button type="submit" id="spotify-connect">Connect</button></div>
+      <p class="redirect"><span>Redirect URI</span><code id="spotify-redirect"></code><button type="button" id="spotify-copy">Copy</button></p>
+    </form>
+    <div class="spotify-line" id="spotify-waiting" hidden><span>Finish signing in to Spotify in your browser.</span><button type="button" id="spotify-cancel">Cancel</button></div>
+    <div class="spotify-line" id="spotify-connected" hidden><span id="spotify-client"></span><button type="button" id="spotify-disconnect">Disconnect</button></div>
+    <p id="spotify-status" class="status" role="status" aria-live="polite"></p>
+  </section>
   <section class="panel startup" aria-label="Startup and diagnostics">
     <h2 class="section-title">Startup</h2>
     <label class="source-option" for="autostart"><input type="checkbox" id="autostart" disabled><span>Start Yozora when I sign in to Windows</span></label>
@@ -431,6 +492,7 @@
     <details class="diagnostics">
       <summary>Diagnostics</summary>
       <div class="meta" id="meta">Waiting for status…</div>
+      <button type="button" id="setup-reopen">Show setup checklist</button>
     </details>
   </section>
   <p class="made-by">Made with love by <a href="https://github.com/mariyaholic" target="_blank" rel="noopener noreferrer">Maria</a>.</p>
@@ -759,24 +821,32 @@ sourceReset.addEventListener("click", () => {
 sourceRetry.addEventListener("click", loadSources);
 loadSources();
 const autostartBox = document.getElementById("autostart");
+const setupAutostart = document.getElementById("setup-autostart");
+const autostartBoxes = [autostartBox, setupAutostart];
 const autostartStatus = document.getElementById("autostart-status");
 const autostartURL = `/api/autostart?t=${encodeURIComponent(t)}`;
 async function autostartCall(init) {
   const r = await fetch(autostartURL, {cache:"no-store", ...init});
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  autostartBox.checked = (await r.json()).enabled === true;
+  const enabled = (await r.json()).enabled === true;
+  for (const box of autostartBoxes) box.checked = enabled;
 }
-autostartCall().then(() => { autostartBox.disabled = false; }).catch(e => { autostartStatus.textContent = `Could not read startup setting: ${e}`; });
-autostartBox.addEventListener("change", async () => {
-  const want = autostartBox.checked;
-  autostartBox.disabled = true;
+autostartCall().then(() => { for (const box of autostartBoxes) box.disabled = false; }).catch(e => { autostartStatus.textContent = `Could not read startup setting: ${e}`; });
+// The checklist offers the same switch; both boxes show one saved setting.
+for (const box of autostartBoxes) box.addEventListener("change", async () => {
+  const want = box.checked;
+  for (const other of autostartBoxes) { other.checked = want; other.disabled = true; }
   autostartStatus.textContent = "Saving startup setting…";
   autostartStatus.dataset.busy = "true";
   try {
     await autostartCall({method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled:want})});
     autostartStatus.textContent = autostartBox.checked ? "Yozora will start with Windows." : "Yozora will not start with Windows.";
-  } catch (e) { autostartBox.checked = !want; autostartStatus.textContent = `Could not change startup setting: ${e}`; }
-  finally { delete autostartStatus.dataset.busy; autostartBox.disabled = false; }
+  } catch (e) {
+    for (const other of autostartBoxes) other.checked = !want;
+    autostartStatus.textContent = `Could not change startup setting: ${e}`;
+    if (box === setupAutostart) setupMessage(`Could not change startup setting: ${e}`, "error");
+  }
+  finally { delete autostartStatus.dataset.busy; for (const other of autostartBoxes) other.disabled = false; }
 });
 const appearanceDialog = document.getElementById("appearance");
 document.getElementById("appearance-open").addEventListener("click", () => {
@@ -866,6 +936,179 @@ function cue(name) {
   clearTimeout(cueTimers[name]);
   cueTimers[name] = setTimeout(() => document.body.classList.remove(name), 900);
 }
+// First-run checklist. It reads the 1 s state tick and adds no polling of its own.
+const setupPanel = document.getElementById("setup");
+const setupStatus = document.getElementById("setup-status");
+const setupURL = `/api/setup?t=${encodeURIComponent(t)}`;
+const testCardButton = document.getElementById("test-card");
+const appIdForm = document.getElementById("app-id-form");
+const appIdInput = document.getElementById("app-id");
+const appIdStatus = document.getElementById("app-id-status");
+const setup = {loaded:false, onboarded:true, manual:false, saving:false, cardSeen:false, clientId:"", completeTimer:0};
+function setupMessage(text, tone = "") {
+  setupStatus.dataset.tone = tone;
+  updateStatus(setupStatus, text);
+}
+async function setupCall(body) {
+  const r = await fetch(setupURL, body ? {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)} : {cache:"no-store"});
+  if (!r.ok) throw new Error((await r.text()).trim() || `HTTP ${r.status}`);
+  const data = await r.json();
+  setup.onboarded = data.onboarded === true;
+  setup.clientId = data.default_client_id ? "" : data.client_id || "";
+  return data;
+}
+function showSetup(open) {
+  if (!open && setupPanel.contains(document.activeElement)) document.activeElement.blur();
+  setupPanel.hidden = !open;
+}
+setupCall().then(() => { setup.loaded = true; showSetup(!setup.onboarded); }).catch(() => {});
+function setCheck(id, state, note) {
+  const row = document.getElementById(`check-${id}`);
+  row.dataset.state = state;
+  updateStatus(document.getElementById(`check-${id}-note`), note);
+}
+async function finishSetup(manual) {
+  if (setup.saving) return;
+  setup.saving = true;
+  try {
+    await setupCall({onboarded:true});
+    if (manual) { showSetup(false); return; }
+    document.getElementById("setup-title").textContent = "All set";
+    clearTimeout(setup.completeTimer);
+    setup.completeTimer = setTimeout(() => showSetup(false), 2500);
+  } catch (e) {
+    if (manual) showSetup(false);
+    else setupMessage(`Could not save setup: ${e.message}`, "error");
+  } finally { setup.saving = false; }
+}
+function updateSetup(s) {
+  if (setupPanel.hidden) return;
+  const card = s.test_card || null;
+  const testing = card && (card.state === "sending" || card.state === "shown");
+  if (card?.confirmed || (s.published_activity && s.discord_activity_readback && !testing)) setup.cardSeen = true;
+  const handshake = /handshake|READY|client.?id/i.test(`${s.last_error || ""} ${card?.error || ""}`);
+  setCheck("discord", s.discord_connected ? "done" : card?.state === "failed" || handshake ? "problem" : "todo",
+    s.discord_connected ? "" : handshake ? "Discord turned the application ID down." : card?.state === "failed" ? "Discord didn’t answer. Is the desktop app open?" : "Open the Discord desktop app, then send a test card.");
+  setCheck("media", s.title ? "done" : "todo", s.title ? "" : "Play something from an enabled source.");
+  let cardState = "todo", cardNote = "Send a test card to check.";
+  if (setup.cardSeen) { cardState = "done"; cardNote = ""; }
+  else if (card?.state === "sending") { cardState = "busy"; cardNote = "Sending…"; }
+  else if (card?.state === "failed") { cardState = "problem"; cardNote = "The test card didn’t reach Discord."; }
+  else if (card && s.discord_connected) { cardState = "problem"; cardNote = "Discord took the card but didn’t confirm it. If your profile doesn’t show it, turn on Share my activity in Discord under Settings › Activity Privacy."; }
+  setCheck("card", cardState, cardNote);
+  const left = card?.state === "shown" && card.until ? Math.max(0, Math.ceil((Date.parse(card.until) - Date.now()) / 1000)) : 0;
+  testCardButton.disabled = Boolean(testing);
+  testCardButton.textContent = card?.state === "sending" ? "Sending…" : card?.state === "shown" ? `Test card up (${left} s)` : "Send test card";
+  if (handshake && appIdForm.hidden) { appIdForm.hidden = false; appIdInput.value = setup.clientId; }
+  if (!setup.manual && setup.loaded && !setup.onboarded && s.discord_connected && s.title && setup.cardSeen) finishSetup(false);
+}
+testCardButton.addEventListener("click", async () => {
+  testCardButton.disabled = true;
+  setupMessage("");
+  try {
+    const r = await fetch(`/api/test-card?t=${encodeURIComponent(t)}`, {method:"POST"});
+    if (!r.ok && r.status !== 409) throw new Error((await r.text()).trim() || `HTTP ${r.status}`);
+    setup.cardSeen = false;
+    await refreshSoon();
+  } catch (e) { testCardButton.disabled = false; setupMessage(`Could not send the test card: ${e.message}`, "error"); }
+});
+document.getElementById("setup-hide").addEventListener("click", () => finishSetup(true));
+document.getElementById("setup-reopen").addEventListener("click", () => {
+  setup.manual = true;
+  clearTimeout(setup.completeTimer);
+  document.getElementById("setup-title").textContent = "Get started";
+  setupMessage("");
+  showSetup(true);
+  setupPanel.scrollIntoView({block:"nearest"});
+  testCardButton.focus({preventScroll:true});
+  refreshSoon();
+});
+appIdForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const id = appIdInput.value.trim();
+  if (id && !/^[0-9]{17,20}$/.test(id)) {
+    appIdInput.setAttribute("aria-invalid", "true");
+    appIdStatus.dataset.tone = "error";
+    updateStatus(appIdStatus, "An application ID is 17 to 20 digits.");
+    appIdInput.focus();
+    return;
+  }
+  appIdInput.removeAttribute("aria-invalid");
+  appIdStatus.dataset.tone = "pending";
+  updateStatus(appIdStatus, "Saving…");
+  try {
+    await setupCall({client_id:id});
+    appIdStatus.dataset.tone = "";
+    updateStatus(appIdStatus, "Saved. Send a test card to try it.");
+  } catch (e) { appIdStatus.dataset.tone = "error"; updateStatus(appIdStatus, `Could not save: ${e.message}`); }
+});
+// Spotify Web API connect. The daemon opens the system browser; the panel only follows the state tick.
+const spotifySection = document.getElementById("spotify");
+const spotifyForm = document.getElementById("spotify-form");
+const spotifyInput = document.getElementById("spotify-id");
+const spotifyStatus = document.getElementById("spotify-status");
+const spotifyURL = `/api/spotify?t=${encodeURIComponent(t)}`;
+let spotifyBusy = false;
+function spotifyMessage(text, tone = "") {
+  spotifyStatus.dataset.tone = tone;
+  updateStatus(spotifyStatus, text);
+}
+function updateSpotify(sp) {
+  spotifySection.hidden = !sp?.available;
+  if (!sp?.available) return;
+  const state = sp.connected ? "connected" : sp.waiting ? "waiting" : "off";
+  spotifySection.dataset.state = state;
+  const label = document.getElementById("spotify-state");
+  updateStatus(label, sp.connected ? "Connected" : sp.waiting ? "Waiting for Spotify" : "Not connected");
+  label.dataset.tone = sp.connected ? "good" : "";
+  spotifyForm.hidden = sp.connected;
+  document.getElementById("spotify-waiting").hidden = !sp.waiting;
+  document.getElementById("spotify-connected").hidden = !sp.connected;
+  for (const control of spotifyForm.querySelectorAll("input, button")) control.disabled = sp.waiting || spotifyBusy;
+  updateStatus(document.getElementById("spotify-redirect"), sp.redirect_uri || "");
+  updateStatus(document.getElementById("spotify-client"), sp.client_id ? `Client ${sp.client_id.slice(0, 6)}…` : "");
+  if (!spotifyInput.value && document.activeElement !== spotifyInput && sp.client_id) spotifyInput.value = sp.client_id;
+  if (spotifyBusy) return;
+  if (sp.error) spotifyMessage(sp.connected ? `Spotify isn’t answering: ${sp.error}` : `Spotify wasn’t connected: ${sp.error}`, "error");
+  else if (spotifyStatus.dataset.tone === "error") spotifyMessage("");
+}
+async function spotifyCall(body) {
+  spotifyBusy = true;
+  try {
+    const r = await fetch(spotifyURL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    if (!r.ok) throw new Error((await r.text()).trim() || `HTTP ${r.status}`);
+    spotifyBusy = false;
+    spotifyMessage("");
+    updateSpotify(await r.json());
+    return true;
+  } catch (e) {
+    spotifyBusy = false;
+    spotifyMessage(`${body.action === "connect" ? "Could not start Spotify sign-in" : "Could not change Spotify"}: ${e.message}`, "error");
+    for (const control of spotifyForm.querySelectorAll("input, button")) control.disabled = false;
+    return false;
+  }
+}
+spotifyForm.addEventListener("submit", async event => {
+  event.preventDefault();
+  const id = spotifyInput.value.trim().toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(id)) {
+    spotifyInput.setAttribute("aria-invalid", "true");
+    spotifyMessage("A client ID is 32 characters, 0-9 and a-f.", "error");
+    spotifyInput.focus();
+    return;
+  }
+  spotifyInput.removeAttribute("aria-invalid");
+  spotifyInput.value = id;
+  for (const control of spotifyForm.querySelectorAll("input, button")) control.disabled = true;
+  if (await spotifyCall({action:"connect", client_id:id})) document.getElementById("spotify-cancel").focus();
+});
+spotifyInput.addEventListener("input", () => { if (spotifyInput.hasAttribute("aria-invalid")) { spotifyInput.removeAttribute("aria-invalid"); spotifyMessage(""); } });
+document.getElementById("spotify-cancel").addEventListener("click", async () => { if (await spotifyCall({action:"cancel"})) spotifyInput.focus(); });
+document.getElementById("spotify-disconnect").addEventListener("click", async () => { if (await spotifyCall({action:"disconnect"})) spotifyInput.focus(); });
+document.getElementById("spotify-copy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(document.getElementById("spotify-redirect").textContent); spotifyMessage("Redirect URI copied."); }
+  catch { spotifyMessage("Could not copy. Select the address instead.", "error"); }
+});
 let lastTrack = null;
 let lastPlayState = null;
 const fmt = s => { s = Math.max(0, Math.round(s||0)); const m = Math.floor(s/60);
@@ -925,6 +1168,8 @@ async function tick() {
     const r = await fetch(`/api/state?t=${encodeURIComponent(t)}`, {cache:"no-store", signal:controller.signal});
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const s = await r.json();
+    updateSetup(s);
+    updateSpotify(s.spotify);
     const hasTrack = Boolean(s.title);
     hasPreview = true;
     preview.dataset.stale = "false";
@@ -973,6 +1218,11 @@ async function tick() {
     clearTimeout(timeout);
     polling = false;
   }
+}
+// An action refreshes at once instead of waiting for the next tick.
+async function refreshSoon() {
+  while (polling) await new Promise(resolve => setTimeout(resolve, 20));
+  await tick();
 }
 tick(); setInterval(tick, 1000);
 </script>
