@@ -391,3 +391,27 @@ func TestLoadNormalizesPanelLanguage(t *testing.T) {
 		t.Fatalf("missing language loaded as %v, %v", cfg, err)
 	}
 }
+
+func TestOnChangeRunsOnlyWhenReloadChangesConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cadence.toml")
+	h, err := NewHolder(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seen []string
+	h.OnChange(func(c *Config) { seen = append(seen, c.Log.Level) })
+	if _, err := h.Reload(); err != nil || len(seen) != 0 {
+		t.Fatalf("unchanged reload ran hooks: %v %v", seen, err)
+	}
+	c := Defaults()
+	c.Log.Level = "debug"
+	if err := Save(c, path); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := h.Reload(); err != nil || !changed {
+		t.Fatalf("reload: %v %v", changed, err)
+	}
+	if !slices.Equal(seen, []string{"debug"}) {
+		t.Fatalf("hook saw %v", seen)
+	}
+}
