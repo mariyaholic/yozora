@@ -1220,12 +1220,15 @@ const server = http.createServer(async (req, res) => {
       assert.match(await text('#restored-text'), /前回の設定に戻しました。編集したファイルは cadence\.toml\.broken-20261112-101500 として/);
       assert.equal(await text('#preview-note'), 'Discord が起動していないため、まだプロフィールに表示されていません。');
       recent = [{ title:'夜道', artist:'ミラ', service:'Spotify', art_url:'/test-art.svg', at:minutesAgo(7) }, { title:'ガラスの雨', artist:'オード', service:'Apple Music', at:minutesAgo(190) }];
-      await l.evaluate(() => { window.copied = null; });
-      await l.locator('#recent summary').click();
+      // The update checks above reload the page: the clipboard stub and the open
+      // sections are gone, so set them up again.
+      await l.evaluate(() => { window.copied = null; Object.defineProperty(navigator, 'clipboard', { configurable:true, value:{ writeText: async text => { window.copied = text; } } }); });
+      if (await l.locator('#recent').evaluate(node => node.open)) await l.locator('#recent summary').click();
       await l.locator('#recent summary').click();
       await l.waitForFunction(() => document.querySelectorAll('#recent-list li').length === 2);
       assert.equal(await text('#recent summary'), '最近の再生');
       assert.deepEqual(await l.locator('#recent-list time').allTextContents(), ['7 分前', '3 時間前']);
+      if (!await l.locator('.diagnostics').evaluate(node => node.open)) await l.locator('.diagnostics summary').click();
       assert.equal(await text('#diag-copy'), 'レポートをコピー');
       await l.locator('#diag-copy').click();
       await l.waitForFunction(() => window.copied !== null);
