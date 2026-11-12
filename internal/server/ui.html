@@ -189,6 +189,14 @@
   #restored-text { flex:1; min-width:0; padding-top:4px; overflow-wrap:anywhere; }
   #restored-dismiss { width:28px; min-height:28px; flex:none; padding:0; font-size:15px; }
   .preview-note:empty { display:none; }
+  .preview-label { flex-wrap:wrap; }
+  .preview-tools { display:flex; align-items:center; flex-wrap:wrap; justify-content:flex-end; gap:6px 10px; }
+  .pause-open { min-height:28px; padding:3px 9px; color:var(--muted); background:var(--panel); border-color:var(--line); }
+  .pause-open:hover:enabled { color:var(--text); }
+  .pause-choices { display:flex; flex-wrap:wrap; gap:7px; margin:-4px 0 12px; }
+  .pause-line { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 12px; padding:5px 6px 5px 10px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); background:var(--panel-2); font-size:12px; }
+  .pause-line span { min-width:0; overflow-wrap:anywhere; }
+  .pause-line button { min-height:28px; padding:3px 10px; flex:none; }
 
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px 14px 12px; margin-top:12px; box-shadow:var(--panel-shadow); }
   fieldset { margin:0; padding:0; border:0; min-width:0; }
@@ -409,6 +417,8 @@
     .drag-preview { forced-color-adjust:none; background:Canvas; color:CanvasText; border:2px solid Highlight; box-shadow:none; }
     .drag-preview small, #source-order .rank, #playback-state { color:Highlight; }
     .bar { border:1px solid CanvasText; }
+    .pause-line { border:2px solid CanvasText; background:Canvas; color:CanvasText; }
+    .pause-open[aria-expanded="true"] { border:2px solid Highlight; }
     .bar i { forced-color-adjust:none; background:Highlight; }
     .status[data-tone="pending"], .row-state[data-tone="good"] { color:Highlight; }
     .status[data-tone="error"], .err, .dependency-note, .preview-note.restored { color:CanvasText; font-weight:600; border-inline-start:3px solid CanvasText; padding-inline-start:6px; }
@@ -456,7 +466,9 @@
     <p id="setup-status" class="status" role="status" aria-live="polite"></p>
   </section>
   <section class="preview" id="preview" aria-label="Detected media preview" data-i18n-attr="aria-label:preview.label">
-    <div class="preview-label"><h2 class="eyebrow" data-i18n="preview.title">Detected media</h2><span id="playback-state" data-i18n="loading">Loading…</span></div>
+    <div class="pause-line" id="pause-line" hidden><span id="pause-text" role="status"></span><button type="button" id="pause-resume" data-i18n="pause.resume">Resume</button></div>
+    <div class="preview-label"><h2 class="eyebrow" data-i18n="preview.title">Detected media</h2><div class="preview-tools"><span id="playback-state" data-i18n="loading">Loading…</span><button type="button" class="pause-open" id="pause-open" aria-expanded="false" aria-controls="pause-choices" data-i18n="pause.open">Pause sharing</button></div></div>
+    <div class="pause-choices" id="pause-choices" role="group" aria-label="Pause sharing" data-i18n-attr="aria-label:pause.open" hidden><button type="button" id="pause-hour" data-i18n="pause.hour">For 1 hour</button><button type="button" id="pause-open-ended" data-i18n="pause.until">Until I resume</button></div>
     <div class="card">
       <div class="art-wrap">
         <span class="art-placeholder" aria-hidden="true">♫</span>
@@ -587,6 +599,7 @@ const strings = {
     "check.media.play":"Play something from an enabled source.", "check.card.todo":"Send a test card to check.", "check.card.sending":"Sending…", "check.card.failed":"The test card didn’t reach Discord.",
     "check.card.unconfirmed":"Discord took the card but didn’t confirm it. If your profile doesn’t show it, turn on Share my activity in Discord under Settings › Activity Privacy.",
     "setup.saveFailed":"Could not save setup: {error}",
+    "pause.open":"Pause sharing", "pause.hour":"For 1 hour", "pause.until":"Until I resume", "pause.resume":"Resume", "pause.state":"Sharing paused", "pause.until.time":"Sharing paused until {time}", "pause.failed":"Could not change the pause: {error}",
     "card.send":"Send test card", "card.up":"Test card up ({seconds} s)", "card.failed":"Could not send the test card: {error}",
     "appid.label":"Discord application ID", "appid.placeholder":"Empty uses Yozora’s app", "appid.invalid":"An application ID is 17 to 20 digits.", "appid.saved":"Saved. Send a test card to try it.", "appid.failed":"Could not save: {error}",
     "preview.label":"Detected media preview", "preview.title":"Detected media", "preview.waiting":"Waiting for Yozora", "preview.next":"Your next track goes here", "preview.loading":"Loading detected media…",
@@ -638,6 +651,7 @@ const strings = {
     "check.media.play":"有効なソースで何か再生してください。", "check.card.todo":"テストカードを送信して確認します。", "check.card.sending":"送信中…", "check.card.failed":"テストカードが Discord に届きませんでした。",
     "check.card.unconfirmed":"Discord はカードを受け取りましたが、表示を確認できませんでした。プロフィールに出ない場合は、Discord の設定の「アクティビティのプライバシー」でアクティビティの共有をオンにしてください。",
     "setup.saveFailed":"セットアップを保存できませんでした: {error}",
+    "pause.open":"共有を一時停止", "pause.hour":"1 時間", "pause.until":"再開するまで", "pause.resume":"再開", "pause.state":"共有を一時停止中", "pause.until.time":"{time} まで共有を一時停止中", "pause.failed":"一時停止を変更できませんでした: {error}",
     "card.send":"テストカードを送信", "card.up":"テストカード表示中（{seconds} 秒）", "card.failed":"テストカードを送信できませんでした: {error}",
     "appid.label":"Discord アプリケーション ID", "appid.placeholder":"空欄なら Yozora のアプリを使用", "appid.invalid":"アプリケーション ID は 17〜20 桁の数字です。", "appid.saved":"保存しました。テストカードで確認できます。", "appid.failed":"保存できませんでした: {error}",
     "preview.label":"検出したメディアのプレビュー", "preview.title":"検出したメディア", "preview.waiting":"Yozora を待機中", "preview.next":"次の曲がここに表示されます", "preview.loading":"メディアを読み込み中…",
@@ -1393,6 +1407,40 @@ function updateButtons(activity) {
     buttons.appendChild(link);
   }
 }
+// Pause lives in the engine's memory; the panel only reads it from the state poll and asks to change it.
+const pauseLine = document.getElementById("pause-line");
+const pauseText = document.getElementById("pause-text");
+const pauseOpen = document.getElementById("pause-open");
+const pauseChoices = document.getElementById("pause-choices");
+let pauseFailure = "";
+function showPauseChoices(open) {
+  pauseChoices.hidden = !open;
+  pauseOpen.setAttribute("aria-expanded", String(open));
+}
+function updatePause(s) {
+  const paused = Boolean(s.paused);
+  pauseLine.hidden = !paused;
+  pauseOpen.hidden = paused;
+  if (!paused) return;
+  showPauseChoices(false);
+  const until = s.paused_until ? new Date(s.paused_until) : null;
+  const time = until && !isNaN(until) ? until.toLocaleTimeString(lang === "ja" ? "ja-JP" : "en-US", {hour:"2-digit", minute:"2-digit", hourCycle:"h23"}) : "";
+  updateStatus(pauseText, time ? t("pause.until.time", {time}) : t("pause.state"));
+}
+async function setPause(body) {
+  try {
+    const r = await fetch(`/api/pause?t=${encodeURIComponent(token)}`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    pauseFailure = "";
+  } catch (e) { pauseFailure = t("pause.failed", {error:e.message}); setTimeout(() => { pauseFailure = ""; }, 6000); }
+  showPauseChoices(false);
+  await refreshSoon();
+}
+pauseOpen.addEventListener("click", () => showPauseChoices(pauseChoices.hidden));
+pauseChoices.addEventListener("keydown", e => { if (e.key === "Escape") { showPauseChoices(false); pauseOpen.focus(); } });
+document.getElementById("pause-hour").addEventListener("click", () => setPause({action:"pause", minutes:60}));
+document.getElementById("pause-open-ended").addEventListener("click", () => setPause({action:"pause"}));
+document.getElementById("pause-resume").addEventListener("click", () => setPause({action:"resume"}));
 async function tick() {
   if (polling) return;
   polling = true;
@@ -1429,7 +1477,8 @@ async function tick() {
     progress.setAttribute("aria-valuenow", String(Math.round(p)));
     progress.setAttribute("aria-valuetext", t("preview.of", {elapsed:fmt(s.elapsed_sec), total:fmt(s.duration_sec)}));
     // Only trouble earns a line here; a healthy panel says nothing.
-    updateStatus(previewNote, s.last_error ? t("note.problem") : s.discord_connected ? "" : t("note.discord"));
+    updateStatus(previewNote, pauseFailure || (s.last_error ? t("note.problem") : s.discord_connected ? "" : t("note.discord")));
+    updatePause(s);
     updateRestored(s.config_restored);
     setText(meta, t("meta.line", {discord:t(s.discord_connected ? "meta.connected" : "meta.notRunning"), source:s.source || "—", art:s.art_via || "—", sends:s.sends || 0}));
     if (s.last_error) {

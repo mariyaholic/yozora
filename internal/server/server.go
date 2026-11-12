@@ -15,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"uika-resonance/internal/config"
@@ -77,7 +76,6 @@ func constantTimeEqual(a, b string) bool {
 
 func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
-	var configMu sync.Mutex
 	sources := config.ToggleKeys
 	writeSources := func(w http.ResponseWriter) {
 		cfg := d.Cfg.Get()
@@ -198,33 +196,7 @@ func Handler(d Deps) http.Handler {
 					return
 				}
 			}
-			current, err := config.Load(d.CfgPath)
-			if err != nil {
-				http.Error(w, err.Error(), 500)
-				return
-			}
-			if payload.Enabled != nil {
-				blocked := make([]string, 0, len(current.Sources.Blocked)+len(payload.Enabled))
-				for _, block := range current.Sources.Blocked {
-					if _, changed := payload.Enabled[strings.ToLower(strings.TrimSpace(block))]; !changed {
-						blocked = append(blocked, block)
-					}
-				}
-				for _, source := range sources {
-					if enabled, changed := payload.Enabled[source]; changed && !*enabled {
-						blocked = append(blocked, source)
-					}
-				}
-				current.Sources.Blocked = blocked
-			}
-			if payload.Order != nil {
-				current.Sources.Order = payload.Order
-			}
-			if err := config.Save(current, d.CfgPath); err != nil {
-				http.Error(w, err.Error(), 500)
-				return
-			}
-			if _, err := d.Cfg.Reload(); err != nil {
+			if err := applySources(d.CfgPath, d.Cfg, payload.Enabled, payload.Order); err != nil {
 				http.Error(w, err.Error(), 500)
 				return
 			}
@@ -316,6 +288,7 @@ func Handler(d Deps) http.Handler {
 		_ = json.NewEncoder(w).Encode(map[string]bool{"enabled": sysutil.AutostartEnabled()})
 	}))
 	registerSetup(mux, d, &configMu, auth)
+	registerPause(mux, d, auth)
 	return mux
 }
 

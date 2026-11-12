@@ -16,6 +16,15 @@ Advanced: a portable [Yozora.exe](https://github.com/mariyaholic/yozora/releases
 
 Yozora keeps an icon in the notification area for as long as it runs, including after it starts on its own at sign-in. Closing the control panel ends the panel completely while Yozora keeps running in the tray. Use **Open control panel** from the tray (or click the icon) or launch Yozora again to reopen it; choose **Quit Yozora** to stop Yozora and close the panel if it is open.
 
+The tray menu is built each time it opens. A greyed first row names the current track ("Title – Artist", shortened if long) or says **Nothing playing**. **Pause sharing for 1 hour** and **Pause until I resume** appear while sharing is on; **Resume sharing** replaces them while it is paused. Below a separator, **YouTube**, **Twitch** and **Background Edge tabs** are checked to match your saved settings and save through the same path as the panel's video-site switches, so the panel shows the change on its next refresh.
+
+### Pause sharing
+
+Pausing clears your Discord card straight away (within the usual five-second gap between Discord updates) and publishes nothing until you resume or the timer ends. Detection keeps running, so the panel preview still follows your player. Resuming, or the timer running out, puts the current track back through the normal path. Start a pause from the tray menu or the **Pause sharing** button beside the panel's preview; while paused the preview shows "Sharing paused until 15:30" (or "Sharing paused") with a **Resume** button.
+
+A pause is held in memory only and does not survive a restart of Yozora. That is deliberate: a pause you forgot about cannot hide you from Discord for good. The panel's endpoint is `POST /api/pause` with `{"action":"pause","minutes":60}` (1 to 1440), `{"action":"pause"}` (until resumed) or `{"action":"resume"}`; `/api/state` reports `paused` and `paused_until`.
+
+
 Installing a newer `Yozora-Setup.exe` over an existing install upgrades it in place: setup quits the running Yozora first (the same way **Quit Yozora** does) and keeps your settings. If autostart is on and Yozora now runs from a different folder than when you turned it on, Yozora points the sign-in entry at its current location the next time it starts.
 
 ### Uninstalling
