@@ -16,6 +16,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 	"uika-resonance/internal/config"
 	"uika-resonance/internal/credman"
 	"uika-resonance/internal/discordipc"
+	"uika-resonance/internal/logfile"
 	"uika-resonance/internal/presence"
 	"uika-resonance/internal/server"
 	"uika-resonance/internal/smtc"
@@ -34,18 +36,41 @@ import (
 
 const logMaxBytes = 5 << 20
 
+// logOut is the rotating log file, nil if it could not be opened.
+var logOut *logfile.Writer
+
+// setupLogging opens the log before the config is read, so startup problems are
+// recorded. The file rotates whenever it passes logMaxBytes, keeping one old file.
 func setupLogging(dataDir string, level string) {
 	dir := filepath.Join(dataDir, "logs")
 	_ = os.MkdirAll(dir, 0o755)
-	path := filepath.Join(dir, "uika-resonance.log")
-	if st, err := os.Stat(path); err == nil && st.Size() > logMaxBytes {
-		_ = os.Rename(path, path+".1")
+	if w, err := logfile.Open(filepath.Join(dir, "uika-resonance.log"), logMaxBytes); err == nil {
+		logOut = w
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err == nil {
-		log.SetOutput(io.MultiWriter(f, os.Stderr))
+	applyLogLevel(level)
+}
+
+// applyLogLevel applies the log.level setting once the config is loaded.
+func applyLogLevel(level string) {
+	lv, known := logfile.ParseLevel(level)
+	flags := log.LstdFlags | log.LUTC
+	if lv.Source {
+		flags |= log.Lmicroseconds | log.Lshortfile
 	}
-	log.SetFlags(log.LstdFlags | log.LUTC)
+	log.SetFlags(flags)
+	switch {
+	case lv.File && logOut != nil:
+		log.SetOutput(io.MultiWriter(logOut, os.Stderr))
+	default:
+		log.SetOutput(os.Stderr)
+		if logOut != nil {
+			// Closed, not dropped: a later write reopens it.
+			_ = logOut.Close()
+		}
+	}
+	if !known {
+		log.Printf("log: unknown level %q, using info (choose one of %s)", level, strings.Join(logfile.Levels, ", "))
+	}
 }
 
 func tokenOf() (string, error) {
@@ -134,6 +159,7 @@ func serve() int {
 		log.Printf("config: wrote starter config to %s", cfgPath)
 	}
 	cfg := holder.Get()
+	applyLogLevel(cfg.Log.Level)
 
 	res := art.New(cacheDir, int64(cfg.Art.CacheMB)<<20)
 	base, err := res.StartServer(cfg.Art.Port)
