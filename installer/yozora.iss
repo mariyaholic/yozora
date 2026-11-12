@@ -55,7 +55,8 @@ function CredDeleteW(TargetName: String; CredType: Cardinal; Flags: Cardinal): I
   external 'CredDeleteW@advapi32.dll stdcall delayload';
 
 // `Yozora.exe stop` posts the tray's own Quit and waits for Yozora to exit,
-// so the tray icon goes away and nothing is cut off mid-write. Builds older
+// so the tray icon is removed rather than left as a ghost, and only processes
+// of this install are touched. Builds older
 // than the stop command answer "unknown command" with a non-zero code; for
 // them, and for anything still running, taskkill without /F asks windows to
 // close, and /F follows only after a short wait.
