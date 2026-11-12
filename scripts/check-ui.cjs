@@ -45,6 +45,10 @@ let recent = [];
 const recentGets = [];
 // A sample of what the daemon sends: no track text, no IDs, no user paths.
 const diagnosticsReport = 'Yozora diagnostics\nVersion: 0.1.42\nWindows: 10.0.22631\nSource: spotify\nArtwork route: deezer\nDiscord: connected\nLast error: none\nEnabled sources: applemusic, spotify, spotifyapi\nTheme: yozora\n';
+const noUpdate = { version:'0.1.42', latest:'', available:false, url:'', verification:'checksum', check_enabled:true, install:{ state:'idle' } };
+let updateState = { ...noUpdate };
+let updateInstallHTTP = 202;
+const updatePosts = [];
 const spotifyPosts = [];
 const posts = [];
 const errors = [];
@@ -124,7 +128,13 @@ const server = http.createServer(async (req, res) => {
   } else if (url.pathname === '/api/diagnostics') {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end(diagnosticsReport);
-  } else if (url.pathname === '/api/autostart') {
+  } else if (url.pathname === '/api/update/install' && req.method === 'POST') {
+    updatePosts.push(Date.now());
+    if (updateInstallHTTP !== 202) { res.writeHead(updateInstallHTTP, { 'Content-Type': 'text/plain' }); res.end('an update is already in progress\n'); return; }
+    updateState = { ...updateState, install:{ state:'downloading' } };
+    json(updateState, 202);
+  } else if (url.pathname === '/api/update') json(updateState);
+  else if (url.pathname === '/api/autostart') {
     if (req.method === 'POST') {
       let body = '';
       for await (const chunk of req) body += chunk;
@@ -1127,6 +1137,75 @@ const server = http.createServer(async (req, res) => {
       await l.screenshot({ path:path.join(output, 'diagnostics-560.png'), fullPage:true });
       check('Recent lists the last tracks with a thumbnail, title, artist and relative time, and Copy report puts the plain-text report on the clipboard');
 
+      // The update line: shown for an available release, dismissed per version, and following an install.
+      const pollUpdate = p => p.evaluate(async () => { while (updateBusy) await new Promise(resolve => setTimeout(resolve, 10)); await pollUpdate(); });
+      const releasePage = 'https://github.com/mariyaholic/yozora/releases/tag/v0.1.43';
+      await pollUpdate(l);
+      assert.equal(await l.locator('#update-note').isHidden(), true, 'no update, no line');
+      updateState = { ...noUpdate, latest:'0.1.43', available:true, url:releasePage };
+      await pollUpdate(l);
+      assert.equal(await l.locator('#update-note').isVisible(), true, 'an available update earns a line');
+      assert.equal(await text('#update-text'), 'Yozora 0.1.43 is available');
+      assert.equal(await text('#update-now'), 'Update now');
+      assert.equal(await l.locator('#update-notes').getAttribute('href'), releasePage);
+      assert.equal(await l.locator('#update-notes').getAttribute('target'), '_blank');
+      assert.equal(await l.locator('#update-note').evaluate(node => node.getBoundingClientRect().top < document.querySelector('#preview').getBoundingClientRect().top), true, 'the line sits above the preview');
+      assert.equal(updatePosts.length, 0, 'showing the line installs nothing');
+      await lShot('update-available-560');
+      await l.setViewportSize({ width:320, height:760 });
+      assert.equal(await l.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the update line fits 320px');
+      await lShot('update-available-320');
+      await l.setViewportSize({ width:560, height:760 });
+      await l.locator('#update-dismiss').click();
+      assert.equal(await l.locator('#update-note').isHidden(), true);
+      await pollUpdate(l);
+      assert.equal(await l.locator('#update-note').isHidden(), true, 'a dismissed version stays away while the panel polls');
+      await l.reload();
+      await ready(l);
+      await pollUpdate(l);
+      assert.equal(await l.locator('#update-note').isHidden(), true, 'a dismissed version stays away after a reload');
+      updateState = { ...updateState, latest:'0.1.44', url:releasePage.replace('0.1.43', '0.1.44') };
+      await pollUpdate(l);
+      assert.equal(await text('#update-text'), 'Yozora 0.1.44 is available', 'a newer release shows again');
+      check('the update line names the version, links the release, and dismisses per version');
+
+      await l.locator('#update-now').click();
+      await l.waitForFunction(() => document.getElementById('update-text').textContent.startsWith('Downloading'));
+      assert.equal(updatePosts.length, 1, 'Update now posts once');
+      assert.equal(await text('#update-text'), 'Downloading Yozora 0.1.44…');
+      assert.equal(await l.locator('#update-now').isHidden(), true, 'no second install button while one runs');
+      assert.equal(await l.locator('#update-dismiss').isHidden(), true);
+      await lShot('update-downloading-560');
+      updateState = { ...updateState, install:{ state:'verifying' } };
+      await pollUpdate(l);
+      assert.equal(await text('#update-text'), 'Checking the download…');
+      updateState = { ...updateState, install:{ state:'installing' } };
+      await pollUpdate(l);
+      assert.equal(await text('#update-text'), 'Installing Yozora 0.1.44. Yozora restarts when it is done.');
+      await l.reload();
+      await ready(l);
+      await pollUpdate(l);
+      assert.equal(await l.locator('#update-note').isVisible(), true, 'progress shows even for a dismissed version');
+      updateState = { ...updateState, install:{ state:'error', error:'checksum mismatch for Yozora-Setup.exe' } };
+      await pollUpdate(l);
+      assert.equal(await text('#update-text'), 'Could not update: checksum mismatch for Yozora-Setup.exe');
+      assert.equal(await l.locator('#update-note').getAttribute('data-state'), 'error');
+      assert.equal(await text('#update-now'), 'Try again');
+      await lShot('update-error-560');
+      await l.locator('#update-now').click();
+      await l.waitForFunction(() => document.getElementById('update-text').textContent.startsWith('Downloading'));
+      assert.equal(updatePosts.length, 2, 'Try again posts again');
+      updateInstallHTTP = 409;
+      updateState = { ...updateState, install:{ state:'idle' } };
+      await pollUpdate(l);
+      await l.locator('#update-now').click();
+      await l.waitForFunction(() => document.getElementById('update-note').dataset.state === 'error');
+      assert.equal(await text('#update-text'), 'Could not update: an update is already in progress');
+      updateInstallHTTP = 202;
+      updateState = { ...updateState, install:{ state:'idle' } };
+      await pollUpdate(l);
+      check('Update now posts once, shows downloading, checking and installing, and reports errors with Try again');
+
       // Japanese, chosen in the Appearance dialog.
       state = { ...state, discord_connected:false };
       await choose(l, 'language', 'ja', '言語（日本語）を保存しました');
@@ -1178,6 +1257,29 @@ const server = http.createServer(async (req, res) => {
         assert.deepEqual(found, [], `${selector} still has English in Japanese`);
       }
       check('Japanese: the picker saves only the language, and key regions, labels and live text are translated');
+
+      assert.equal(await text('#update-text'), 'Yozora 0.1.44 を利用できます', 'a language change redraws the line at once');
+      updateState = { ...updateState, install:{ state:'idle' } };
+      await pollUpdate(l);
+      assert.equal(await text('#update-text'), 'Yozora 0.1.44 を利用できます');
+      assert.equal(await text('#update-now'), '今すぐ更新');
+      assert.equal(await text('#update-notes'), '更新内容');
+      assert.equal(await l.locator('#update-dismiss').getAttribute('aria-label'), '閉じる');
+      for (const [phase, want] of [['downloading', 'Yozora 0.1.44 をダウンロードしています…'], ['verifying', 'ダウンロードを確認しています…'], ['installing', 'Yozora 0.1.44 をインストールしています。完了すると Yozora は自動で起動し直します。']]) {
+        updateState = { ...updateState, install:{ state:phase } };
+        await pollUpdate(l);
+        assert.equal(await text('#update-text'), want);
+      }
+      updateState = { ...updateState, install:{ state:'error', error:'x' } };
+      await pollUpdate(l);
+      assert.equal(await text('#update-text'), '更新できませんでした: x');
+      assert.equal(await text('#update-now'), 'もう一度試す');
+      assert.equal(await l.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await lShot('update-error-ja-560');
+      updateState = { ...noUpdate };
+      await pollUpdate(l);
+      assert.equal(await l.locator('#update-note').isHidden(), true);
+      check('Japanese: the update line, its buttons and every install state are translated');
 
       // The pause control and line in Japanese.
       state = { ...state, paused:true, paused_until:'2026-11-12T15:30:00' };
@@ -1326,6 +1428,12 @@ const server = http.createServer(async (req, res) => {
       });
       assert.ok(tiles.on[0] === '2px' && !transparent(tiles.on[1]) && tiles.on[1] !== tiles.off[1], `the checked theme tile stands out: ${JSON.stringify(tiles)}`);
       assert.ok(!transparent(tiles.seg) && tiles.seg !== tiles.segOff, `the chosen segment is filled: ${JSON.stringify(tiles)}`);
+      updateState = { ...noUpdate, latest:'0.1.43', available:true, url:'https://github.com/mariyaholic/yozora/releases/tag/v0.1.43', install:{ state:'error', error:'checksum mismatch' } };
+      await f.evaluate(async () => { while (updateBusy) await new Promise(resolve => setTimeout(resolve, 10)); await pollUpdate(); });
+      const note = await f.evaluate(() => { const n = document.getElementById('update-note'); const e = getComputedStyle(document.getElementById('update-text')); const b = getComputedStyle(n); return { border:[b.borderTopStyle, b.borderTopWidth], err:[e.borderInlineStartStyle, e.borderInlineStartWidth], shown:!n.hidden }; });
+      assert.deepEqual(note, { border:['solid', '1px'], err:['solid', '3px'], shown:true }, 'forced colours keep the update line and its error edge visible');
+      await f.screenshot({ path:path.join(output, 'forced-colors-update-560.png') });
+      updateState = { ...noUpdate };
       await f.keyboard.press('Tab');
       await f.keyboard.press('Shift+Tab');
       const tileRing = await f.evaluate(() => { const s = getComputedStyle(document.querySelector('.theme-option:has(input:focus-visible)')); return [s.outlineStyle, s.outlineColor]; });

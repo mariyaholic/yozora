@@ -31,6 +31,7 @@ import (
 	"uika-resonance/internal/smtc"
 	"uika-resonance/internal/spotifyapi"
 	"uika-resonance/internal/sysutil"
+	"uika-resonance/internal/update"
 	"uika-resonance/internal/version"
 )
 
@@ -225,6 +226,13 @@ func serve() int {
 
 	eng := presence.New(holder, res, w.Out, spotify.Out(), dataDir)
 
+	// One timer, asleep between checks; a dev build never starts it. Looking
+	// is automatic (and can be turned off), installing never is.
+	upd := update.New(version.Version, filepath.Join(dataDir, "update.json"), func() bool { return holder.Get().Update.Check })
+	if upd.Active() {
+		go upd.Run(ctx)
+	}
+
 	panelLive := false
 	if cfg.Server.Enabled {
 		tok, tokenErr := tokenOf()
@@ -233,7 +241,7 @@ func serve() int {
 		} else if base, err := server.Start(server.Deps{
 			Engine: eng, Cfg: holder, CfgPath: cfgPath, Token: tok,
 			DiscordApp: cfg.Discord.AppName,
-			Spotify:    spotify, SpotifyLink: &spotifyapi.Link{}, OpenURL: openURL,
+			Spotify:    spotify, SpotifyLink: &spotifyapi.Link{}, OpenURL: openURL, Update: upd,
 		}, cfg.Server.Port); err == nil {
 			log.Printf("dashboard: %s (session token redacted)", base)
 			endpointPath := dashboardEndpointPath(dataDir)
@@ -253,7 +261,7 @@ func serve() int {
 	// is written, so "Open control panel" never races the server's start.
 	// Deferred after the endpoint cleanup, so it runs first: the icon goes
 	// away before the endpoint file does.
-	closeTray := startDaemonTray(holder, stop, dataDir, panelLive, eng)
+	closeTray := startDaemonTray(holder, stop, dataDir, panelLive, eng, upd)
 	defer closeTray()
 
 	log.Printf("Yozora serving — config: %s", cfgPath)

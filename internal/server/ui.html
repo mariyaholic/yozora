@@ -197,6 +197,12 @@
   .pause-line { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 12px; padding:5px 6px 5px 10px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); background:var(--panel-2); font-size:12px; }
   .pause-line span { min-width:0; overflow-wrap:anywhere; }
   .pause-line button { min-height:28px; padding:3px 10px; flex:none; }
+  .update-note { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:0 0 12px; padding:8px 10px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); background:var(--panel-2); color:var(--text); font-size:12px; }
+  .update-note[hidden] { display:none; }
+  #update-text { flex:1 1 180px; min-width:0; overflow-wrap:anywhere; }
+  .update-note[data-state="error"] #update-text { color:var(--warn); }
+  .update-note .btn, .update-note button { min-height:30px; }
+  #update-dismiss { width:28px; padding:0; font-size:15px; }
 
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px 14px 12px; margin-top:12px; box-shadow:var(--panel-shadow); }
   fieldset { margin:0; padding:0; border:0; min-width:0; }
@@ -436,6 +442,8 @@
     .pause-open[aria-expanded="true"] { border:2px solid Highlight; }
     .bar i { forced-color-adjust:none; background:Highlight; }
     .status[data-tone="pending"], .row-state[data-tone="good"] { color:Highlight; }
+    .update-note { border-color:CanvasText; }
+    .update-note[data-state="error"] #update-text { color:CanvasText; font-weight:600; border-inline-start:3px solid CanvasText; padding-inline-start:6px; }
     .status[data-tone="error"], .err, .dependency-note, .preview-note.restored { color:CanvasText; font-weight:600; border-inline-start:3px solid CanvasText; padding-inline-start:6px; }
     .subtitle, .source-option small, .t, .made-by, #version-meta, .recent-list time { color:GrayText; }
     .recent-list li, #diag-text { border-color:CanvasText; }
@@ -461,6 +469,7 @@
     </div>
     <button type="button" class="appearance-open" id="appearance-open" aria-haspopup="dialog" aria-controls="appearance" aria-label="Appearance" data-i18n-attr="aria-label:appearance"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5C21 6.5 17 3 12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="7.5" cy="11" r="1.3" fill="currentColor"/><circle cx="10.5" cy="7.2" r="1.3" fill="currentColor"/><circle cx="15.2" cy="7.6" r="1.3" fill="currentColor"/></svg><span data-i18n="appearance">Appearance</span></button>
   </header>
+  <p class="update-note" id="update-note" role="status" hidden><span id="update-text"></span><button type="button" id="update-now" data-i18n="update.now">Update now</button><a class="btn" id="update-notes" href="#" target="_blank" rel="noopener noreferrer" data-i18n="update.notes">What’s new</a><button type="button" id="update-dismiss" aria-label="Dismiss" data-i18n-attr="aria-label:dismiss">×</button></p>
   <section class="panel setup" id="setup" aria-labelledby="setup-title" hidden>
     <div class="row-head">
       <h2 class="section-title" id="setup-title" data-i18n="setup.title">Get started</h2>
@@ -664,6 +673,7 @@ const strings = {
     "motion.system.hint":"Uses the Windows Show animations setting", "motion.reduced.hint":"No animations or transitions", "motion.full.hint":"Animate even when Windows asks for less",
     "language.title":"Language", "language.system":"Follow Windows", "language.system.hint":"Uses the Windows display language",
     "appearance.describe":"{theme} with {motion} motion", "appearance.theme":"{name} theme", "appearance.motion":"{name} motion", "appearance.language":"Language ({name})",
+    "update.available":"Yozora {version} is available", "update.now":"Update now", "update.notes":"What’s new", "update.downloading":"Downloading Yozora {version}…", "update.verifying":"Checking the download…", "update.installing":"Installing Yozora {version}. Yozora restarts when it is done.", "update.failed":"Could not update: {error}", "update.retry":"Try again",
     "field.theme":"theme", "field.motion":"motion", "field.language":"language",
     "appearance.readFailed":"Could not confirm the saved appearance: {error}. Showing {appearance}.", "appearance.saving":"Saving {label}…", "appearance.saved":"{label} saved.",
     "appearance.saveFailed":"Could not save the {field}: {error}. Kept {appearance}.",
@@ -718,6 +728,7 @@ const strings = {
     "motion.system.hint":"Windows の「アニメーションを表示する」設定に従います", "motion.reduced.hint":"アニメーションと切り替え効果を止めます", "motion.full.hint":"Windows で減らす設定にしていてもアニメーションします",
     "language.title":"言語", "language.system":"Windows に従う", "language.system.hint":"Windows の表示言語に従います",
     "appearance.describe":"{theme}・アニメーション「{motion}」", "appearance.theme":"テーマ「{name}」", "appearance.motion":"アニメーション「{name}」", "appearance.language":"言語（{name}）",
+    "update.available":"Yozora {version} を利用できます", "update.now":"今すぐ更新", "update.notes":"更新内容", "update.downloading":"Yozora {version} をダウンロードしています…", "update.verifying":"ダウンロードを確認しています…", "update.installing":"Yozora {version} をインストールしています。完了すると Yozora は自動で起動し直します。", "update.failed":"更新できませんでした: {error}", "update.retry":"もう一度試す",
     "field.theme":"テーマ", "field.motion":"アニメーション", "field.language":"言語",
     "appearance.readFailed":"保存済みの外観を確認できませんでした: {error}。{appearance}で表示しています。", "appearance.saving":"{label}を保存中…", "appearance.saved":"{label}を保存しました。",
     "appearance.saveFailed":"{field}を保存できませんでした: {error}。{appearance}のままです。",
@@ -749,6 +760,7 @@ function applyLanguage() {
   const shown = version === "dev" ? t("version.dev") : version;
   document.getElementById("version-footer").textContent = version === "dev" ? `· ${shown}` : `· v${shown}`;
   document.getElementById("version-meta").textContent = t("version.label", {version:shown});
+  document.dispatchEvent(new Event("yozora-language"));
 }
 applyLanguage();
 const token = new URLSearchParams(location.search).get("t");
@@ -1396,6 +1408,71 @@ document.getElementById("restored-dismiss").addEventListener("click", () => {
   try { localStorage.setItem("yozora.restored-dismissed", restoredAt); } catch {}
   restoredNote.hidden = true;
 });
+// An update the user has not dismissed gets one line at the top. Only Update now installs;
+// the line is dismissed per version, and progress and errors replace its buttons.
+const updateNote = document.getElementById("update-note");
+const updateText = document.getElementById("update-text");
+const updateNow = document.getElementById("update-now");
+const updateNotes = document.getElementById("update-notes");
+let updateTicks = 60;
+let updateBusy = false;
+let updateInfo = null;
+let dismissedUpdate = "";
+try { dismissedUpdate = localStorage.getItem("yozora.update-dismissed") || ""; } catch {}
+function renderUpdate() {
+  const u = updateInfo;
+  const phase = u?.install?.state || "idle";
+  const working = phase === "downloading" || phase === "verifying" || phase === "installing";
+  const failed = phase === "error";
+  const show = Boolean(u?.available) && (working || failed || u.latest !== dismissedUpdate);
+  updateNote.hidden = !show;
+  if (!show) return;
+  updateNote.dataset.state = failed ? "error" : working ? "working" : "available";
+  const keys = {downloading:"update.downloading", verifying:"update.verifying", installing:"update.installing"};
+  setText(updateText, failed ? t("update.failed", {error:u.install.error || ""}) : working ? t(keys[phase], {version:u.latest}) : t("update.available", {version:u.latest}));
+  updateNow.hidden = working;
+  setKey(updateNow, failed ? "update.retry" : "update.now");
+  updateNow.disabled = false;
+  const href = /^https:\/\/github\.com\/mariyaholic\/yozora\//.test(u.url || "") ? u.url : "";
+  updateNotes.hidden = !href || working;
+  if (href) updateNotes.href = href;
+  document.getElementById("update-dismiss").hidden = working;
+}
+async function pollUpdate() {
+  if (updateBusy) return;
+  updateBusy = true;
+  try {
+    const r = await fetch(`/api/update?t=${encodeURIComponent(token)}`, {cache:"no-store"});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    updateInfo = await r.json();
+    renderUpdate();
+  } catch {} finally { updateBusy = false; }
+}
+function updateTick() {
+  // Once a minute is plenty for a daily check; an install in progress is followed every second.
+  const phase = updateInfo?.install?.state;
+  if (++updateTicks >= 60 || phase === "downloading" || phase === "verifying" || phase === "installing") {
+    updateTicks = 0;
+    pollUpdate();
+  }
+}
+document.addEventListener("yozora-language", renderUpdate);
+updateNow.addEventListener("click", async () => {
+  updateNow.disabled = true;
+  try {
+    const r = await fetch(`/api/update/install?t=${encodeURIComponent(token)}`, {method:"POST"});
+    if (!r.ok) throw new Error((await r.text()).trim() || `HTTP ${r.status}`);
+    updateInfo = await r.json();
+  } catch (e) {
+    updateInfo = {...updateInfo, install:{state:"error", error:String(e.message || e)}};
+  }
+  renderUpdate();
+});
+document.getElementById("update-dismiss").addEventListener("click", () => {
+  dismissedUpdate = updateInfo?.latest || "";
+  try { localStorage.setItem("yozora.update-dismissed", dismissedUpdate); } catch {}
+  renderUpdate();
+});
 function updateStatus(element, text) {
   // Dynamic text owns the element from here on; a language switch must not reset it to its placeholder.
   delete element.dataset.i18n;
@@ -1608,7 +1685,7 @@ async function refreshSoon() {
   while (polling) await new Promise(resolve => setTimeout(resolve, 20));
   await tick();
 }
-tick(); setInterval(tick, 1000);
+tick(); setInterval(() => { tick(); updateTick(); }, 1000);
 </script>
 </body>
 </html>

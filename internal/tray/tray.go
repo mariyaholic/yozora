@@ -95,6 +95,7 @@ const (
 	cmdPauseOpen  = 1004
 	cmdResume     = 1005
 	cmdHeader     = 1010
+	cmdUpdate     = 1011
 	cmdSourceBase = 1100 // + index into sourceToggles
 )
 
@@ -145,6 +146,13 @@ var sourceToggles = []struct {
 	{"youtube_tabs", map[string]string{"en": "Background Edge tabs", "ja": "バックグラウンドの Edge タブ"}},
 }
 
+// Updater is optionally implemented by Actions to offer an update. UpdateVersion
+// is "" when there is nothing to offer, and the row is then left out of the menu.
+type Updater interface {
+	UpdateVersion() string
+	InstallUpdate()
+}
+
 // menuItem is one fixed row of the tray's context menu. New entries only need a
 // row here: the popup is built from this table and WM_COMMAND is routed
 // through it. Labels holds each language's text; English is the fallback.
@@ -156,6 +164,11 @@ type menuItem struct {
 
 var menuItems = []menuItem{
 	{cmdOpenPanel, map[string]string{"en": "Open control panel", "ja": "コントロールパネルを開く"}, func(p *Panel) { p.actions.ShowPanel() }},
+	{cmdUpdate, map[string]string{"en": "Update to %s", "ja": "%s に更新"}, func(p *Panel) {
+		if u, ok := p.actions.(Updater); ok {
+			u.InstallUpdate()
+		}
+	}},
 	{cmdPauseHour, map[string]string{"en": "Pause sharing for 1 hour", "ja": "共有を 1 時間一時停止"}, func(p *Panel) {
 		if c := p.controller(); c != nil {
 			c.PauseFor(time.Hour)
@@ -226,8 +239,9 @@ type menuRow struct {
 
 // buildMenu lays the popup out for a language and state: the track header,
 // the table's rows that apply, and, ahead of Quit, the video-site switches.
-// A nil state (no Controller) gives only the table's unconditional rows.
-func buildMenu(lang string, st *State) []menuRow {
+// A nil state (no Controller) gives only the table's unconditional rows. The
+// update row appears only when update names a version.
+func buildMenu(lang string, st *State, update string) []menuRow {
 	var rows []menuRow
 	if st != nil {
 		rows = append(rows, menuRow{ID: cmdHeader, Label: headerLabel(lang, *st), Disabled: true})
@@ -236,6 +250,13 @@ func buildMenu(lang string, st *State) []menuRow {
 		if show, conditional := itemShown[item.ID]; conditional && (st == nil || !show(*st)) {
 			continue
 		}
+		label := pick(item.Labels, lang)
+		if item.ID == cmdUpdate {
+			if update == "" {
+				continue
+			}
+			label = fmt.Sprintf(label, update)
+		}
 		if item.ID == cmdQuit && st != nil {
 			rows = append(rows, menuRow{Separator: true})
 			for i, toggle := range sourceToggles {
@@ -243,7 +264,7 @@ func buildMenu(lang string, st *State) []menuRow {
 			}
 			rows = append(rows, menuRow{Separator: true})
 		}
-		rows = append(rows, menuRow{ID: item.ID, Label: pick(item.Labels, lang)})
+		rows = append(rows, menuRow{ID: item.ID, Label: label})
 	}
 	return rows
 }
@@ -279,6 +300,14 @@ func menuLabels(lang string) []string {
 func (p *Panel) controller() Controller {
 	c, _ := p.actions.(Controller)
 	return c
+}
+
+// updateVersion is the version the update row offers, "" for no row.
+func (p *Panel) updateVersion() string {
+	if u, ok := p.actions.(Updater); ok {
+		return u.UpdateVersion()
+	}
+	return ""
 }
 
 func (p *Panel) language() string {
@@ -373,7 +402,7 @@ func (p *Panel) popupMenu() {
 		st := c.MenuState()
 		state = &st
 	}
-	for _, row := range buildMenu(p.language(), state) {
+	for _, row := range buildMenu(p.language(), state, p.updateVersion()) {
 		appendMenuRow(menu, row)
 	}
 
