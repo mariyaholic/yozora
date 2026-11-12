@@ -38,6 +38,11 @@ Name: "{autoprograms}\Yozora"; Filename: "{app}\Yozora.exe"
 Name: "{autodesktop}\Yozora"; Filename: "{app}\Yozora.exe"; Tasks: desktopicon
 
 [Run]
+; An upgrade stops Yozora (see PrepareToInstall), so start it again when it was
+; running, silent or not. Not after a fresh install, nor when it was not running.
+; The single-instance mutex makes a second start (a restart by Windows, or "Open
+; Yozora" below) exit quietly.
+Filename: "{app}\Yozora.exe"; Parameters: "serve"; Flags: nowait runhidden; Check: RestartAfterUpgrade
 Filename: "{app}\Yozora.exe"; Description: "Open Yozora"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
@@ -50,6 +55,15 @@ const
 
 var
   RemoveUserData: Boolean;
+  // Yozora was running when Setup began; RestartAfterUpgrade acts on it.
+  WasRunning: Boolean;
+  RunningAtStart: Boolean;
+
+// The tray's hidden host window exists exactly while a Yozora daemon runs
+// (internal/tray trayClassName). The window name is passed as a number so it is
+// NULL, which means "any title".
+function FindWindowW(ClassName: String; WindowName: Cardinal): Longint;
+  external 'FindWindowW@user32.dll stdcall';
 
 function CredDeleteW(TargetName: String; CredType: Cardinal; Flags: Cardinal): Integer;
   external 'CredDeleteW@advapi32.dll stdcall delayload';
@@ -71,12 +85,35 @@ begin
   Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM Yozora.exe', '', SW_HIDE, ewWaitUntilTerminated, Code);
 end;
 
-// Upgrades replace Yozora.exe in place, so stop the running copy first.
+function YozoraRunning: Boolean;
+begin
+  Result := FindWindowW('YozoraTrayHost', 0) <> 0;
+end;
+
+// Looked at before anything else can close Yozora (Windows Restart Manager
+// closes applications that hold files, which happens around PrepareToInstall).
+function InitializeSetup(): Boolean;
+begin
+  RunningAtStart := YozoraRunning;
+  Result := True;
+end;
+
+// Upgrades replace Yozora.exe in place, so stop the running copy first. Whether it
+// was running is recorded first; a fresh install has no Yozora.exe yet and never
+// restarts anything. Setup started by Yozora's own Update now finds it running here.
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   if FileExists(ExpandConstant('{app}\Yozora.exe')) then
+  begin
+    WasRunning := RunningAtStart or YozoraRunning;
     StopYozora(ExpandConstant('{app}\Yozora.exe'));
+  end;
   Result := '';
+end;
+
+function RestartAfterUpgrade: Boolean;
+begin
+  Result := WasRunning;
 end;
 
 procedure DeleteDirWithRetry(Dir: String);

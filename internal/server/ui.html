@@ -189,6 +189,20 @@
   #restored-text { flex:1; min-width:0; padding-top:4px; overflow-wrap:anywhere; }
   #restored-dismiss { width:28px; min-height:28px; flex:none; padding:0; font-size:15px; }
   .preview-note:empty { display:none; }
+  .preview-label { flex-wrap:wrap; }
+  .preview-tools { display:flex; align-items:center; flex-wrap:wrap; justify-content:flex-end; gap:6px 10px; }
+  .pause-open { min-height:28px; padding:3px 9px; color:var(--muted); background:var(--panel); border-color:var(--line); }
+  .pause-open:hover:enabled { color:var(--text); }
+  .pause-choices { display:flex; flex-wrap:wrap; gap:7px; margin:-4px 0 12px; }
+  .pause-line { display:flex; align-items:center; justify-content:space-between; gap:10px; margin:0 0 12px; padding:5px 6px 5px 10px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); background:var(--panel-2); font-size:12px; }
+  .pause-line span { min-width:0; overflow-wrap:anywhere; }
+  .pause-line button { min-height:28px; padding:3px 10px; flex:none; }
+  .update-note { display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:0 0 12px; padding:8px 10px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); background:var(--panel-2); color:var(--text); font-size:12px; }
+  .update-note[hidden] { display:none; }
+  #update-text { flex:1 1 180px; min-width:0; overflow-wrap:anywhere; }
+  .update-note[data-state="error"] #update-text { color:var(--warn); }
+  .update-note .btn, .update-note button { min-height:30px; }
+  #update-dismiss { width:28px; padding:0; font-size:15px; }
 
   .panel { background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px 14px 12px; margin-top:12px; box-shadow:var(--panel-shadow); }
   fieldset { margin:0; padding:0; border:0; min-width:0; }
@@ -237,6 +251,35 @@
   #source-retry { margin-top:8px; }
   .startup .source-option { background:none; border:0; padding:0; min-height:32px; }
   #autostart-status:empty, #theme-status:empty, #source-status:empty { display:none; }
+
+  /* Discord card form, the hide controls on the preview, and the hidden list. */
+  /* The legend floats full width, so whatever shows first after it must clear it; the note above may be empty. */
+  .cf legend.section-title ~ * { clear:both; }
+  .card-texts, .card-buttons { display:grid; grid-template-columns:minmax(0, 1fr); gap:10px; margin-bottom:12px; }
+  .card-texts > *, .card-buttons > *, .card-grid > * { min-width:0; }
+  .cf label.cf-label, .cf-label { display:block; margin:0 0 4px; font-size:12px; color:var(--muted); }
+  .cf-input, .cf-select { width:100%; min-height:34px; padding:5px 9px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font:12px/1.4 var(--font-label); }
+  .cf-select { font-family:var(--font-ui); }
+  .cf-input[aria-invalid="true"] { border-color:var(--bad); }
+  .rendered { margin:4px 0 0; padding-left:2px; color:var(--text); font-size:12px; overflow-wrap:anywhere; }
+  .rendered:empty { display:none; }
+  .rendered::before { content:"\2192\00a0"; color:var(--dim); }
+  .card-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap:10px; margin-bottom:12px; }
+  #card-note:empty, #card-status:empty, #hide-status:empty { display:none; }
+  #card-note { margin:0 0 10px; }
+  #card-placeholder-list { list-style:none; margin:0 0 10px; padding:0; display:grid; gap:4px; font-size:12px; color:var(--muted); }
+  #card-placeholder-list code { font:12px/1.4 var(--font-label); color:var(--text); overflow-wrap:anywhere; }
+  #card-placeholder-list li { display:flex; flex-wrap:wrap; gap:2px 10px; }
+  #hidden-list { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+  #hidden-list li { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px 4px 4px 10px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--bg); font-size:12px; }
+  #hidden-list li span { min-width:0; overflow-wrap:anywhere; }
+  #hidden-list button { flex:none; min-height:28px; padding:2px 10px; }
+  #card-hidden { margin-bottom:10px; }
+  .hide-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+  .hide-row button { min-height:30px; padding:3px 11px; }
+  #hide-menu { display:inline-flex; flex-wrap:wrap; gap:8px; }
+  .hidden-mark { color:var(--warn); font-size:12px; font-weight:600; }
+  #hide-status { flex-basis:100%; margin:0; }
 
   /* Appearance lives in a dialog off the masthead: it is set once, so it should not sit between the daily controls. */
   dialog.appearance { width:min(560px, calc(100vw - 24px)); max-height:calc(100vh - 24px); padding:16px; color:var(--text); background:var(--panel); border:1px solid var(--line-strong); border-radius:var(--radius); box-shadow:var(--panel-shadow), 0 18px 48px rgba(0,0,0,.45); }
@@ -303,6 +346,21 @@
   #setup-reopen { margin:4px 2px 2px; }
   .diagnostics { margin-top:4px; border-bottom:0; }
   .diagnostics summary { padding:2px; }
+  .diag-tools { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; margin:6px 2px 2px; }
+  #diag-status:empty { display:none; }
+  #diag-text { display:block; width:100%; min-height:7.5em; margin:6px 0 0; padding:6px 8px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font:11px/1.5 var(--font-label); resize:vertical; }
+  .recent summary { padding:2px; }
+  .recent { border-bottom:0; }
+  .recent-list { list-style:none; margin:0; padding:0 2px 6px; }
+  .recent-list li { display:flex; align-items:center; gap:10px; padding:5px 0; border-top:1px solid var(--line); }
+  .recent-list li:first-child { border-top:0; }
+  .recent-list img, .recent-list .no-art { flex:none; width:36px; height:36px; border-radius:var(--radius-sm); background:var(--panel-2); object-fit:cover; }
+  .recent-text { min-width:0; flex:1; }
+  .recent-text b, .recent-text span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .recent-text b { font-size:13px; font-weight:600; }
+  .recent-text span { font-size:12px; color:var(--muted); }
+  .recent-list time { flex:none; font-size:11px; color:var(--dim); font-variant-numeric:tabular-nums; }
+  #recent-status:empty { display:none; }
   .meta { color:var(--muted); font:12px/1.6 var(--font-label); white-space:pre-wrap; overflow-wrap:anywhere; padding:8px 2px 2px; }
   .made-by a { text-decoration:underline; text-underline-offset:2px; }
   .made-by { margin:14px 0 0; text-align:center; font-size:12px; color:var(--dim); }
@@ -409,14 +467,22 @@
     .drag-preview { forced-color-adjust:none; background:Canvas; color:CanvasText; border:2px solid Highlight; box-shadow:none; }
     .drag-preview small, #source-order .rank, #playback-state { color:Highlight; }
     .bar { border:1px solid CanvasText; }
+    .pause-line { border:2px solid CanvasText; background:Canvas; color:CanvasText; }
+    .pause-open[aria-expanded="true"] { border:2px solid Highlight; }
     .bar i { forced-color-adjust:none; background:Highlight; }
     .status[data-tone="pending"], .row-state[data-tone="good"] { color:Highlight; }
+    .update-note { border-color:CanvasText; }
+    .update-note[data-state="error"] #update-text { color:CanvasText; font-weight:600; border-inline-start:3px solid CanvasText; padding-inline-start:6px; }
     .status[data-tone="error"], .err, .dependency-note, .preview-note.restored { color:CanvasText; font-weight:600; border-inline-start:3px solid CanvasText; padding-inline-start:6px; }
-    .subtitle, .source-option small, .t, .made-by, #version-meta { color:GrayText; }
+    .subtitle, .source-option small, .t, .made-by, #version-meta, .recent-list time { color:GrayText; }
+    .recent-list li, #diag-text { border-color:CanvasText; }
+    .recent-list img, .recent-list .no-art { border:1px solid CanvasText; }
     .checks li::before { border-color:CanvasText; }
     .checks li[data-state="done"]::before { forced-color-adjust:none; background:Highlight; border-color:Highlight; color:HighlightText; }
     .checks li[data-state="busy"]::before { border-color:Highlight; }
     .checks li[data-state="problem"]::before { color:CanvasText; border-color:CanvasText; border-width:2px; }
+    .hidden-mark { color:CanvasText; border-inline-start:3px solid CanvasText; padding-inline-start:6px; }
+    .cf-input, .cf-select, #hidden-list li { border-color:ButtonText; }
     a { color:LinkText; }
   }
   /* Motion mode: "reduced" always stills the panel, "full" keeps motion even when Windows asks for less,
@@ -434,6 +500,7 @@
     </div>
     <button type="button" class="appearance-open" id="appearance-open" aria-haspopup="dialog" aria-controls="appearance" aria-label="Appearance" data-i18n-attr="aria-label:appearance"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5C21 6.5 17 3 12 3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="7.5" cy="11" r="1.3" fill="currentColor"/><circle cx="10.5" cy="7.2" r="1.3" fill="currentColor"/><circle cx="15.2" cy="7.6" r="1.3" fill="currentColor"/></svg><span data-i18n="appearance">Appearance</span></button>
   </header>
+  <p class="update-note" id="update-note" role="status" hidden><span id="update-text"></span><button type="button" id="update-now" data-i18n="update.now">Update now</button><a class="btn" id="update-notes" href="#" target="_blank" rel="noopener noreferrer" data-i18n="update.notes">What’s new</a><button type="button" id="update-dismiss" aria-label="Dismiss" data-i18n-attr="aria-label:dismiss">×</button></p>
   <section class="panel setup" id="setup" aria-labelledby="setup-title" hidden>
     <div class="row-head">
       <h2 class="section-title" id="setup-title" data-i18n="setup.title">Get started</h2>
@@ -456,7 +523,9 @@
     <p id="setup-status" class="status" role="status" aria-live="polite"></p>
   </section>
   <section class="preview" id="preview" aria-label="Detected media preview" data-i18n-attr="aria-label:preview.label">
-    <div class="preview-label"><h2 class="eyebrow" data-i18n="preview.title">Detected media</h2><span id="playback-state" data-i18n="loading">Loading…</span></div>
+    <div class="pause-line" id="pause-line" hidden><span id="pause-text" role="status"></span><button type="button" id="pause-resume" data-i18n="pause.resume">Resume</button></div>
+    <div class="preview-label"><h2 class="eyebrow" data-i18n="preview.title">Detected media</h2><div class="preview-tools"><span id="playback-state" data-i18n="loading">Loading…</span><button type="button" class="pause-open" id="pause-open" aria-expanded="false" aria-controls="pause-choices" data-i18n="pause.open">Pause sharing</button></div></div>
+    <div class="pause-choices" id="pause-choices" role="group" aria-label="Pause sharing" data-i18n-attr="aria-label:pause.open" hidden><button type="button" id="pause-hour" data-i18n="pause.hour">For 1 hour</button><button type="button" id="pause-open-ended" data-i18n="pause.until">Until I resume</button></div>
     <div class="card">
       <div class="art-wrap">
         <span class="art-placeholder" aria-hidden="true">♫</span>
@@ -474,6 +543,12 @@
       </div>
     </div>
     <div id="buttons"></div>
+    <div class="hide-row" id="hide-row" hidden>
+      <span class="hidden-mark" id="hidden-mark" role="status" tabindex="-1" hidden data-i18n="hide.marked">Hidden from Discord</span>
+      <button type="button" id="hide-open" aria-expanded="false" aria-controls="hide-menu" data-i18n="hide.open">Hide this track</button>
+      <span id="hide-menu" hidden><button type="button" id="hide-song" data-i18n="hide.song">Hide this song</button><button type="button" id="hide-artist" data-i18n="hide.artist">Hide this artist</button></span>
+      <p class="status" id="hide-status" role="status" aria-live="polite"></p>
+    </div>
   </section>
   <p class="preview-note" id="preview-note" role="status"></p>
   <p class="preview-note restored" id="restored-note" role="status" hidden><span id="restored-text"></span><button type="button" class="dialog-close" id="restored-dismiss" aria-label="Dismiss" data-i18n-attr="aria-label:dismiss">×</button></p>
@@ -511,6 +586,44 @@
     <p id="source-status" class="status" role="status" aria-live="polite" data-i18n="sources.loading">Loading saved sources…</p>
     <button type="button" id="source-retry" hidden data-i18n="sources.retry">Retry loading sources</button>
   </form>
+  <form id="card-form" class="panel cf">
+    <fieldset id="card-fields" disabled>
+      <legend class="section-title" data-i18n="card.title">Discord card</legend>
+      <p id="card-note" class="status" role="status" aria-live="polite"></p>
+      <div class="card-texts">
+        <div><label class="cf-label" for="cf-details" data-i18n="card.details">Top line</label><input class="cf-input" id="cf-details" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="cf-r-details"><p class="rendered" id="cf-r-details"></p></div>
+        <div><label class="cf-label" for="cf-state" data-i18n="card.state">Second line</label><input class="cf-input" id="cf-state" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="cf-r-state"><p class="rendered" id="cf-r-state"></p></div>
+        <div><label class="cf-label" for="cf-large_text" data-i18n="card.large">Image text</label><input class="cf-input" id="cf-large_text" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="cf-r-large_text"><p class="rendered" id="cf-r-large_text"></p></div>
+        <div><label class="cf-label" for="cf-small_text" data-i18n="card.small">Icon text</label><input class="cf-input" id="cf-small_text" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="cf-r-small_text"><p class="rendered" id="cf-r-small_text"></p></div>
+        <div><label class="cf-label" for="cf-paused_details" data-i18n="card.pausedDetails">Top line when paused</label><input class="cf-input" id="cf-paused_details" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="cf-r-paused_details"><p class="rendered" id="cf-r-paused_details"></p></div>
+      </div>
+      <details id="card-placeholders">
+        <summary data-i18n="card.placeholders">Placeholders</summary>
+        <ul id="card-placeholder-list"></ul>
+      </details>
+      <div class="card-grid">
+        <div><label class="cf-label" for="cf-paused_mode" data-i18n="card.pausedMode">When paused</label><select class="cf-select" id="cf-paused_mode"><option value="show" data-i18n="card.pausedShow">Show the card</option><option value="hide" data-i18n="card.pausedHide">Hide the card</option></select></div>
+        <div><label class="cf-label" for="cf-type" data-i18n="card.type">Activity</label><select class="cf-select" id="cf-type"><option value="listening" data-i18n="card.type.listening">Listening</option><option value="watching" data-i18n="card.type.watching">Watching</option><option value="playing" data-i18n="card.type.playing">Playing</option></select></div>
+        <div><label class="cf-label" for="cf-status_display" data-i18n="card.statusDisplay">Status text</label><select class="cf-select" id="cf-status_display"><option value="app" data-i18n="card.status.app">App name</option><option value="state" data-i18n="card.status.state">Second line</option><option value="details" data-i18n="card.status.details">Top line</option></select></div>
+      </div>
+      <div class="card-buttons">
+        <label class="source-option" for="cf-buttons_enabled"><input type="checkbox" id="cf-buttons_enabled"><span data-i18n="card.buttonsOn">Show buttons</span></label>
+        <div><label class="cf-label" for="cf-button_label" data-i18n="card.buttonLabel">Button label</label><input class="cf-input" id="cf-button_label" maxlength="32" autocomplete="off" spellcheck="false"></div>
+        <label class="source-option" for="cf-spotify_search_fallback"><input type="checkbox" id="cf-spotify_search_fallback"><span data-i18n="card.spotifySearch">Link to a Spotify search when there is no track link</span></label>
+      </div>
+      <div id="card-hidden" hidden>
+        <h2 class="source-subheading" data-i18n="hidden.title">Hidden from Discord</h2>
+        <ul id="hidden-list"></ul>
+      </div>
+      <div class="save-row">
+        <button type="submit" id="card-save" disabled data-i18n="sources.apply">Apply changes</button>
+        <button type="button" id="card-discard" hidden data-i18n="sources.discard">Discard changes</button>
+        <button type="button" id="card-reset" data-i18n="card.reset">Reset to defaults</button>
+      </div>
+    </fieldset>
+    <p id="card-status" class="status" role="status" aria-live="polite" data-i18n="card.loading">Loading the card settings…</p>
+    <button type="button" id="card-retry" hidden data-i18n="card.retry">Retry loading</button>
+  </form>
   <section class="panel" id="spotify" aria-labelledby="spotify-title" hidden>
     <div class="row-head"><h2 class="section-title" id="spotify-title">Spotify Web API</h2><span class="row-state" id="spotify-state" data-i18n="spotify.off">Not connected</span></div>
     <form id="spotify-form">
@@ -530,7 +643,14 @@
       <summary data-i18n="diagnostics">Diagnostics</summary>
       <div class="meta" id="meta" data-i18n="diagnostics.waiting">Waiting for status…</div>
       <div class="meta" id="version-meta"></div>
+      <div class="diag-tools"><button type="button" id="diag-copy" data-i18n="diag.copy">Copy report</button><p id="diag-status" class="status" role="status" aria-live="polite"></p></div>
+      <textarea id="diag-text" readonly hidden spellcheck="false" aria-label="Diagnostics report" data-i18n-attr="aria-label:diag.report"></textarea>
       <button type="button" id="setup-reopen" data-i18n="setup.reopen">Show setup checklist</button>
+    </details>
+    <details class="recent" id="recent">
+      <summary data-i18n="recent.title">Recent</summary>
+      <ol class="recent-list" id="recent-list"></ol>
+      <p id="recent-status" class="status" role="status" aria-live="polite"></p>
     </details>
   </section>
   <p class="made-by"><span data-i18n="footer.before">Made with love by </span><a href="https://github.com/mariyaholic" target="_blank" rel="noopener noreferrer">Maria</a><span data-i18n="footer.after"></span> <span class="version" id="version-footer"></span></p>
@@ -587,6 +707,7 @@ const strings = {
     "check.media.play":"Play something from an enabled source.", "check.card.todo":"Send a test card to check.", "check.card.sending":"Sending…", "check.card.failed":"The test card didn’t reach Discord.",
     "check.card.unconfirmed":"Discord took the card but didn’t confirm it. If your profile doesn’t show it, turn on Share my activity in Discord under Settings › Activity Privacy.",
     "setup.saveFailed":"Could not save setup: {error}",
+    "pause.open":"Pause sharing", "pause.hour":"For 1 hour", "pause.until":"Until I resume", "pause.resume":"Resume", "pause.state":"Sharing paused", "pause.until.time":"Sharing paused until {time}", "pause.failed":"Could not change the pause: {error}",
     "card.send":"Send test card", "card.up":"Test card up ({seconds} s)", "card.failed":"Could not send the test card: {error}",
     "appid.label":"Discord application ID", "appid.placeholder":"Empty uses Yozora’s app", "appid.invalid":"An application ID is 17 to 20 digits.", "appid.saved":"Saved. Send a test card to try it.", "appid.failed":"Could not save: {error}",
     "preview.label":"Detected media preview", "preview.title":"Detected media", "preview.waiting":"Waiting for Yozora", "preview.next":"Your next track goes here", "preview.loading":"Loading detected media…",
@@ -617,14 +738,32 @@ const strings = {
     "spotify.connect":"Connect", "spotify.redirect":"Redirect URI", "spotify.finish":"Finish signing in to Spotify in your browser.", "spotify.disconnect":"Disconnect", "spotify.clientShort":"Client {id}…",
     "spotify.silent":"Spotify isn’t answering: {error}", "spotify.notConnected":"Spotify wasn’t connected: {error}", "spotify.signInFailed":"Could not start Spotify sign-in: {error}", "spotify.changeFailed":"Could not change Spotify: {error}",
     "spotify.invalid":"A client ID is 32 characters, 0-9 and a-f.", "spotify.copied":"Redirect URI copied.", "spotify.copyFailed":"Could not copy. Select the address instead.",
+    "card.title":"Discord card", "card.details":"Top line", "card.state":"Second line", "card.large":"Image text", "card.small":"Icon text", "card.pausedDetails":"Top line when paused",
+    "card.pausedMode":"When paused", "card.pausedShow":"Show the card", "card.pausedHide":"Hide the card",
+    "card.type":"Activity", "card.type.listening":"Listening", "card.type.watching":"Watching", "card.type.playing":"Playing",
+    "card.statusDisplay":"Status text", "card.status.app":"App name", "card.status.state":"Second line", "card.status.details":"Top line",
+    "card.buttonsOn":"Show buttons", "card.buttonLabel":"Button label", "card.spotifySearch":"Link to a Spotify search when there is no track link",
+    "card.placeholders":"Placeholders", "card.reset":"Reset to defaults", "card.retry":"Retry loading",
+    "ph.title":"Track title", "ph.artist":"Artist", "ph.album":"Album", "ph.player":"Player name", "ph.source":"Source id, such as spotify", "ph.number":"Track number",
+    "ph.time":"Time as 1:23", "ph.playing":"True while playing, for if", "ph.bar":"Progress bar, 10 characters", "ph.funcs":"Text helpers: lower, upper, strip, default",
+    "card.loading":"Loading the card settings…", "card.loadFailed":"Could not load the card settings: {error}. Retry to load them.", "card.unsaved":"Unsaved changes.",
+    "card.saving":"Saving changes…", "card.saved":"Saved. The card updates within a few seconds.", "card.saveFailed":"Save failed: {error}. Your changes were not confirmed; try again.",
+    "card.discarded":"Changes discarded. Saved settings restored.", "card.resetDone":"Defaults filled in. Apply to save them.", "card.invalid":"Cannot apply yet: {error}",
+    "card.sample":"Showing a sample track, since nothing is playing.", "card.pausedNote":"A paused track is not shown on Discord.", "card.trackHidden":"This track is hidden, so no card is shown on Discord.",
+    "hidden.title":"Hidden from Discord", "hidden.artist":"Artist: {artist}", "hidden.titleOnly":"Song: {title}", "hidden.both":"{artist} · {title}", "hidden.remove":"Remove",
+    "hidden.removeRule":"Stop hiding {rule}", "hidden.removed":"No longer hidden.", "hidden.removeFailed":"Could not remove the rule: {error}",
+    "hide.open":"Hide this track", "hide.song":"Hide this song", "hide.artist":"Hide this artist", "hide.marked":"Hidden from Discord", "hide.failed":"Could not hide it: {error}",
     "startup.label":"Startup and diagnostics", "startup.title":"Startup", "startup.autostart":"Start Yozora when I sign in to Windows", "diagnostics":"Diagnostics", "diagnostics.waiting":"Waiting for status…",
     "startup.readFailed":"Could not read startup setting: {error}", "startup.saving":"Saving startup setting…", "startup.on":"Yozora will start with Windows.", "startup.off":"Yozora will not start with Windows.", "startup.failed":"Could not change startup setting: {error}",
     "footer.before":"Made with love by ", "footer.after":"",
+    "recent.title":"Recent", "recent.empty":"Nothing has been shown on Discord yet.", "recent.failed":"Could not load recent tracks: {error}", "recent.now":"just now",
+    "diag.copy":"Copy report", "diag.report":"Diagnostics report", "diag.copied":"Report copied.", "diag.copyFailed":"Could not copy. Select the text below.", "diag.failed":"Could not build the report: {error}",
     "theme.title":"Theme", "theme.yozora":"Night sky", "theme.astra-light":"Astra light",
     "motion.title":"Motion", "motion.system":"Follow Windows", "motion.reduced":"Reduced", "motion.full":"Full",
     "motion.system.hint":"Uses the Windows Show animations setting", "motion.reduced.hint":"No animations or transitions", "motion.full.hint":"Animate even when Windows asks for less",
     "language.title":"Language", "language.system":"Follow Windows", "language.system.hint":"Uses the Windows display language",
     "appearance.describe":"{theme} with {motion} motion", "appearance.theme":"{name} theme", "appearance.motion":"{name} motion", "appearance.language":"Language ({name})",
+    "update.available":"Yozora {version} is available", "update.now":"Update now", "update.notes":"What’s new", "update.downloading":"Downloading Yozora {version}…", "update.verifying":"Checking the download…", "update.installing":"Installing Yozora {version}. Yozora restarts when it is done.", "update.failed":"Could not update: {error}", "update.retry":"Try again",
     "field.theme":"theme", "field.motion":"motion", "field.language":"language",
     "appearance.readFailed":"Could not confirm the saved appearance: {error}. Showing {appearance}.", "appearance.saving":"Saving {label}…", "appearance.saved":"{label} saved.",
     "appearance.saveFailed":"Could not save the {field}: {error}. Kept {appearance}.",
@@ -638,6 +777,7 @@ const strings = {
     "check.media.play":"有効なソースで何か再生してください。", "check.card.todo":"テストカードを送信して確認します。", "check.card.sending":"送信中…", "check.card.failed":"テストカードが Discord に届きませんでした。",
     "check.card.unconfirmed":"Discord はカードを受け取りましたが、表示を確認できませんでした。プロフィールに出ない場合は、Discord の設定の「アクティビティのプライバシー」でアクティビティの共有をオンにしてください。",
     "setup.saveFailed":"セットアップを保存できませんでした: {error}",
+    "pause.open":"共有を一時停止", "pause.hour":"1 時間", "pause.until":"再開するまで", "pause.resume":"再開", "pause.state":"共有を一時停止中", "pause.until.time":"{time} まで共有を一時停止中", "pause.failed":"一時停止を変更できませんでした: {error}",
     "card.send":"テストカードを送信", "card.up":"テストカード表示中（{seconds} 秒）", "card.failed":"テストカードを送信できませんでした: {error}",
     "appid.label":"Discord アプリケーション ID", "appid.placeholder":"空欄なら Yozora のアプリを使用", "appid.invalid":"アプリケーション ID は 17〜20 桁の数字です。", "appid.saved":"保存しました。テストカードで確認できます。", "appid.failed":"保存できませんでした: {error}",
     "preview.label":"検出したメディアのプレビュー", "preview.title":"検出したメディア", "preview.waiting":"Yozora を待機中", "preview.next":"次の曲がここに表示されます", "preview.loading":"メディアを読み込み中…",
@@ -668,14 +808,32 @@ const strings = {
     "spotify.connect":"接続", "spotify.redirect":"リダイレクト URI", "spotify.finish":"ブラウザーで Spotify へのサインインを完了してください。", "spotify.disconnect":"接続を解除", "spotify.clientShort":"クライアント {id}…",
     "spotify.silent":"Spotify から応答がありません: {error}", "spotify.notConnected":"Spotify に接続できませんでした: {error}", "spotify.signInFailed":"Spotify のサインインを開始できませんでした: {error}", "spotify.changeFailed":"Spotify の設定を変更できませんでした: {error}",
     "spotify.invalid":"クライアント ID は 0〜9 と a〜f の 32 文字です。", "spotify.copied":"リダイレクト URI をコピーしました。", "spotify.copyFailed":"コピーできませんでした。アドレスを選択してコピーしてください。",
+    "card.title":"Discord のカード", "card.details":"1行目", "card.state":"2行目", "card.large":"画像のテキスト", "card.small":"アイコンのテキスト", "card.pausedDetails":"一時停止中の1行目",
+    "card.pausedMode":"一時停止中", "card.pausedShow":"カードを表示", "card.pausedHide":"カードを隠す",
+    "card.type":"アクティビティ", "card.type.listening":"聴いている", "card.type.watching":"視聴している", "card.type.playing":"プレイしている",
+    "card.statusDisplay":"ステータスの文言", "card.status.app":"アプリ名", "card.status.state":"2行目", "card.status.details":"1行目",
+    "card.buttonsOn":"ボタンを表示", "card.buttonLabel":"ボタンの名前", "card.spotifySearch":"曲のリンクがないときは Spotify の検索へ",
+    "card.placeholders":"差し込みの一覧", "card.reset":"初期設定に戻す", "card.retry":"再読み込み",
+    "ph.title":"曲名", "ph.artist":"アーティスト", "ph.album":"アルバム", "ph.player":"プレーヤー名", "ph.source":"ソース ID（spotify など）", "ph.number":"トラック番号",
+    "ph.time":"1:23 の形式の時間", "ph.playing":"再生中は true（if 用）", "ph.bar":"進行バー（10 文字）", "ph.funcs":"文字の関数: lower, upper, strip, default",
+    "card.loading":"カードの設定を読み込み中…", "card.loadFailed":"カードの設定を読み込めませんでした: {error}。再読み込みしてください。", "card.unsaved":"未保存の変更があります。",
+    "card.saving":"保存中…", "card.saved":"保存しました。カードは数秒で更新されます。", "card.saveFailed":"保存できませんでした: {error}。変更は確認できていません。もう一度お試しください。",
+    "card.discarded":"変更を破棄し、保存済みの設定に戻しました。", "card.resetDone":"初期設定を入力しました。保存するには適用してください。", "card.invalid":"まだ適用できません: {error}",
+    "card.sample":"再生中の曲がないため、サンプルの曲で表示しています。", "card.pausedNote":"一時停止中の曲は Discord に表示されません。", "card.trackHidden":"この曲は非表示のため、Discord にカードは表示されません。",
+    "hidden.title":"Discord に表示しない曲", "hidden.artist":"アーティスト: {artist}", "hidden.titleOnly":"曲名: {title}", "hidden.both":"{artist} · {title}", "hidden.remove":"削除",
+    "hidden.removeRule":"{rule} の非表示をやめる", "hidden.removed":"非表示をやめました。", "hidden.removeFailed":"ルールを削除できませんでした: {error}",
+    "hide.open":"この曲を非表示", "hide.song":"この曲を隠す", "hide.artist":"このアーティストを隠す", "hide.marked":"Discord には表示されません", "hide.failed":"非表示にできませんでした: {error}",
     "startup.label":"起動と診断", "startup.title":"起動", "startup.autostart":"Windows へのサインイン時に Yozora を起動", "diagnostics":"診断情報", "diagnostics.waiting":"状態を取得中…",
     "startup.readFailed":"起動設定を読み込めませんでした: {error}", "startup.saving":"起動設定を保存中…", "startup.on":"Windows の起動時に Yozora を開始します。", "startup.off":"Windows の起動時に Yozora を開始しません。", "startup.failed":"起動設定を変更できませんでした: {error}",
     "footer.before":"", "footer.after":" が心を込めて作りました",
+    "recent.title":"最近の再生", "recent.empty":"まだ Discord に表示したトラックはありません。", "recent.failed":"最近のトラックを読み込めませんでした: {error}", "recent.now":"たった今",
+    "diag.copy":"レポートをコピー", "diag.report":"診断レポート", "diag.copied":"レポートをコピーしました。", "diag.copyFailed":"コピーできませんでした。下のテキストを選択してコピーしてください。", "diag.failed":"レポートを作成できませんでした: {error}",
     "theme.title":"テーマ", "theme.yozora":"夜空", "theme.astra-light":"Astra ライト",
     "motion.title":"アニメーション", "motion.system":"Windows に従う", "motion.reduced":"減らす", "motion.full":"すべて",
     "motion.system.hint":"Windows の「アニメーションを表示する」設定に従います", "motion.reduced.hint":"アニメーションと切り替え効果を止めます", "motion.full.hint":"Windows で減らす設定にしていてもアニメーションします",
     "language.title":"言語", "language.system":"Windows に従う", "language.system.hint":"Windows の表示言語に従います",
     "appearance.describe":"{theme}・アニメーション「{motion}」", "appearance.theme":"テーマ「{name}」", "appearance.motion":"アニメーション「{name}」", "appearance.language":"言語（{name}）",
+    "update.available":"Yozora {version} を利用できます", "update.now":"今すぐ更新", "update.notes":"更新内容", "update.downloading":"Yozora {version} をダウンロードしています…", "update.verifying":"ダウンロードを確認しています…", "update.installing":"Yozora {version} をインストールしています。完了すると Yozora は自動で起動し直します。", "update.failed":"更新できませんでした: {error}", "update.retry":"もう一度試す",
     "field.theme":"テーマ", "field.motion":"アニメーション", "field.language":"言語",
     "appearance.readFailed":"保存済みの外観を確認できませんでした: {error}。{appearance}で表示しています。", "appearance.saving":"{label}を保存中…", "appearance.saved":"{label}を保存しました。",
     "appearance.saveFailed":"{field}を保存できませんでした: {error}。{appearance}のままです。",
@@ -707,6 +865,7 @@ function applyLanguage() {
   const shown = version === "dev" ? t("version.dev") : version;
   document.getElementById("version-footer").textContent = version === "dev" ? `· ${shown}` : `· v${shown}`;
   document.getElementById("version-meta").textContent = t("version.label", {version:shown});
+  document.dispatchEvent(new Event("yozora-language"));
 }
 applyLanguage();
 const token = new URLSearchParams(location.search).get("t");
@@ -1068,6 +1227,10 @@ function showLanguage(language) {
 function relocalize() {
   if (savedOrder.length && !drag) renderOrder();
   updateDirty();
+  drawRecent();
+  renderHidden(hiddenRules);
+  updateCardDirty();
+  updateCardNote();
   refreshSoon();
 }
 // The server rendered the saved appearance into <html>, so it is the starting saved state.
@@ -1353,6 +1516,71 @@ document.getElementById("restored-dismiss").addEventListener("click", () => {
   try { localStorage.setItem("yozora.restored-dismissed", restoredAt); } catch {}
   restoredNote.hidden = true;
 });
+// An update the user has not dismissed gets one line at the top. Only Update now installs;
+// the line is dismissed per version, and progress and errors replace its buttons.
+const updateNote = document.getElementById("update-note");
+const updateText = document.getElementById("update-text");
+const updateNow = document.getElementById("update-now");
+const updateNotes = document.getElementById("update-notes");
+let updateTicks = 60;
+let updateBusy = false;
+let updateInfo = null;
+let dismissedUpdate = "";
+try { dismissedUpdate = localStorage.getItem("yozora.update-dismissed") || ""; } catch {}
+function renderUpdate() {
+  const u = updateInfo;
+  const phase = u?.install?.state || "idle";
+  const working = phase === "downloading" || phase === "verifying" || phase === "installing";
+  const failed = phase === "error";
+  const show = Boolean(u?.available) && (working || failed || u.latest !== dismissedUpdate);
+  updateNote.hidden = !show;
+  if (!show) return;
+  updateNote.dataset.state = failed ? "error" : working ? "working" : "available";
+  const keys = {downloading:"update.downloading", verifying:"update.verifying", installing:"update.installing"};
+  setText(updateText, failed ? t("update.failed", {error:u.install.error || ""}) : working ? t(keys[phase], {version:u.latest}) : t("update.available", {version:u.latest}));
+  updateNow.hidden = working;
+  setKey(updateNow, failed ? "update.retry" : "update.now");
+  updateNow.disabled = false;
+  const href = /^https:\/\/github\.com\/mariyaholic\/yozora\//.test(u.url || "") ? u.url : "";
+  updateNotes.hidden = !href || working;
+  if (href) updateNotes.href = href;
+  document.getElementById("update-dismiss").hidden = working;
+}
+async function pollUpdate() {
+  if (updateBusy) return;
+  updateBusy = true;
+  try {
+    const r = await fetch(`/api/update?t=${encodeURIComponent(token)}`, {cache:"no-store"});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    updateInfo = await r.json();
+    renderUpdate();
+  } catch {} finally { updateBusy = false; }
+}
+function updateTick() {
+  // Once a minute is plenty for a daily check; an install in progress is followed every second.
+  const phase = updateInfo?.install?.state;
+  if (++updateTicks >= 60 || phase === "downloading" || phase === "verifying" || phase === "installing") {
+    updateTicks = 0;
+    pollUpdate();
+  }
+}
+document.addEventListener("yozora-language", renderUpdate);
+updateNow.addEventListener("click", async () => {
+  updateNow.disabled = true;
+  try {
+    const r = await fetch(`/api/update/install?t=${encodeURIComponent(token)}`, {method:"POST"});
+    if (!r.ok) throw new Error((await r.text()).trim() || `HTTP ${r.status}`);
+    updateInfo = await r.json();
+  } catch (e) {
+    updateInfo = {...updateInfo, install:{state:"error", error:String(e.message || e)}};
+  }
+  renderUpdate();
+});
+document.getElementById("update-dismiss").addEventListener("click", () => {
+  dismissedUpdate = updateInfo?.latest || "";
+  try { localStorage.setItem("yozora.update-dismissed", dismissedUpdate); } catch {}
+  renderUpdate();
+});
 function updateStatus(element, text) {
   // Dynamic text owns the element from here on; a language switch must not reset it to its placeholder.
   delete element.dataset.i18n;
@@ -1393,6 +1621,296 @@ function updateButtons(activity) {
     buttons.appendChild(link);
   }
 }
+// Pause lives in the engine's memory; the panel only reads it from the state poll and asks to change it.
+const pauseLine = document.getElementById("pause-line");
+const pauseText = document.getElementById("pause-text");
+const pauseOpen = document.getElementById("pause-open");
+const pauseChoices = document.getElementById("pause-choices");
+let pauseFailure = "";
+function showPauseChoices(open) {
+  pauseChoices.hidden = !open;
+  pauseOpen.setAttribute("aria-expanded", String(open));
+}
+function updatePause(s) {
+  const paused = Boolean(s.paused);
+  pauseLine.hidden = !paused;
+  pauseOpen.hidden = paused;
+  if (!paused) return;
+  showPauseChoices(false);
+  const until = s.paused_until ? new Date(s.paused_until) : null;
+  const time = until && !isNaN(until) ? until.toLocaleTimeString(lang === "ja" ? "ja-JP" : "en-US", {hour:"2-digit", minute:"2-digit", hourCycle:"h23"}) : "";
+  updateStatus(pauseText, time ? t("pause.until.time", {time}) : t("pause.state"));
+}
+async function setPause(body) {
+  try {
+    const r = await fetch(`/api/pause?t=${encodeURIComponent(token)}`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    pauseFailure = "";
+  } catch (e) { pauseFailure = t("pause.failed", {error:e.message}); setTimeout(() => { pauseFailure = ""; }, 6000); }
+  showPauseChoices(false);
+  await refreshSoon();
+}
+pauseOpen.addEventListener("click", () => showPauseChoices(pauseChoices.hidden));
+pauseChoices.addEventListener("keydown", e => { if (e.key === "Escape") { showPauseChoices(false); pauseOpen.focus(); } });
+document.getElementById("pause-hour").addEventListener("click", () => setPause({action:"pause", minutes:60}));
+document.getElementById("pause-open-ended").addEventListener("click", () => setPause({action:"pause"}));
+document.getElementById("pause-resume").addEventListener("click", () => setPause({action:"resume"}));
+// Discord card: the TOML-only presence, button and template settings, with a preview rendered by the
+// same template engine the card is sent with. Hidden rules sit beside it; they save one at a time.
+const cardFieldIds = ["paused_mode", "type", "status_display", "buttons_enabled", "button_label", "spotify_search_fallback", "details", "state", "large_text", "small_text", "paused_details"];
+const cardTextIds = ["details", "state", "large_text", "small_text", "paused_details"];
+const cardFields = document.getElementById("card-fields");
+const cardSave = document.getElementById("card-save");
+const cardDiscard = document.getElementById("card-discard");
+const cardStatus = document.getElementById("card-status");
+const cardRetry = document.getElementById("card-retry");
+const cardNote = document.getElementById("card-note");
+const cardURL = `/api/card?t=${encodeURIComponent(token)}`;
+const cardPreviewURL = `/api/card/preview?t=${encodeURIComponent(token)}`;
+const hiddenURL = `/api/hidden?t=${encodeURIComponent(token)}`;
+let savedCard = null;
+let cardDefaults = null;
+let cardInvalid = false;
+let hiddenRules = [];
+let cardPreviewTimer = 0;
+let cardPreviewSeq = 0;
+let previewInfo = {sample: false, playing: true, hidden: false};
+const cardEl = id => document.getElementById(`cf-${id}`);
+function cardMessage(message, tone = "") {
+  setText(cardStatus, message);
+  cardStatus.dataset.tone = tone;
+}
+function currentCard() {
+  return Object.fromEntries(cardFieldIds.map(id => {
+    const el = cardEl(id);
+    return [id, el.type === "checkbox" ? el.checked : el.value];
+  }));
+}
+function showCard(card) {
+  for (const id of cardFieldIds) {
+    const el = cardEl(id);
+    if (el.type === "checkbox") el.checked = card[id] === true;
+    else el.value = card[id] ?? "";
+  }
+}
+function syncCardButtons() {
+  const dirty = JSON.stringify(currentCard()) !== savedCard;
+  cardSave.disabled = !dirty || cardInvalid;
+  cardDiscard.hidden = !dirty;
+  return dirty;
+}
+function updateCardDirty(message, onlyWhenDirty = false) {
+  if (!savedCard) return;
+  const dirty = syncCardButtons();
+  if (cardInvalid) return;
+  cardMessage((!onlyWhenDirty || dirty ? message : "") || (dirty ? t("card.unsaved") : ""), dirty ? "pending" : "");
+}
+function updateCardNote() {
+  let key = "";
+  if (previewInfo.hidden) key = "card.trackHidden";
+  else if (previewInfo.sample) key = "card.sample";
+  else if (!previewInfo.playing && cardEl("paused_mode").value !== "show") key = "card.pausedNote";
+  updateStatus(cardNote, key ? t(key) : "");
+}
+async function previewCard() {
+  if (!savedCard) return;
+  const seq = ++cardPreviewSeq;
+  try {
+    const r = await fetch(cardPreviewURL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(currentCard())});
+    if (seq !== cardPreviewSeq) return;
+    if (!r.ok) throw new Error((await r.text()).trim() || `HTTP ${r.status}`);
+    const p = await r.json();
+    if (seq !== cardPreviewSeq) return;
+    const wasInvalid = cardInvalid;
+    cardInvalid = false;
+    for (const id of cardTextIds) {
+      document.getElementById(`cf-r-${id}`).textContent = p[id] || "";
+      cardEl(id).removeAttribute("aria-invalid");
+    }
+    previewInfo = {sample: p.sample, playing: p.playing, hidden: p.hidden};
+    // Keep a "Saved" message up unless this preview is what cleared an error.
+    if (wasInvalid) updateCardDirty(); else syncCardButtons();
+    updateCardNote();
+  } catch (e) {
+    if (seq !== cardPreviewSeq) return;
+    cardInvalid = true;
+    cardSave.disabled = true;
+    cardMessage(t("card.invalid", {error:e.message}), "error");
+  }
+}
+function schedulePreview() {
+  clearTimeout(cardPreviewTimer);
+  cardPreviewTimer = setTimeout(previewCard, 200);
+}
+function renderHidden(rules) {
+  hiddenRules = rules || [];
+  const list = document.getElementById("hidden-list");
+  list.replaceChildren();
+  for (const rule of hiddenRules) {
+    const label = rule.artist && rule.title ? t("hidden.both", rule) : rule.artist ? t("hidden.artist", rule) : t("hidden.titleOnly", rule);
+    const item = document.createElement("li");
+    const text = document.createElement("span");
+    text.textContent = label;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = t("hidden.remove");
+    remove.setAttribute("aria-label", t("hidden.removeRule", {rule:label}));
+    remove.addEventListener("click", () => removeHidden(rule, item));
+    item.append(text, remove);
+    list.appendChild(item);
+  }
+  document.getElementById("card-hidden").hidden = hiddenRules.length === 0;
+}
+async function hiddenCall(body) {
+  const r = await fetch(hiddenURL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+  if (!r.ok) throw new Error((await r.text()).trim() || `HTTP ${r.status}`);
+  return (await r.json()).hidden;
+}
+async function removeHidden(rule, item) {
+  const next = item.nextElementSibling || item.previousElementSibling;
+  try {
+    renderHidden(await hiddenCall({remove:rule}));
+    cardMessage(t("hidden.removed"));
+    (next?.querySelector("button") || cardEl("details")).focus();
+    refreshSoon();
+  } catch (e) { cardMessage(t("hidden.removeFailed", {error:e.message}), "error"); }
+}
+async function loadCard() {
+  const retrying = !cardRetry.hidden;
+  cardRetry.hidden = true;
+  cardMessage(t("card.loading"));
+  try {
+    const r = await fetch(cardURL, {cache:"no-store"});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const data = await r.json();
+    cardDefaults = data.defaults;
+    showCard(data.card);
+    renderHidden(data.hidden);
+    savedCard = JSON.stringify(currentCard());
+    cardFields.disabled = false;
+    cardInvalid = false;
+    updateCardDirty();
+    previewCard();
+    if (retrying) cardEl("details").focus();
+  } catch (e) {
+    cardMessage(t("card.loadFailed", {error:e.message}), "error");
+    cardRetry.hidden = false;
+  }
+}
+cardFields.addEventListener("input", () => { updateCardDirty(); schedulePreview(); });
+cardFields.addEventListener("change", () => { updateCardDirty(); schedulePreview(); });
+cardRetry.addEventListener("click", loadCard);
+cardDiscard.addEventListener("click", () => {
+  if (!savedCard) return;
+  showCard(JSON.parse(savedCard));
+  cardInvalid = false;
+  updateCardDirty(t("card.discarded"));
+  previewCard();
+  cardEl("details").focus();
+});
+document.getElementById("card-reset").addEventListener("click", () => {
+  if (!cardDefaults) return;
+  showCard(cardDefaults);
+  cardInvalid = false;
+  updateCardDirty(t("card.resetDone"));
+  previewCard();
+  cardEl("details").focus();
+});
+document.getElementById("card-form").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (cardFields.disabled || cardSave.disabled) return;
+  const card = currentCard();
+  cardFields.disabled = true;
+  setKey(cardSave, "saving");
+  cardMessage(t("card.saving"));
+  try {
+    const r = await fetch(cardURL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(card)});
+    if (!r.ok) throw new Error((await r.text()).trim() || `HTTP ${r.status}`);
+    const data = await r.json();
+    showCard(data.card);
+    renderHidden(data.hidden);
+    savedCard = JSON.stringify(currentCard());
+    updateCardDirty(t("card.saved"));
+    previewCard();
+  } catch (e) { cardMessage(t("card.saveFailed", {error:e.message}), "error"); }
+  finally { cardFields.disabled = false; setKey(cardSave, "sources.apply"); syncCardButtons(); }
+});
+// Placeholders are built here because the page itself is a Go template and cannot hold the braces literally.
+(() => {
+  const open = "{" + "{", close = "}" + "}";
+  const rows = [
+    [".Title", "ph.title"], [".Artist", "ph.artist"], [".Album", "ph.album"], [".Player", "ph.player"], [".Source", "ph.source"], [".TrackNumber", "ph.number"],
+    [".ElapsedFmt  .DurationFmt  .RemainingFmt", "ph.time"], [".Playing", "ph.playing"], ['bar 10 "▰" "▱"', "ph.bar"], ["", "ph.funcs"],
+  ];
+  const list = document.getElementById("card-placeholder-list");
+  for (const [code, key] of rows) {
+    const item = document.createElement("li");
+    if (code) {
+      const c = document.createElement("code");
+      c.textContent = code.split(/\s{2,}/).map(part => open + part + close).join("  ");
+      item.appendChild(c);
+    }
+    const d = document.createElement("span");
+    d.dataset.i18n = key;
+    d.textContent = t(key);
+    item.appendChild(d);
+    list.appendChild(item);
+  }
+})();
+
+// Hiding the track on the preview.
+const hideRow = document.getElementById("hide-row");
+const hideOpen = document.getElementById("hide-open");
+const hideMenu = document.getElementById("hide-menu");
+const hideMark = document.getElementById("hidden-mark");
+const hideStatus = document.getElementById("hide-status");
+let hideTrack = null;
+let cardTrackKey = null;
+function closeHideMenu() {
+  hideMenu.hidden = true;
+  hideOpen.setAttribute("aria-expanded", "false");
+}
+function updateCardTrack(s) {
+  const hasTrack = Boolean(s.title);
+  hideTrack = hasTrack ? {artist:s.artist || "", title:s.title} : null;
+  hideRow.hidden = !hasTrack;
+  const hidden = hasTrack && s.hidden === true;
+  hideMark.hidden = !hidden;
+  hideOpen.hidden = hidden;
+  if (hidden || !hasTrack) closeHideMenu();
+  document.getElementById("hide-artist").hidden = !hideTrack?.artist;
+  if (!hasTrack || hidden) updateStatus(hideStatus, "");
+  // The card preview follows the track, not the clock, so it is asked again only when the track, its play state
+  // or whether it is hidden changes.
+  const key = [hasTrack ? s.title : "", s.artist || "", s.album || "", s.service || "", s.playing, hidden].join("\u0001");
+  if (key !== cardTrackKey) {
+    cardTrackKey = key;
+    schedulePreview();
+  }
+}
+hideOpen.addEventListener("click", () => {
+  const open = hideMenu.hidden;
+  hideMenu.hidden = !open;
+  hideOpen.setAttribute("aria-expanded", String(open));
+  if (open) document.getElementById("hide-song").focus();
+});
+hideRow.addEventListener("keydown", event => {
+  if (event.key === "Escape" && !hideMenu.hidden) { closeHideMenu(); hideOpen.focus(); }
+});
+async function hideCurrent(rule) {
+  closeHideMenu();
+  try {
+    renderHidden(await hiddenCall({add:rule}));
+    updateStatus(hideStatus, "");
+    await refreshSoon();
+    if (!hideMark.hidden) hideMark.focus();
+  } catch (e) {
+    updateStatus(hideStatus, t("hide.failed", {error:e.message}));
+    hideOpen.focus();
+  }
+}
+document.getElementById("hide-song").addEventListener("click", () => hideTrack && hideCurrent({artist:hideTrack.artist, title:hideTrack.title}));
+document.getElementById("hide-artist").addEventListener("click", () => hideTrack?.artist && hideCurrent({artist:hideTrack.artist, title:""}));
 async function tick() {
   if (polling) return;
   polling = true;
@@ -1410,6 +1928,7 @@ async function tick() {
     setText(playbackState, t(hasTrack ? (s.playing ? "state.playing" : "state.paused") : "state.idle"));
     playbackState.dataset.live = String(Boolean(s.discord_connected && hasTrack && s.playing));
     const track = hasTrack ? [s.title, s.artist || "", s.album || "", s.service || ""].join("\u0001") : "";
+    if (lastTrack !== null && track !== lastTrack && recentBox.open) loadRecent();
     if (lastTrack !== null && track !== lastTrack) cue("track-changed");
     else if (lastPlayState !== null && playbackState.textContent !== lastPlayState) cue("state-changed");
     lastTrack = track;
@@ -1422,6 +1941,7 @@ async function tick() {
     updateImage(art, hasTrack ? s.art_url : "");
     updateImage(badge, hasTrack ? s.small_image : "");
     updateButtons(s.published_activity);
+    updateCardTrack(s);
     const p = s.duration_sec > 0 ? Math.max(0, Math.min(100, 100 * (s.elapsed_sec || 0) / s.duration_sec)) : 0;
     fill.style.width = p + "%";
     elapsed.textContent = fmt(s.elapsed_sec); duration.textContent = fmt(s.duration_sec);
@@ -1429,7 +1949,8 @@ async function tick() {
     progress.setAttribute("aria-valuenow", String(Math.round(p)));
     progress.setAttribute("aria-valuetext", t("preview.of", {elapsed:fmt(s.elapsed_sec), total:fmt(s.duration_sec)}));
     // Only trouble earns a line here; a healthy panel says nothing.
-    updateStatus(previewNote, s.last_error ? t("note.problem") : s.discord_connected ? "" : t("note.discord"));
+    updateStatus(previewNote, pauseFailure || (s.last_error ? t("note.problem") : s.discord_connected ? "" : t("note.discord")));
+    updatePause(s);
     updateRestored(s.config_restored);
     setText(meta, t("meta.line", {discord:t(s.discord_connected ? "meta.connected" : "meta.notRunning"), source:s.source || "—", art:s.art_via || "—", sends:s.sends || 0}));
     if (s.last_error) {
@@ -1454,12 +1975,83 @@ async function tick() {
     polling = false;
   }
 }
+// Diagnostics: a copyable plain-text report built by the daemon, and the in-memory Recent list.
+const diagStatus = document.getElementById("diag-status");
+const diagText = document.getElementById("diag-text");
+document.getElementById("diag-copy").addEventListener("click", async () => {
+  diagText.hidden = true;
+  let report;
+  try {
+    const r = await fetch(`/api/diagnostics?t=${encodeURIComponent(token)}`, {cache:"no-store"});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    report = await r.text();
+  } catch (e) {
+    updateStatus(diagStatus, t("diag.failed", {error:e}));
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(report);
+    updateStatus(diagStatus, t("diag.copied"));
+  } catch {
+    // No clipboard access: show the text so it can be selected by hand.
+    diagText.value = report;
+    diagText.hidden = false;
+    diagText.select();
+    updateStatus(diagStatus, t("diag.copyFailed"));
+  }
+});
+const recentBox = document.getElementById("recent");
+const recentList = document.getElementById("recent-list");
+const recentStatus = document.getElementById("recent-status");
+function relativeTime(iso) {
+  const secs = Math.round((new Date(iso).getTime() - Date.now()) / 1000);
+  if (!Number.isFinite(secs) || secs > -45) return t("recent.now");
+  const rtf = new Intl.RelativeTimeFormat(lang, {numeric:"auto"});
+  const mins = Math.round(secs / 60);
+  if (Math.abs(mins) < 60) return rtf.format(mins, "minute");
+  const hours = Math.round(mins / 60);
+  return Math.abs(hours) < 24 ? rtf.format(hours, "hour") : rtf.format(Math.round(hours / 24), "day");
+}
+let recentData = [];
+function drawRecent() {
+  recentList.replaceChildren();
+  for (const item of recentData) {
+    const li = document.createElement("li");
+    let thumb;
+    if (item.art_url) {
+      thumb = document.createElement("img");
+      thumb.alt = ""; thumb.loading = "lazy"; thumb.src = item.art_url;
+      thumb.addEventListener("error", () => { const blank = document.createElement("span"); blank.className = "no-art"; thumb.replaceWith(blank); });
+    } else { thumb = document.createElement("span"); thumb.className = "no-art"; }
+    const text = document.createElement("div"); text.className = "recent-text";
+    const title = document.createElement("b"); title.textContent = item.title; title.title = item.title;
+    const artist = document.createElement("span"); artist.textContent = [item.artist, item.service].filter(Boolean).join(" · ");
+    text.append(title, artist);
+    const when = document.createElement("time"); when.dateTime = item.at; when.textContent = relativeTime(item.at);
+    li.append(thumb, text, when);
+    recentList.appendChild(li);
+  }
+  updateStatus(recentStatus, recentData.length ? "" : t("recent.empty"));
+}
+async function loadRecent() {
+  try {
+    const r = await fetch(`/api/recent?t=${encodeURIComponent(token)}`, {cache:"no-store"});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    recentData = (await r.json()).recent || [];
+    drawRecent();
+  } catch (e) {
+    updateStatus(recentStatus, t("recent.failed", {error:e}));
+  }
+}
+// Loaded when opened and again on each track change while open; there is no timer.
+recentBox.addEventListener("toggle", () => { if (recentBox.open) loadRecent(); });
 // An action refreshes at once instead of waiting for the next tick.
 async function refreshSoon() {
   while (polling) await new Promise(resolve => setTimeout(resolve, 20));
   await tick();
 }
-tick(); setInterval(tick, 1000);
+loadCard();
+tick(); setInterval(() => { tick(); updateTick(); }, 1000);
 </script>
 </body>
 </html>

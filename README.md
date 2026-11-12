@@ -16,7 +16,15 @@ Advanced: a portable [Yozora.exe](https://github.com/mariyaholic/yozora/releases
 
 Yozora keeps an icon in the notification area for as long as it runs, including after it starts on its own at sign-in. Closing the control panel ends the panel completely while Yozora keeps running in the tray. Use **Open control panel** from the tray (or click the icon) or launch Yozora again to reopen it; choose **Quit Yozora** to stop Yozora and close the panel if it is open.
 
-Installing a newer `Yozora-Setup.exe` over an existing install upgrades it in place: setup quits the running Yozora first (the same way **Quit Yozora** does) and keeps your settings. If autostart is on and Yozora now runs from a different folder than when you turned it on, Yozora points the sign-in entry at its current location the next time it starts.
+The tray menu is built each time it opens. A greyed first row names the current track ("Title – Artist", shortened if long) or says **Nothing playing**. When a newer release is out, **Update to 0.2.N** follows **Open control panel** (see [Updating](#updating)). **Pause sharing for 1 hour** and **Pause until I resume** appear while sharing is on; **Resume sharing** replaces them while it is paused. Below a separator, **YouTube**, **Twitch** and **Background Edge tabs** are checked to match your saved settings and save through the same path as the panel's video-site switches, so the panel shows the change on its next refresh.
+
+Installing a newer `Yozora-Setup.exe` over an existing install upgrades it in place: setup quits the running Yozora first (the same way **Quit Yozora** does), keeps your settings, and starts Yozora again afterwards if it was running (also for a silent `/VERYSILENT` upgrade). A fresh install, or an upgrade while Yozora was not running, starts nothing on its own. If autostart is on and Yozora now runs from a different folder than when you turned it on, Yozora points the sign-in entry at its current location the next time it starts.
+
+### Pause sharing
+
+Pausing clears your Discord card straight away (within the usual five-second gap between Discord updates) and publishes nothing until you resume or the timer ends. Detection keeps running, so the panel preview still follows your player. Resuming, or the timer running out, puts the current track back through the normal path. Start a pause from the tray menu or the **Pause sharing** button beside the panel's preview; while paused the preview shows "Sharing paused until 15:30" (or "Sharing paused") with a **Resume** button.
+
+A pause is held in memory only and does not survive a restart of Yozora. That is deliberate: a pause you forgot about cannot hide you from Discord for good. The panel's endpoint is `POST /api/pause` with `{"action":"pause","minutes":60}` (1 to 1440), `{"action":"pause"}` (until resumed) or `{"action":"resume"}`; `/api/state` reports `paused` and `paused_until`.
 
 ### Uninstalling
 
@@ -28,6 +36,24 @@ Use **Settings > Apps > Installed apps > Yozora > Uninstall**. The uninstaller q
 - the `uika-resonance:spotify-refresh` and `uika-resonance:spotify-secret` entries in Windows Credential Manager
 
 A silent uninstall (`unins000.exe /VERYSILENT`) keeps all of this unless you add `/PURGE=1`.
+
+## Updating
+
+Yozora asks GitHub for the latest release at most once a day (and once about two minutes after it starts, if a day has passed since the last check). The request goes to `api.github.com` with the user agent `Yozora/<version>` and nothing else about you or your machine; the time and result are remembered in `update.json` beside the other status files, so restarting Yozora does not check again. A local `dev` build never checks. To turn it off:
+
+```toml
+[update]
+check = false
+```
+
+When a newer `v0.2.N` exists, the control panel shows "Yozora 0.2.N is available" at the top with **Update now** and **What's new** (the release page). It stays until you dismiss it, and returns for the next version. The tray menu gains an **Update to 0.2.N** row. Nothing is ever installed unless you press one of these.
+
+**Update now** downloads `Yozora-Setup.exe` and `SHA256SUMS.txt` from that exact release, only over HTTPS and only from github.com and GitHub's release download hosts (any other redirect is refused), up to 50 MB, into a fresh temporary folder. It checks the installer's SHA-256 against `SHA256SUMS.txt`, then runs it silently (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`). Setup quits Yozora, replaces it and starts it again; the panel closes with it, so open it again from the tray. The panel shows downloading, checking and installing, and says why if anything fails, leaving your install untouched.
+
+How the download is trusted depends on the running Yozora, and `/api/update` reports it as `"verification"`:
+
+- `"signature"`: the running `Yozora.exe` has a valid Authenticode signature. The installer must then have a valid signature from the same signer as well as the right checksum.
+- `"checksum"`: the running `Yozora.exe` is not signed (every release until [code signing](#code-signing) is switched on, and local builds). Only the checksum is checked, and it comes from the same release as the installer, so it catches a corrupted or truncated download but not a tampered release. Update by hand from the release page if that is not enough for you.
 
 ## Repository
 
@@ -56,7 +82,7 @@ go build -ldflags=-H=windowsgui -o Yozora.exe ./cmd/yozora
 ./Yozora.exe serve
 ```
 
-Commands: `serve`, `status`, `doctor`, `setup`, `install`, `uninstall`, `stop`, `version`. `install` opts into Windows login startup; building and serving do not install autostart. `stop` quits a running Yozora started from the same executable, as the tray's **Quit Yozora** does. `version` prints the version, which is `dev` unless the build sets it with `-ldflags "-X uika-resonance/internal/version.Version=0.1.N"` as the release workflow does.
+Commands: `serve`, `status`, `doctor`, `setup`, `install`, `uninstall`, `stop`, `version`. `install` opts into Windows login startup; building and serving do not install autostart. `stop` quits a running Yozora started from the same executable, as the tray's **Quit Yozora** does. `version` prints the version, which is `dev` unless the build sets it with `-ldflags "-X uika-resonance/internal/version.Version=0.2.N"` as the release workflow does.
 
 `Yozora.exe` with no arguments opens the control panel (below); with any argument it acts as the command line (`Yozora.exe status`, `Yozora.exe serve`, ...). It is the only executable: the control panel starts the background daemon by re-launching itself with `serve`. The daemon owns the tray icon; its **Open control panel** re-launches the executable with the internal `panel` command, which opens the panel the same way but never starts a daemon of its own. The panel window runs in its own short-lived process that exits when the window closes or when the daemon stops. The `-H=windowsgui` linker flag keeps double-click launches free of a console window; the executable's icon comes from `cmd/yozora/rsrc_windows_amd64.syso`, generated from `assets/yozora.ico` with `go-winres simply --arch amd64 --icon ../../assets/yozora.ico --manifest gui`.
 
@@ -92,7 +118,7 @@ Until setup is done, the panel opens with a short checklist above the preview: *
 - Yozora's own Discord application ID is built in, so nothing needs entering. If Discord refuses the handshake (for example a custom `discord.client_id` that does not exist), the checklist shows an application ID field; it accepts 17 to 20 digits, and an empty value goes back to Yozora's app.
 - When every check passes, the checklist saves `onboarded = true` under `[ui]` in `cadence.toml` and folds away for good. Its close button does the same. **Show setup checklist** under Diagnostics brings it back.
 
-The terminal `setup` command still exists for scripted installs.
+The terminal `setup` command still exists for scripted installs. Its Spotify step uses the same PKCE flow as the panel: it asks for the client ID only (no secret), prints the sign-in address and opens it in your browser, and waits on `http://127.0.0.1:8977/spotify/callback` for up to 10 minutes. Add that exact Redirect URI to your Spotify app first. Earlier versions asked for a client secret and stored it in Credential Manager; nothing reads it now, and a successful `setup` deletes the old `spotify-secret` entry. If you connected through the old terminal flow, run `setup` again (or use **Connect** in the panel) to get a working token.
 
 ## Spotify Web API
 
@@ -110,7 +136,12 @@ This flow is covered by tests against a local fake token endpoint; it has not ye
 
 - Header: **Listening to Spotify**, **Listening to Apple Music**, or the player's name. Browser sessions show the browser (Microsoft Edge, Google Chrome, Firefox and so on) rather than a guess at the streaming service playing in it.
 - Players are recognised from a fixed table of Windows app IDs and exe names in `internal/smtc/players.go`, matched exactly rather than by part of the name, so the Apple TV app is not mistaken for Apple Music. Tidal, Deezer, Qobuz, Amazon Music, foobar2000, MusicBee, AIMP, VLC, iTunes, Apple TV, Media Player and Windows Media Player are named on the card but stay under **Other media players** (`generic`), with that source's switch, priority and activity type. An app missing from the table is also `generic` and gets a name from its exe or app ID (`strawberry.exe` shows as Strawberry).
-- Large image: album artwork, resolved asynchronously. A slow artwork service must not delay the song text or playback timestamps.
+- Large image: album artwork, resolved asynchronously. A slow artwork service must not delay the song text or playback timestamps. Yozora asks the iTunes Search service first, for the storefront of your Windows region (for example `JP` for Japan; the United States if the region is unknown), so songs listed only outside the US are found. If iTunes has nothing, it asks Deezer's public search, which needs no key, and uses the album's `cover_xl` (or `cover_big`) image only when both the title and the artist match the playing track; a near miss is dropped and the card falls back as before. Deezer art carries no track link, so it adds no **Listen** button. Results are cached for a day per storefront. Override the storefront in `cadence.toml`; it takes effect from the next track:
+
+  ```toml
+  [art]
+  country = "GB"   # ISO 3166 alpha-2 code; empty follows the Windows region
+  ```
 - Small image: Yozora's application icon. Override `discord.small_image` with a Discord asset key or a publicly accessible image URL if the app icon changes.
 - First button: **Listen on [service]**. A custom `buttons.label` is preserved; the legacy/default `Listen along` label becomes the service-specific label.
 - Second button: **Yozora**, using `buttons.yozora_url`.
@@ -135,6 +166,10 @@ The **Appearance** button in the panel's header opens a dialog with 11 themes, t
 ```
 
 The panel's footer and Diagnostics show the running version, or "dev build" for a local build.
+
+**Copy report** under Diagnostics copies a plain-text report for bug reports: version, Windows build, source, artwork route, Discord state, last error, enabled sources and theme. It never contains track titles, artists, tokens, client IDs or file paths with your user name; the last error has those stripped before it is included. If the browser refuses clipboard access, the text is shown in a box to select by hand.
+
+**Recent** (just below Diagnostics) lists the last 20 distinct tracks Yozora published to Discord this run, newest first, with a thumbnail, title, artist and how long ago. It is kept in memory only: nothing is written to disk and it is empty after a restart. It loads when you open it and again when the track changes while it is open; there is no timer.
 
 ### Language
 
@@ -183,13 +218,42 @@ Like the theme, it applies at once and is saved in `cadence.toml`; an unknown va
 | Sumimi | New track: the card fades in | A gold wash spreads from the press point | Paper-lift preview; rows ease 300ms |
 | Confluence | None | Oxblood underline | Oxblood drop rule; rows slide 200ms |
 
+## Discord card settings
+
+The panel's **Discord card** section, between Sources and Spotify, edits the settings that used to be TOML-only. **Apply changes** saves them all at once or not at all, **Discard changes** goes back to what is saved, and **Reset to defaults** fills in the defaults for you to Apply. Yozora picks the change up on its next update; no restart is needed.
+
+- Text lines: `template.details` (top line), `template.state` (second line), `template.large_text` (image tooltip), `template.small_text` (icon tooltip) and `template.paused_details` (top line while paused). Each is a Go template of at most 256 characters and must parse and run; the panel refuses to save one that does not. The rendered result is shown under each field, using the track you are playing now (a sample track when nothing is), through the same code that builds the card. **Placeholders** lists what a template can use.
+- Choices: `presence.paused_mode` (`show`, or `hide`; `clear` behaves like `hide`), `presence.type` (`listening`, `watching`, `playing`) and `presence.status_display` (`app`, `state`, `details`).
+- Buttons: `buttons.enabled`, `buttons.label` (at most 32 characters; empty or `Listen along` gives the service-specific label) and `buttons.spotify_search_fallback`.
+
+The panel saves through `/api/card`, which rejects unknown fields, out-of-range choices and bad templates without changing the file.
+
+## Hiding tracks
+
+Some tracks should never reach your profile. A hidden track is treated like a blocked source: it is never sent to Discord, nothing is looked up for it (no artwork request), and a card already showing for it is cleared at the next rate step. Unlike a blocked source, it still shows in the panel preview, marked **Hidden from Discord**.
+
+- **Hide this track** on the preview offers **Hide this song** (artist and title together) and **Hide this artist**. The **Hidden from Discord** list in the Discord card section removes a rule again.
+- Rules live in `cadence.toml`, one table each. A rule names an artist, a title or both; every named field must match:
+
+```toml
+[[sources.hidden]]
+  artist = "Some Artist"
+
+[[sources.hidden]]
+  artist = "Another Artist"
+  title = "Song * (Live)"
+```
+
+- A field matches the whole value, ignoring case and surrounding spaces. `*` stands for any run of characters (`Song *`, `* (Live)`); there is nothing else, so no regular expressions. A rule made only of `*`, or empty, is ignored so it can never hide everything. A title that really contains `*` also matches more than itself.
+- At most 200 rules, each field at most 128 characters. Hiding applies to the track Yozora has chosen: while a hidden track is the one playing from the highest-priority source, a lower-priority source is not used instead.
+
 ## Performance
 
 With media playing, Yozora checks Windows media sessions every `sources.poll_ms` (default 1000 ms) and updates its state every 250 ms. After a minute with no media session and nothing on your Discord profile, it slows to one session check every 5 seconds and one update every 2 seconds. It returns to full speed as soon as any session appears. A newly started track therefore shows in Yozora within about 5.25 seconds at worst, and on Discord after the usual `presence.track_debounce_ms` (default 500 ms) on top. While a card is still on your profile, Yozora stays at full speed so the `presence.idle_clear_secs` clear is not delayed. A `poll_ms` of 5000 or more is left as it is.
 
 ## Logs
 
-The daemon writes `%LOCALAPPDATA%\uika-resonance\logs\uika-resonance.log`. When the file passes 5 MB it is renamed to `uika-resonance.log.1`, replacing the previous one, and a new file starts, so the logs never take more than about 10 MB however long Yozora runs. `log.level` in `cadence.toml` is read at startup:
+The daemon writes `%LOCALAPPDATA%\uika-resonance\logs\uika-resonance.log`. When the file passes 5 MB it is renamed to `uika-resonance.log.1`, replacing the previous one, and a new file starts, so the logs never take more than about 10 MB however long Yozora runs. `log.level` in `cadence.toml` is read at startup and again whenever the config reloads, so a hand edit or a panel save takes effect without a restart:
 
 ```toml
 [log]
@@ -206,7 +270,7 @@ Settings live in `%APPDATA%\uika-resonance\cadence.toml`. Each time it loads or 
 
 Private Windows named-pipe regression tests exercise simultaneous read/write using a unique `yozora-test-*` pipe, not the live Discord client. Ordinary `go test ./...` never publishes experimental activity to a Discord profile. Tests also cover slow artwork, session gaps and out-of-order lookups, coherent track/art transitions, paused clear/resume and visibility-policy reloads under the send-rate gate, label-only Discord button readback, loopback-art filtering, source-toggle API validation and concurrency, launcher endpoint validation, service names, icon placement, platform-specific links, button ordering, display enums, config bounds, and newest-snapshot retention.
 
-The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, every theme (applied, saved, rolled back on failure, and checked for 4.5:1 text), motion (no animation at idle in any theme, cues fire once per change and never on reconnect, every drag, cancel and reorder ends with no leftover transform or running animation, busy cursors clear after failed saves, Windows reduced motion and the Reduced mode each disable everything, and Full overrides Windows), mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, the Appearance dialog, that each theme loads its own fonts, the Twitch card, the first-run checklist (test card states, the unconfirmed-card hint, application ID validation, completion, reopening) and the Spotify connect states, Discord-offline and panel-offline notes, the config-restored notice, the version line, Japanese (the saved payload, translated key regions, and no overflow at 320px), Windows High Contrast (visible focus rings, chosen tiles, segments, checks and drop line), responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
+The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, every theme (applied, saved, rolled back on failure, and checked for 4.5:1 text), motion (no animation at idle in any theme, cues fire once per change and never on reconnect, every drag, cancel and reorder ends with no leftover transform or running animation, busy cursors clear after failed saves, Windows reduced motion and the Reduced mode each disable everything, and Full overrides Windows), mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, the Appearance dialog, that each theme loads its own fonts, the Twitch card, the first-run checklist (test card states, the unconfirmed-card hint, application ID validation, completion, reopening) and the Spotify connect states, Discord-offline and panel-offline notes, the config-restored notice, the update line (available, dismissed per version, and every install state), the version line, Japanese (the saved payload, translated key regions, and no overflow at 320px), Windows High Contrast (visible focus rings, chosen tiles, segments, checks and drop line), responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
 
 ```sh
 npm install --prefix /tmp/yozora-ui-tools --no-save --no-package-lock playwright@1.62.1
@@ -218,7 +282,7 @@ To use an existing Chromium installation, set `CHROMIUM_PATH` to its executable 
 
 ## Release
 
-A merge to `main` that changes what ships tests, builds and publishes a release automatically (`.github/workflows/release.yml`): Go sources (not `_test.go` files), `go.mod`/`go.sum`, the `.syso` icon resources, `installer/`, `assets/yozora.ico`, the embedded panel (`internal/server/ui.html` and `internal/server/fonts/`), the tray icon, or the workflow itself. Documentation, scripts and test-only merges do not cut a release. The version is the latest `v0.1.N` tag plus one, so the download links above always point at the newest build; it is stamped into the binary (`Yozora.exe version`) and the installer. Use the "Run workflow" button on the release workflow to republish without a code change.
+A merge to `main` that changes what ships tests, builds and publishes a release automatically (`.github/workflows/release.yml`): Go sources (not `_test.go` files), `go.mod`/`go.sum`, the `.syso` icon resources, `installer/`, `assets/yozora.ico`, the embedded panel (`internal/server/ui.html` and `internal/server/fonts/`), the tray icon, or the workflow itself. Documentation, scripts and test-only merges do not cut a release. The version is `<series>.N`: the latest `v<series>.N` tag plus one, starting at `.0` for a new series. The series (`0.2` now) is set by hand in the workflow and raised for a big change; fixes after that only bump N. Either way the download links above always point at the newest build; it is stamped into the binary (`Yozora.exe version`) and the installer. Use the "Run workflow" button on the release workflow to republish without a code change.
 
 ### Code signing
 

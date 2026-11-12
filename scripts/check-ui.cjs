@@ -38,8 +38,30 @@ const setupPosts = [];
 let testCardHTTP = 202;
 const testCardPosts = [];
 let spotifyHTTP = 200;
+let pauseHTTP = 200;
+const pausePosts = [];
+let recentHTTP = 200;
+let recent = [];
+const recentGets = [];
+// A sample of what the daemon sends: no track text, no IDs, no user paths.
+const diagnosticsReport = 'Yozora diagnostics\nVersion: 0.1.42\nWindows: 10.0.22631\nSource: spotify\nArtwork route: deezer\nDiscord: connected\nLast error: none\nEnabled sources: applemusic, spotify, spotifyapi\nTheme: yozora\n';
+const noUpdate = { version:'0.1.42', latest:'', available:false, url:'', verification:'checksum', check_enabled:true, install:{ state:'idle' } };
+let updateState = { ...noUpdate };
+let updateInstallHTTP = 202;
+const updatePosts = [];
 const spotifyPosts = [];
 const posts = [];
+// Discord card form and hidden rules. The preview mimics the server's template engine for the plain placeholders only.
+const cardDefaults = { paused_mode: 'show', type: 'listening', status_display: 'app', buttons_enabled: true, button_label: 'Listen along', spotify_search_fallback: true, details: '{{.Title}}', state: '{{.Artist}}', large_text: '{{.Album}}', small_text: '{{.Player}}', paused_details: '\u23f8 {{.Title}}' };
+let card = { ...cardDefaults };
+let hiddenRules = [];
+let cardGetHTTP = 200;
+const cardPosts = [];
+const hiddenPosts = [];
+const previewPosts = [];
+const foldRule = value => (value || '').trim().toLowerCase();
+const ruleHides = (rule, track) => (rule.artist || rule.title) && (!rule.artist || foldRule(rule.artist) === foldRule(track.artist)) && (!rule.title || foldRule(rule.title) === foldRule(track.title));
+const renderCard = (tpl, track) => tpl.replace(/\{\{\.(\w+)\}\}/g, (_, name) => ({ Title: track.title, Artist: track.artist, Album: track.album, Player: track.service }[name] ?? ''));
 const errors = [];
 const violations = [];
 const checks = [];
@@ -55,8 +77,37 @@ const server = http.createServer(async (req, res) => {
   } else if (url.pathname.startsWith('/test-')) {
     res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
     res.end('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160"><rect width="160" height="160" fill="#253348"/><circle cx="111" cy="48" r="26" fill="#e0b758"/><path d="M0 135 54 65 114 160H0M72 160l49-78 39 60v18" fill="#53647d"/></svg>');
-  } else if (url.pathname === '/api/state') json(state, stateHTTP);
-  else if (url.pathname === '/api/sources') {
+  } else if (url.pathname === '/api/state') json({ ...state, hidden: Boolean(state.title) && hiddenRules.some(rule => ruleHides(rule, state)) || undefined }, stateHTTP);
+  else if (url.pathname === '/api/card') {
+    if (req.method === 'POST') {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      cardPosts.push(JSON.parse(body));
+      if (saveDelay) await new Promise(resolve => setTimeout(resolve, saveDelay));
+      if (cardGetHTTP === 200) card = cardPosts.at(-1);
+    }
+    json({ card, defaults: cardDefaults, hidden: hiddenRules }, cardGetHTTP);
+  } else if (url.pathname === '/api/card/preview' && req.method === 'POST') {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    const posted = JSON.parse(body);
+    previewPosts.push(posted);
+    const broken = ['details', 'state', 'large_text', 'small_text', 'paused_details'].find(key => (posted[key].match(/\{\{/g) || []).length !== (posted[key].match(/\}\}/g) || []).length);
+    if (broken) { res.writeHead(400, { 'Content-Type': 'text/plain' }); res.end(`${broken} is not a valid template: unclosed action`); return; }
+    const sample = !state.title;
+    const track = sample ? { title: 'Night Walk', artist: 'Mira', album: 'After Hours', service: 'Spotify', playing: true } : state;
+    json({ details: renderCard(track.playing ? posted.details : posted.paused_details, track), state: renderCard(posted.state, track), large_text: renderCard(posted.large_text, track), small_text: renderCard(posted.small_text, track), playing: track.playing, sample, hidden: !sample && hiddenRules.some(rule => ruleHides(rule, track)) });
+  } else if (url.pathname === '/api/hidden') {
+    if (req.method === 'POST') {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const posted = JSON.parse(body);
+      hiddenPosts.push(posted);
+      if (posted.add && !hiddenRules.some(rule => foldRule(rule.artist) === foldRule(posted.add.artist) && foldRule(rule.title) === foldRule(posted.add.title))) hiddenRules = [...hiddenRules, { artist: posted.add.artist || '', title: posted.add.title || '' }];
+      if (posted.remove) hiddenRules = hiddenRules.filter(rule => !(foldRule(rule.artist) === foldRule(posted.remove.artist) && foldRule(rule.title) === foldRule(posted.remove.title)));
+    }
+    json({ hidden: hiddenRules });
+  } else if (url.pathname === '/api/sources') {
     if (req.method === 'POST') {
       let body = '';
       for await (const chunk of req) body += chunk;
@@ -90,6 +141,15 @@ const server = http.createServer(async (req, res) => {
     if (testCardHTTP === 202) state = { ...state, test_card: { state: 'sending', confirmed: false } };
     res.writeHead(testCardHTTP, { 'Content-Type': 'text/plain' });
     res.end(testCardHTTP === 202 ? '{"state":"sending"}' : 'a test card is already showing');
+  } else if (url.pathname === '/api/pause' && req.method === 'POST') {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    const posted = JSON.parse(body);
+    pausePosts.push(posted);
+    if (pauseHTTP !== 200) { res.writeHead(pauseHTTP, { 'Content-Type': 'text/plain' }); res.end('pause failed'); return; }
+    const { paused, paused_until, ...rest } = state;
+    state = posted.action === 'pause' ? { ...rest, paused: true, ...(posted.minutes ? { paused_until: new Date(Date.now() + posted.minutes * 60000).toISOString() } : {}) } : rest;
+    json({ paused: Boolean(state.paused) });
   } else if (url.pathname === '/api/spotify' && req.method === 'POST') {
     let body = '';
     for await (const chunk of req) body += chunk;
@@ -102,7 +162,19 @@ const server = http.createServer(async (req, res) => {
     if (posted.action === 'disconnect') Object.assign(sp, { waiting: false, connected: false });
     state = { ...state, spotify: sp };
     json(sp);
-  } else if (url.pathname === '/api/autostart') {
+  } else if (url.pathname === '/api/recent') {
+    recentGets.push(Date.now());
+    json({ recent }, recentHTTP);
+  } else if (url.pathname === '/api/diagnostics') {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end(diagnosticsReport);
+  } else if (url.pathname === '/api/update/install' && req.method === 'POST') {
+    updatePosts.push(Date.now());
+    if (updateInstallHTTP !== 202) { res.writeHead(updateInstallHTTP, { 'Content-Type': 'text/plain' }); res.end('an update is already in progress\n'); return; }
+    updateState = { ...updateState, install:{ state:'downloading' } };
+    json(updateState, 202);
+  } else if (url.pathname === '/api/update') json(updateState);
+  else if (url.pathname === '/api/autostart') {
     if (req.method === 'POST') {
       let body = '';
       for await (const chunk of req) body += chunk;
@@ -181,6 +253,58 @@ const server = http.createServer(async (req, res) => {
     assert.equal(await page.locator('#playback-state').textContent(), 'Paused');
     await shot('paused-560');
     check('polling preserves link focus and paused progress');
+
+    // Pause sharing: a small control opens the two choices; a paused state shows one compact line with Resume.
+    assert.equal(await page.locator('#pause-line').isHidden(), true, 'no pause line while sharing');
+    assert.equal(await page.locator('#pause-choices').isHidden(), true);
+    assert.equal(await page.locator('#pause-open').textContent(), 'Pause sharing');
+    await page.locator('#pause-open').click();
+    assert.equal(await page.locator('#pause-open').getAttribute('aria-expanded'), 'true');
+    assert.deepEqual(await page.locator('#pause-choices button').allTextContents(), ['For 1 hour', 'Until I resume']);
+    await page.locator('#pause-hour').focus();
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#pause-choices').isHidden(), true, 'Escape closes the choices');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'pause-open', 'focus returns to the control');
+    await page.locator('#pause-open').click();
+    await page.locator('#pause-hour').click();
+    await page.waitForFunction(() => !document.getElementById('pause-line').hidden);
+    assert.deepEqual(pausePosts.at(-1), { action: 'pause', minutes: 60 });
+    assert.match(await page.locator('#pause-text').textContent(), /^Sharing paused until \d\d:\d\d$/);
+    assert.equal(await page.locator('#pause-open').isHidden(), true, 'the pause control gives way to Resume');
+    assert.equal(await page.locator('#pause-choices').isHidden(), true);
+    await shot('paused-560');
+    await page.setViewportSize({ width: 320, height: 760 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the pause line fits 320px');
+    await shot('paused-320');
+    await page.setViewportSize({ width: 560, height: 760 });
+    await page.locator('#pause-resume').click();
+    await page.waitForFunction(() => document.getElementById('pause-line').hidden);
+    assert.deepEqual(pausePosts.at(-1), { action: 'resume' });
+    assert.equal(await page.locator('#pause-open').isVisible(), true);
+    await page.locator('#pause-open').click();
+    await page.locator('#pause-open-ended').click();
+    await page.waitForFunction(() => document.getElementById('pause-text').textContent === 'Sharing paused');
+    assert.deepEqual(pausePosts.at(-1), { action: 'pause' });
+    state = { ...state, paused: true, paused_until: '2026-11-12T15:30:00' };
+    await refresh();
+    assert.equal(await page.locator('#pause-text').textContent(), 'Sharing paused until 15:30');
+    await page.locator('#pause-resume').click();
+    await page.waitForFunction(() => document.getElementById('pause-line').hidden);
+    await page.setViewportSize({ width: 320, height: 760 });
+    await page.locator('#pause-open').click();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the pause choices fit 320px');
+    await page.setViewportSize({ width: 560, height: 760 });
+    await page.locator('#pause-open').click();
+    pauseHTTP = 500;
+    await page.locator('#pause-open').click();
+    await page.locator('#pause-hour').click();
+    await waitText('#preview-note', 'Could not change the pause');
+    assert.equal(await page.locator('#pause-line').isHidden(), true, 'a failed pause shows no pause line');
+    pauseHTTP = 200;
+    await page.evaluate(() => { pauseFailure = ''; });
+    await refresh();
+    assert.equal(await page.locator('#preview-note').isHidden(), true);
+    check('Pause sharing: choices, 1 hour and until-resumed, the paused line with Resume, a failed save, and 320px');
 
     await page.locator('label[for=source-youtube]').click({ position: { x: 3, y: 3 } });
     assert.equal(await page.locator('#browser-dependency').isVisible(), true);
@@ -993,6 +1117,135 @@ const server = http.createServer(async (req, res) => {
       assert.equal(await l.locator('#restored-note').isVisible(), true, 'a later restore shows again');
       check('the config-restored notice names the file set aside, and dismisses for that restore');
 
+      // Recent tracks and the copyable report, in English.
+      const minutesAgo = n => new Date(Date.now() - n * 60000).toISOString();
+      recent = [
+        { title:'Night Walk', artist:'Mira', service:'Spotify', art_url:'/test-art.svg', at:minutesAgo(0) },
+        { title:'Glass Rain', artist:'Ode', service:'Apple Music', art_url:'/missing-art.png', at:minutesAgo(7) },
+        { title:'A very long title that has to be cut short before it pushes the clock off the card', artist:'Someone', service:'YouTube Music', at:minutesAgo(190) },
+      ];
+      await l.evaluate(() => { window.copied = null; Object.defineProperty(navigator, 'clipboard', { configurable:true, value:{ writeText: async text => { window.copied = text; } } }); });
+      await l.locator('.diagnostics summary').click();
+      assert.equal(await l.locator('#recent-list').isHidden(), true, 'Recent starts collapsed');
+      const getsBefore = recentGets.length;
+      await l.locator('#recent summary').click();
+      await l.waitForFunction(() => document.querySelectorAll('#recent-list li').length === 3);
+      assert.equal(recentGets.length, getsBefore + 1, 'opening Recent loads it once');
+      assert.deepEqual(await l.locator('#recent-list li b').allTextContents(), recent.map(r => r.title));
+      assert.equal(await l.locator('#recent-list li').first().locator('span').textContent(), 'Mira · Spotify');
+      assert.deepEqual(await l.locator('#recent-list time').allTextContents(), ['just now', '7 minutes ago', '3 hours ago']);
+      assert.equal(await l.locator('#recent-list img').count(), 1, 'a track without working art gets a plain tile, not a broken image');
+      assert.equal(await l.locator('#recent-list .no-art').count(), 2);
+      assert.equal(await l.evaluate(() => document.getElementById('recent-list').querySelector('img').naturalWidth > 0), true, 'the thumbnail loads');
+      await l.setViewportSize({ width:320, height:760 });
+      assert.equal(await l.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Recent fits 320px');
+      await l.locator('#recent').scrollIntoViewIfNeeded();
+      await l.screenshot({ path:path.join(output, 'recent-320.png'), fullPage:true });
+      await l.setViewportSize({ width:560, height:760 });
+      const getsOpen = recentGets.length;
+      state = { ...state, title:'Another Song' };
+      await lRefresh();
+      await l.waitForTimeout(150);
+      assert.equal(recentGets.length, getsOpen + 1, 'a track change reloads an open Recent list');
+      state = { ...state, title:'Night Walk' };
+      await lRefresh();
+      await l.waitForTimeout(150);
+      recent = [];
+      await l.locator('#recent summary').click();
+      await l.locator('#recent summary').click();
+      await l.waitForFunction(() => document.getElementById('recent-status').textContent.includes('Nothing has been shown'));
+      assert.equal(await l.locator('#recent-list li').count(), 0);
+      recentHTTP = 500;
+      await l.locator('#recent summary').click();
+      await l.locator('#recent summary').click();
+      await l.waitForFunction(() => document.getElementById('recent-status').textContent.includes('Could not load recent tracks: Error: HTTP 500'));
+      recentHTTP = 200;
+      await l.locator('#diag-copy').click();
+      await l.waitForFunction(() => window.copied !== null);
+      const copied = await l.evaluate(() => window.copied);
+      console.log('copied diagnostics (English page):\n' + copied);
+      assert.equal(copied, diagnosticsReport);
+      assert.doesNotMatch(copied, /Night Walk|Mira|After Hours|[A-Za-z]:\\|\d{15,}|token/i, 'the report carries no track text, paths, IDs or tokens');
+      assert.equal(await l.locator('#diag-status').textContent(), 'Report copied.');
+      assert.equal(await l.locator('#diag-text').isHidden(), true);
+      await l.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable:true, value:{ writeText: async () => { throw new Error('denied'); } } }));
+      await l.locator('#diag-copy').click();
+      await l.waitForFunction(() => !document.getElementById('diag-text').hidden);
+      assert.equal(await l.locator('#diag-text').inputValue(), diagnosticsReport, 'without clipboard access the text is shown to select');
+      assert.equal(await l.locator('#diag-status').textContent(), 'Could not copy. Select the text below.');
+      await l.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable:true, value:{ writeText: async text => { window.copied = text; } } }); });
+      await l.screenshot({ path:path.join(output, 'diagnostics-560.png'), fullPage:true });
+      check('Recent lists the last tracks with a thumbnail, title, artist and relative time, and Copy report puts the plain-text report on the clipboard');
+
+      // The update line: shown for an available release, dismissed per version, and following an install.
+      const pollUpdate = p => p.evaluate(async () => { while (updateBusy) await new Promise(resolve => setTimeout(resolve, 10)); await pollUpdate(); });
+      const releasePage = 'https://github.com/mariyaholic/yozora/releases/tag/v0.1.43';
+      await pollUpdate(l);
+      assert.equal(await l.locator('#update-note').isHidden(), true, 'no update, no line');
+      updateState = { ...noUpdate, latest:'0.1.43', available:true, url:releasePage };
+      await pollUpdate(l);
+      assert.equal(await l.locator('#update-note').isVisible(), true, 'an available update earns a line');
+      assert.equal(await text('#update-text'), 'Yozora 0.1.43 is available');
+      assert.equal(await text('#update-now'), 'Update now');
+      assert.equal(await l.locator('#update-notes').getAttribute('href'), releasePage);
+      assert.equal(await l.locator('#update-notes').getAttribute('target'), '_blank');
+      assert.equal(await l.locator('#update-note').evaluate(node => node.getBoundingClientRect().top < document.querySelector('#preview').getBoundingClientRect().top), true, 'the line sits above the preview');
+      assert.equal(updatePosts.length, 0, 'showing the line installs nothing');
+      await lShot('update-available-560');
+      await l.setViewportSize({ width:320, height:760 });
+      assert.equal(await l.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the update line fits 320px');
+      await lShot('update-available-320');
+      await l.setViewportSize({ width:560, height:760 });
+      await l.locator('#update-dismiss').click();
+      assert.equal(await l.locator('#update-note').isHidden(), true);
+      await pollUpdate(l);
+      assert.equal(await l.locator('#update-note').isHidden(), true, 'a dismissed version stays away while the panel polls');
+      await l.reload();
+      await ready(l);
+      await pollUpdate(l);
+      assert.equal(await l.locator('#update-note').isHidden(), true, 'a dismissed version stays away after a reload');
+      updateState = { ...updateState, latest:'0.1.44', url:releasePage.replace('0.1.43', '0.1.44') };
+      await pollUpdate(l);
+      assert.equal(await text('#update-text'), 'Yozora 0.1.44 is available', 'a newer release shows again');
+      check('the update line names the version, links the release, and dismisses per version');
+
+      await l.locator('#update-now').click();
+      await l.waitForFunction(() => document.getElementById('update-text').textContent.startsWith('Downloading'));
+      assert.equal(updatePosts.length, 1, 'Update now posts once');
+      assert.equal(await text('#update-text'), 'Downloading Yozora 0.1.44…');
+      assert.equal(await l.locator('#update-now').isHidden(), true, 'no second install button while one runs');
+      assert.equal(await l.locator('#update-dismiss').isHidden(), true);
+      await lShot('update-downloading-560');
+      updateState = { ...updateState, install:{ state:'verifying' } };
+      await pollUpdate(l);
+      assert.equal(await text('#update-text'), 'Checking the download…');
+      updateState = { ...updateState, install:{ state:'installing' } };
+      await pollUpdate(l);
+      assert.equal(await text('#update-text'), 'Installing Yozora 0.1.44. Yozora restarts when it is done.');
+      await l.reload();
+      await ready(l);
+      await pollUpdate(l);
+      assert.equal(await l.locator('#update-note').isVisible(), true, 'progress shows even for a dismissed version');
+      updateState = { ...updateState, install:{ state:'error', error:'checksum mismatch for Yozora-Setup.exe' } };
+      await pollUpdate(l);
+      assert.equal(await text('#update-text'), 'Could not update: checksum mismatch for Yozora-Setup.exe');
+      assert.equal(await l.locator('#update-note').getAttribute('data-state'), 'error');
+      assert.equal(await text('#update-now'), 'Try again');
+      await lShot('update-error-560');
+      await l.locator('#update-now').click();
+      await l.waitForFunction(() => document.getElementById('update-text').textContent.startsWith('Downloading'));
+      assert.equal(updatePosts.length, 2, 'Try again posts again');
+      updateInstallHTTP = 409;
+      updateState = { ...updateState, install:{ state:'idle' } };
+      await pollUpdate(l);
+      await l.locator('#update-now').click();
+      await l.waitForFunction(() => document.getElementById('update-note').dataset.state === 'error');
+      assert.equal(await text('#update-text'), 'Could not update: an update is already in progress');
+      updateInstallHTTP = 202;
+      updateState = { ...updateState, install:{ state:'idle' } };
+      await pollUpdate(l);
+      check('Update now posts once, shows downloading, checking and installing, and reports errors with Try again');
+
       // Japanese, chosen in the Appearance dialog.
       state = { ...state, discord_connected:false };
       await choose(l, 'language', 'ja', '言語（日本語）を保存しました');
@@ -1006,6 +1259,31 @@ const server = http.createServer(async (req, res) => {
       assert.equal(await l.locator('#version-meta').evaluate(node => node.textContent), 'バージョン 0.1.42');
       assert.match(await text('#restored-text'), /前回の設定に戻しました。編集したファイルは cadence\.toml\.broken-20261112-101500 として/);
       assert.equal(await text('#preview-note'), 'Discord が起動していないため、まだプロフィールに表示されていません。');
+      recent = [{ title:'夜道', artist:'ミラ', service:'Spotify', art_url:'/test-art.svg', at:minutesAgo(7) }, { title:'ガラスの雨', artist:'オード', service:'Apple Music', at:minutesAgo(190) }];
+      // The update checks above reload the page: the clipboard stub and the open
+      // sections are gone, so set them up again.
+      await l.evaluate(() => { window.copied = null; Object.defineProperty(navigator, 'clipboard', { configurable:true, value:{ writeText: async text => { window.copied = text; } } }); });
+      if (await l.locator('#recent').evaluate(node => node.open)) await l.locator('#recent summary').click();
+      await l.locator('#recent summary').click();
+      await l.waitForFunction(() => document.querySelectorAll('#recent-list li').length === 2);
+      assert.equal(await text('#recent summary'), '最近の再生');
+      assert.deepEqual(await l.locator('#recent-list time').allTextContents(), ['7 分前', '3 時間前']);
+      if (!await l.locator('.diagnostics').evaluate(node => node.open)) await l.locator('.diagnostics summary').click();
+      assert.equal(await text('#diag-copy'), 'レポートをコピー');
+      await l.locator('#diag-copy').click();
+      await l.waitForFunction(() => window.copied !== null);
+      assert.equal(await text('#diag-status'), 'レポートをコピーしました。');
+      assert.equal(await l.evaluate(() => window.copied), diagnosticsReport);
+      await l.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable:true, value:{ writeText: async () => { throw new Error('denied'); } } }));
+      await l.locator('#diag-copy').click();
+      await l.waitForFunction(() => document.getElementById('diag-status').textContent.startsWith('コピーできませんでした'));
+      await l.locator('#recent').scrollIntoViewIfNeeded();
+      await l.screenshot({ path:path.join(output, 'recent-ja-560.png'), fullPage:true });
+      recent = [];
+      await l.locator('#recent summary').click();
+      await l.locator('#recent summary').click();
+      await l.waitForFunction(() => document.getElementById('recent-status').textContent === 'まだ Discord に表示したトラックはありません。');
+      check('Recent and Copy report read naturally in Japanese');
       assert.match(await l.locator('#source-order li').first().getAttribute('aria-label'), /^優先順位 1: /);
       assert.equal(await l.locator('#source-order li[data-source="spotify"] .drag-handle').getAttribute('aria-label'), 'Spotify（デスクトップ） を並べ替え');
       assert.equal(await l.locator('#appearance-open').getAttribute('aria-label'), '外観');
@@ -1022,6 +1300,48 @@ const server = http.createServer(async (req, res) => {
         assert.deepEqual(found, [], `${selector} still has English in Japanese`);
       }
       check('Japanese: the picker saves only the language, and key regions, labels and live text are translated');
+
+      assert.equal(await text('#update-text'), 'Yozora 0.1.44 を利用できます', 'a language change redraws the line at once');
+      updateState = { ...updateState, install:{ state:'idle' } };
+      await pollUpdate(l);
+      assert.equal(await text('#update-text'), 'Yozora 0.1.44 を利用できます');
+      assert.equal(await text('#update-now'), '今すぐ更新');
+      assert.equal(await text('#update-notes'), '更新内容');
+      assert.equal(await l.locator('#update-dismiss').getAttribute('aria-label'), '閉じる');
+      for (const [phase, want] of [['downloading', 'Yozora 0.1.44 をダウンロードしています…'], ['verifying', 'ダウンロードを確認しています…'], ['installing', 'Yozora 0.1.44 をインストールしています。完了すると Yozora は自動で起動し直します。']]) {
+        updateState = { ...updateState, install:{ state:phase } };
+        await pollUpdate(l);
+        assert.equal(await text('#update-text'), want);
+      }
+      updateState = { ...updateState, install:{ state:'error', error:'x' } };
+      await pollUpdate(l);
+      assert.equal(await text('#update-text'), '更新できませんでした: x');
+      assert.equal(await text('#update-now'), 'もう一度試す');
+      assert.equal(await l.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      await lShot('update-error-ja-560');
+      updateState = { ...noUpdate };
+      await pollUpdate(l);
+      assert.equal(await l.locator('#update-note').isHidden(), true);
+      check('Japanese: the update line, its buttons and every install state are translated');
+
+      // The pause control and line in Japanese.
+      state = { ...state, paused:true, paused_until:'2026-11-12T15:30:00' };
+      await lRefresh();
+      assert.equal(await text('#pause-text'), '15:30 まで共有を一時停止中');
+      assert.equal(await text('#pause-resume'), '再開');
+      await lShot('ja-paused-560');
+      state = { ...state, paused_until:undefined };
+      await lRefresh();
+      assert.equal(await text('#pause-text'), '共有を一時停止中');
+      const { paused, paused_until, ...unpaused } = state;
+      state = unpaused;
+      await lRefresh();
+      assert.equal(await text('#pause-open'), '共有を一時停止');
+      await l.locator('#pause-open').click();
+      assert.deepEqual(await l.locator('#pause-choices button').allTextContents(), ['1 時間', '再開するまで']);
+      assert.equal(await l.locator('#pause-choices').getAttribute('aria-label'), '共有を一時停止');
+      await l.locator('#pause-open').click();
+      check('Japanese: the pause control, its choices, and the paused line with and without an end time');
 
       const ja320 = [];
       for (const id of ['yozora', 'ledger', 'mariyaholic-98']) {
@@ -1111,6 +1431,17 @@ const server = http.createServer(async (req, res) => {
       const marks = await f.evaluate(() => ['discord', 'card'].map(id => { const s = getComputedStyle(document.getElementById(`check-${id}`), '::before'); return [s.content, s.backgroundColor, s.borderTopColor]; }));
       assert.ok(marks[0][0] === '"✓"' && !transparent(marks[0][1]), `a passed check is filled: ${marks[0]}`);
       assert.ok(marks[1][0] === '"!"' && !transparent(marks[1][2]), `a problem check is marked: ${marks[1]}`);
+      state = { ...state, paused:true, paused_until:'2026-11-12T15:30:00' };
+      await f.evaluate(async () => { while (polling) await new Promise(resolve => setTimeout(resolve, 10)); await tick(); });
+      const pauseEdge = await f.locator('#pause-line').evaluate(node => [getComputedStyle(node).borderTopWidth, getComputedStyle(node).borderTopColor]);
+      assert.ok(pauseEdge[0] === '2px' && !transparent(pauseEdge[1]), `the paused line keeps a heavy edge: ${pauseEdge}`);
+      const { paused: pausedOnce, paused_until: pausedUntilOnce, ...notPaused } = state;
+      state = notPaused;
+      await f.evaluate(async () => { while (polling) await new Promise(resolve => setTimeout(resolve, 10)); await tick(); });
+      await f.locator('#pause-open').click();
+      const openEdge = await f.locator('#pause-open').evaluate(node => [getComputedStyle(node).borderTopWidth, getComputedStyle(node).borderTopColor]);
+      assert.ok(openEdge[0] === '2px' && !transparent(openEdge[1]), `the open pause control is marked: ${openEdge}`);
+      await f.locator('#pause-open').click();
       await f.evaluate(() => scrollTo(0, 0));
       await f.screenshot({ path:path.join(output, 'forced-colors-560.png'), fullPage:true });
 
@@ -1140,6 +1471,12 @@ const server = http.createServer(async (req, res) => {
       });
       assert.ok(tiles.on[0] === '2px' && !transparent(tiles.on[1]) && tiles.on[1] !== tiles.off[1], `the checked theme tile stands out: ${JSON.stringify(tiles)}`);
       assert.ok(!transparent(tiles.seg) && tiles.seg !== tiles.segOff, `the chosen segment is filled: ${JSON.stringify(tiles)}`);
+      updateState = { ...noUpdate, latest:'0.1.43', available:true, url:'https://github.com/mariyaholic/yozora/releases/tag/v0.1.43', install:{ state:'error', error:'checksum mismatch' } };
+      await f.evaluate(async () => { while (updateBusy) await new Promise(resolve => setTimeout(resolve, 10)); await pollUpdate(); });
+      const note = await f.evaluate(() => { const n = document.getElementById('update-note'); const e = getComputedStyle(document.getElementById('update-text')); const b = getComputedStyle(n); return { border:[b.borderTopStyle, b.borderTopWidth], err:[e.borderInlineStartStyle, e.borderInlineStartWidth], shown:!n.hidden }; });
+      assert.deepEqual(note, { border:['solid', '1px'], err:['solid', '3px'], shown:true }, 'forced colours keep the update line and its error edge visible');
+      await f.screenshot({ path:path.join(output, 'forced-colors-update-560.png') });
+      updateState = { ...noUpdate };
       await f.keyboard.press('Tab');
       await f.keyboard.press('Shift+Tab');
       const tileRing = await f.evaluate(() => { const s = getComputedStyle(document.querySelector('.theme-option:has(input:focus-visible)')); return [s.outlineStyle, s.outlineColor]; });
@@ -1154,6 +1491,137 @@ const server = http.createServer(async (req, res) => {
       version = 'dev';
       check('forced colours keep focus rings, checked rows and tiles, the chosen segment, checks and the drop line visible');
     }
+
+    // Discord card form, live preview, hidden rules and the hide button, in both languages.
+    const cardTrack = { playing:true, activity_type:'listening', title:'Night Walk', artist:'Mira', album:'After Hours', service:'Spotify', source:'spotify', elapsed_sec:82, duration_sec:243, discord_connected:true, art_url:'/test-art.svg', small_image:'/test-badge.svg' };
+    for (const lang of ['en', 'ja']) {
+      const ja = lang === 'ja';
+      const words = ja
+        ? { saved: '保存しました', unsaved: '未保存', hiddenMark: 'Discord には表示されません', hideSong: 'この曲を隠す', invalid: 'まだ適用できません', reset: '初期設定を入力しました', removeLabel: 'の非表示をやめる', sample: 'サンプルの曲' }
+        : { saved: 'Saved', unsaved: 'Unsaved', hiddenMark: 'Hidden from Discord', hideSong: 'Hide this song', invalid: 'Cannot apply yet', reset: 'Defaults filled in', removeLabel: 'Stop hiding', sample: 'sample track' };
+      language = lang;
+      card = { ...cardDefaults }; hiddenRules = []; state = { ...cardTrack };
+      cardPosts.length = 0; hiddenPosts.length = 0; previewPosts.length = 0;
+      const cc = await browser.newContext({ viewport: { width: 560, height: 760 }, reducedMotion: 'reduce' });
+      await cc.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+      await cc.addInitScript(() => { window.cspViolations = []; document.addEventListener('securitypolicyviolation', event => window.cspViolations.push(event.violatedDirective)); });
+      const c = await cc.newPage();
+      c.on('pageerror', error => errors.push(error.message));
+      await c.goto(`${origin}/?t=synthetic`);
+      await ready(c);
+      await c.waitForFunction(() => !document.getElementById('card-fields').disabled && document.getElementById('cf-r-details').textContent !== '');
+      const val = id => c.locator(`#cf-${id}`).inputValue();
+      const text = sel => c.locator(sel).textContent();
+      assert.equal(await val('details'), '{{.Title}}');
+      assert.equal(await text('#cf-r-details'), 'Night Walk');
+      assert.equal(await text('#cf-r-state'), 'Mira');
+      assert.equal(await c.locator('#card-save').isDisabled(), true);
+      assert.equal(await c.locator('#card-discard').isHidden(), true);
+      assert.equal(await c.locator('#card-status').textContent(), '', 'a clean card form says nothing');
+      assert.equal(await c.locator('#card-placeholders').evaluate(node => node.open), false, 'placeholders are on demand');
+      assert.equal(await c.locator('#card-hidden').isHidden(), true, 'no rules, no hidden list');
+      // Section order: Sources, then the Discord card, then Spotify / Startup.
+      assert.deepEqual(await c.evaluate(() => ['#sources-form', '#card-form', '.startup'].map(sel => document.querySelector(sel).getBoundingClientRect().top + scrollY)).then(tops => tops.every((top, i) => !i || top > tops[i - 1])), true);
+
+      // Editing: the preview follows, Apply and Discard appear, Discard restores.
+      await c.locator('#cf-details').fill('{{.Title}} by {{.Artist}}');
+      await c.waitForFunction(() => document.getElementById('cf-r-details').textContent === 'Night Walk by Mira');
+      assert.equal(await c.locator('#card-save').isEnabled(), true);
+      assert.equal(await c.locator('#card-discard').isVisible(), true);
+      assert.ok((await text('#card-status')).includes(words.unsaved));
+      await c.locator('#card-discard').click();
+      assert.equal(await val('details'), '{{.Title}}');
+      await c.waitForFunction(() => document.getElementById('cf-r-details').textContent === 'Night Walk');
+      assert.equal(await c.locator('#card-save').isDisabled(), true);
+
+      // A template that does not parse blocks Apply and says why; fixing it frees Apply.
+      await c.locator('#cf-state').fill('{{.Artist');
+      await c.waitForFunction(word => document.getElementById('card-status').textContent.includes(word), words.invalid);
+      assert.equal(await c.locator('#card-save').isDisabled(), true);
+      await c.locator('#cf-state').fill('{{.Artist}} / {{.Album}}');
+      await c.waitForFunction(() => document.getElementById('cf-r-state').textContent === 'Mira / After Hours');
+      assert.equal(await c.locator('#card-save').isEnabled(), true);
+
+      // Apply posts the whole form, and the saved state becomes the new baseline.
+      await c.locator('#cf-paused_mode').selectOption('hide');
+      await c.locator('#cf-type').selectOption('watching');
+      await c.locator('#cf-status_display').selectOption('details');
+      await c.locator('#cf-buttons_enabled').uncheck();
+      await c.locator('#cf-button_label').fill('Hear it');
+      await c.locator('#cf-spotify_search_fallback').uncheck();
+      await c.locator('#cf-small_text').fill('');
+      await c.locator('#card-save').click();
+      await c.waitForFunction(word => document.getElementById('card-status').textContent.includes(word), words.saved);
+      assert.deepEqual(cardPosts.at(-1), { paused_mode: 'hide', type: 'watching', status_display: 'details', buttons_enabled: false, button_label: 'Hear it', spotify_search_fallback: false, details: '{{.Title}}', state: '{{.Artist}} / {{.Album}}', large_text: '{{.Album}}', small_text: '', paused_details: '⏸ {{.Title}}' });
+      assert.equal(await c.locator('#card-save').isDisabled(), true);
+      assert.equal(await c.locator('#card-discard').isHidden(), true);
+      await shot(`card-${lang}-560`);
+
+      // Reset fills the defaults but only Apply saves them.
+      await c.locator('#card-reset').click();
+      assert.equal(await val('state'), '{{.Artist}}');
+      assert.equal(await c.locator('#cf-paused_mode').inputValue(), 'show');
+      assert.equal(await c.locator('#cf-buttons_enabled').isChecked(), true);
+      assert.ok((await text('#card-status')).includes(words.reset));
+      assert.equal(cardPosts.length, 1, 'reset alone saves nothing');
+      await c.locator('#card-save').click();
+      await c.waitForFunction(word => document.getElementById('card-status').textContent.includes(word), words.saved);
+      assert.deepEqual(cardPosts.at(-1), cardDefaults);
+
+      // A paused track and a hidden track are said in the card section.
+      await c.locator('#cf-paused_mode').selectOption('hide');
+      state = { ...state, playing: false };
+      await c.evaluate(() => refreshSoon());
+      await c.waitForFunction(() => document.getElementById('card-note').textContent !== '');
+      await c.locator('#cf-paused_mode').selectOption('show');
+      await c.waitForFunction(() => document.getElementById('card-note').textContent === '');
+      state = { ...state, playing: true };
+
+      // Hiding from the preview: song, then artist, then removal from the list.
+      assert.equal(await c.locator('#hide-menu').isHidden(), true);
+      await c.locator('#hide-open').click();
+      assert.equal(await c.locator('#hide-open').getAttribute('aria-expanded'), 'true');
+      assert.equal(await c.locator('#hide-song').textContent(), words.hideSong);
+      await c.keyboard.press('Escape');
+      assert.equal(await c.locator('#hide-menu').isHidden(), true, 'Escape closes the hide menu');
+      await c.locator('#hide-open').click();
+      await c.locator('#hide-song').click();
+      await c.waitForFunction(() => !document.getElementById('hidden-mark').hidden);
+      assert.deepEqual(hiddenPosts.at(-1), { add: { artist: 'Mira', title: 'Night Walk' } });
+      assert.equal(await text('#hidden-mark'), words.hiddenMark);
+      assert.equal(await c.locator('#hide-open').isHidden(), true);
+      assert.equal(await c.locator('#card-hidden').isVisible(), true);
+      assert.equal(await c.locator('#hidden-list li').count(), 1);
+      assert.ok((await c.locator('#hidden-list button').getAttribute('aria-label')).includes(words.removeLabel));
+      await c.waitForFunction(() => document.getElementById('card-note').textContent !== '');
+      await shot(`hidden-${lang}-560`);
+      await c.locator('#hidden-list button').click();
+      await c.waitForFunction(() => document.getElementById('hidden-mark').hidden && !document.getElementById('hide-open').hidden);
+      assert.deepEqual(hiddenPosts.at(-1), { remove: { artist: 'Mira', title: 'Night Walk' } });
+      assert.equal(await c.locator('#card-hidden').isHidden(), true);
+      await c.locator('#hide-open').click();
+      await c.locator('#hide-artist').click();
+      await c.waitForFunction(() => !document.getElementById('hidden-mark').hidden);
+      assert.deepEqual(hiddenPosts.at(-1), { add: { artist: 'Mira', title: '' } });
+      await c.locator('#hidden-list button').click();
+      await c.waitForFunction(() => document.getElementById('hidden-mark').hidden);
+      // Nothing playing: no hide button, and the preview says it is a sample.
+      state = { ...state, title: '', artist: '', album: '' };
+      await c.evaluate(() => refreshSoon());
+      await c.waitForFunction(() => document.getElementById('hide-row').hidden);
+      await c.locator('#cf-details').fill('{{.Title}}!');
+      await c.waitForFunction(() => document.getElementById('cf-r-details').textContent === 'Night Walk!');
+      assert.ok((await text('#card-note')).includes(words.sample) || ja, 'the sample note shows');
+      assert.equal(await c.locator('#card-note').textContent() !== '', true);
+      // 320px: no horizontal scroll with the card section.
+      await c.setViewportSize({ width: 320, height: 760 });
+      assert.equal(await c.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'card section fits 320px');
+      violations.push(...await c.evaluate(() => window.cspViolations));
+      await cc.close();
+      state = { ...cardTrack };
+      check(`${lang === 'ja' ? 'Japanese: ' : ''}Discord card form edits, previews, applies, discards and resets; tracks can be hidden and unhidden`);
+    }
+    language = 'system';
 
     violations.push(...await page.evaluate(() => window.cspViolations));
     assert.deepEqual(errors, [], 'no browser runtime exceptions');

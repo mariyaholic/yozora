@@ -40,11 +40,15 @@ jobs:
       - name: Version
         id: version
         run: |
-          # Next release = highest v0.1.N tag + 1. Using the run number collided with the hand-made v0.1.1 tag.
+          # $series is the major.minor line; raise it by hand for a big change. The next
+          # release is the highest v<series>.N tag + 1, or v<series>.0 for a new series.
+          # (Counting tags, not the run number, which collided with the hand-made v0.1.1.)
+          $series = '0.2'
           git fetch --tags --force
-          $n = git tag --list 'v0.1.*' | ForEach-Object { if ($_ -match '^v0\.1\.(\d+)$') { [int]$Matches[1] } } | Sort-Object | Select-Object -Last 1
+          $pattern = '^v' + [regex]::Escape($series) + '\.(\d+)$'
+          $n = git tag --list "v$series.*" | ForEach-Object { if ($_ -match $pattern) { [int]$Matches[1] } } | Sort-Object | Select-Object -Last 1
           if ($null -eq $n) { $n = -1 }
-          $v = "0.1.$($n + 1)"
+          $v = "$series.$($n + 1)"
           Write-Host "Next version: v$v"
           "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
       - name: Test

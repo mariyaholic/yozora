@@ -33,8 +33,12 @@ type Resolver struct {
 	cacheDir   string
 	cacheMax   int64
 	baseURL    string
+	// Catalog endpoints; tests point them at fakes.
+	itunesURL string
+	deezerURL string
 
 	mu      sync.Mutex
+	country string
 	itu     map[string]ituEntry
 	files   map[string]int64
 	insrt   sync.Once
@@ -50,6 +54,9 @@ type ituEntry struct {
 func New(cacheDir string, cacheMaxBytes int64) *Resolver {
 	return &Resolver{
 		httpClient: &http.Client{Timeout: 8 * time.Second},
+		itunesURL:  "https://itunes.apple.com/search",
+		deezerURL:  "https://api.deezer.com/search",
+		country:    DefaultCountry,
 		cacheDir:   cacheDir,
 		cacheMax:   cacheMaxBytes,
 		itu:        map[string]ituEntry{},
@@ -137,11 +144,11 @@ func (r *Resolver) Resolve(t Track, prefer string) Lookup {
 		if l := r.localArt(t, key); l.ImageURL != "" {
 			return l
 		}
-		if l := r.itunesArt(t, key); l.ImageURL != "" {
+		if l := r.catalogArt(t, key); l.ImageURL != "" {
 			return l
 		}
 	} else {
-		if l := r.itunesArt(t, key); l.ImageURL != "" {
+		if l := r.catalogArt(t, key); l.ImageURL != "" {
 			return l
 		}
 		if l := r.localArt(t, key); l.ImageURL != "" {
@@ -149,6 +156,14 @@ func (r *Resolver) Resolve(t Track, prefer string) Lookup {
 		}
 	}
 	return Lookup{Via: "default"}
+}
+
+// catalogArt asks iTunes first and Deezer only when iTunes has nothing.
+func (r *Resolver) catalogArt(t Track, key string) Lookup {
+	if l := r.itunesArt(t, key); l.ImageURL != "" {
+		return l
+	}
+	return r.deezerArt(t)
 }
 
 func (r *Resolver) localArt(t Track, key string) Lookup {
@@ -182,6 +197,9 @@ func (r *Resolver) itunesArt(t Track, key string) Lookup {
 	if strings.TrimSpace(t.Title) == "" {
 		return Lookup{}
 	}
+	// The store is regional, so the same song can hit in one country and miss in another.
+	country := r.Country()
+	key = keyOf("itunes", country, key)
 	r.mu.Lock()
 	if e, ok := r.itu[key]; ok && time.Now().Before(e.exp) {
 		r.mu.Unlock()
@@ -193,7 +211,8 @@ func (r *Resolver) itunesArt(t Track, key string) Lookup {
 	q.Set("term", strings.TrimSpace(t.Title+" "+t.Artist))
 	q.Set("media", "music")
 	q.Set("limit", "1")
-	req, err := http.NewRequest(http.MethodGet, "https://itunes.apple.com/search?"+q.Encode(), nil)
+	q.Set("country", country)
+	req, err := http.NewRequest(http.MethodGet, r.itunesURL+"?"+q.Encode(), nil)
 	if err != nil {
 		return Lookup{}
 	}
@@ -221,7 +240,13 @@ func (r *Resolver) itunesArt(t Track, key string) Lookup {
 		big := strings.Replace(out.Results[0].ArtworkURL100, "100x100bb", "600x600bb", 1)
 		l = Lookup{ImageURL: big, ListenURL: out.Results[0].TrackViewURL, Via: "itunes"}
 	}
+	r.remember(key, l)
+	return l
+}
+
+func (r *Resolver) remember(key string, l Lookup) {
 	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.itu[key] = ituEntry{l, time.Now().Add(24 * time.Hour)}
 	if len(r.itu) > 128 {
 		for k := range r.itu {
@@ -231,8 +256,6 @@ func (r *Resolver) itunesArt(t Track, key string) Lookup {
 			}
 		}
 	}
-	r.mu.Unlock()
-	return l
 }
 
 func (r *Resolver) StartServer(port int) (string, error) {

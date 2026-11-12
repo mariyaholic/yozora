@@ -15,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"uika-resonance/internal/config"
@@ -23,6 +22,7 @@ import (
 	"uika-resonance/internal/presence"
 	"uika-resonance/internal/spotifyapi"
 	"uika-resonance/internal/sysutil"
+	"uika-resonance/internal/update"
 	"uika-resonance/internal/version"
 )
 
@@ -48,6 +48,15 @@ type Deps struct {
 	OpenURL           func(string) error
 	// RedirectBase is the panel's own loopback origin; Start fills it in.
 	RedirectBase string
+
+	// Update backs /api/update. Nil (or a dev build) reports no update.
+	Update Updater
+}
+
+// Updater is the update service as the panel sees it.
+type Updater interface {
+	Status() update.Status
+	StartInstall() error
 }
 
 func validateSourceOrder(order, canonical []string) error {
@@ -77,7 +86,6 @@ func constantTimeEqual(a, b string) bool {
 
 func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
-	var configMu sync.Mutex
 	sources := config.ToggleKeys
 	writeSources := func(w http.ResponseWriter) {
 		cfg := d.Cfg.Get()
@@ -147,6 +155,34 @@ func Handler(d Deps) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(stateResponse{Status: d.Engine.Status(), Spotify: d.spotifyState(), Restored: d.Cfg.Restored()})
 	}))
+	// Tracks published to Discord this run, newest first. It lives in memory only.
+	mux.HandleFunc("/api/recent", auth(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method", 405)
+			return
+		}
+		list := []presence.RecentTrack{}
+		if d.Engine != nil {
+			list = append(list, d.Engine.Recent()...)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = json.NewEncoder(w).Encode(map[string]any{"recent": list})
+	}))
+	// A plain-text report the panel copies for bug reports; see buildDiagnostics for what stays out.
+	mux.HandleFunc("/api/diagnostics", auth(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method", 405)
+			return
+		}
+		var st presence.Status
+		if d.Engine != nil {
+			st = d.Engine.Status()
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = io.WriteString(w, buildDiagnostics(diagInput{Version: version.Version, OSBuild: osBuild(), Status: st, Cfg: d.Cfg.Get()}))
+	}))
 	mux.HandleFunc("/api/sources", auth(func(w http.ResponseWriter, r *http.Request) {
 		configMu.Lock()
 		defer configMu.Unlock()
@@ -198,33 +234,7 @@ func Handler(d Deps) http.Handler {
 					return
 				}
 			}
-			current, err := config.Load(d.CfgPath)
-			if err != nil {
-				http.Error(w, err.Error(), 500)
-				return
-			}
-			if payload.Enabled != nil {
-				blocked := make([]string, 0, len(current.Sources.Blocked)+len(payload.Enabled))
-				for _, block := range current.Sources.Blocked {
-					if _, changed := payload.Enabled[strings.ToLower(strings.TrimSpace(block))]; !changed {
-						blocked = append(blocked, block)
-					}
-				}
-				for _, source := range sources {
-					if enabled, changed := payload.Enabled[source]; changed && !*enabled {
-						blocked = append(blocked, source)
-					}
-				}
-				current.Sources.Blocked = blocked
-			}
-			if payload.Order != nil {
-				current.Sources.Order = payload.Order
-			}
-			if err := config.Save(current, d.CfgPath); err != nil {
-				http.Error(w, err.Error(), 500)
-				return
-			}
-			if _, err := d.Cfg.Reload(); err != nil {
+			if err := applySources(d.CfgPath, d.Cfg, payload.Enabled, payload.Order); err != nil {
 				http.Error(w, err.Error(), 500)
 				return
 			}
@@ -315,7 +325,10 @@ func Handler(d Deps) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]bool{"enabled": sysutil.AutostartEnabled()})
 	}))
+	registerUpdate(mux, d, auth)
 	registerSetup(mux, d, &configMu, auth)
+	registerPause(mux, d, auth)
+	registerCard(mux, d, &configMu, auth)
 	return mux
 }
 

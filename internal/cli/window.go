@@ -3,6 +3,8 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -19,7 +21,9 @@ import (
 	"github.com/jchv/go-webview2/pkg/edge"
 
 	"uika-resonance/internal/config"
+	"uika-resonance/internal/presence"
 	"uika-resonance/internal/tray"
+	"uika-resonance/internal/update"
 )
 
 const (
@@ -394,7 +398,29 @@ type daemonTray struct {
 	stop      func() // cancels serve's context
 	dataDir   string
 	panelLive bool // the dashboard server is listening and its endpoint written
+	eng       *presence.Engine
 	quitting  atomic.Bool
+	update    *update.Service
+}
+
+// UpdateVersion is the newer version the tray offers, or "" when there is none.
+func (d *daemonTray) UpdateVersion() string {
+	if d.update == nil || !d.update.Active() || !d.cfg.Get().Update.Check {
+		return ""
+	}
+	v, _ := d.update.Available()
+	return v
+}
+
+// InstallUpdate runs when the user picks the tray's update row. Progress and
+// errors are only visible in the panel, so a failure is also said out loud.
+func (d *daemonTray) InstallUpdate() {
+	go func() {
+		if err := d.update.Install(context.Background()); err != nil && !errors.Is(err, update.ErrBusy) {
+			log.Printf("tray: update: %v", err)
+			launcherNotify("Yozora", "Could not update Yozora:\n"+err.Error(), notifyError)
+		}
+	}()
 }
 
 func (d *daemonTray) ShowPanel() {
@@ -448,8 +474,8 @@ func (d *daemonTray) Quit() {
 // startDaemonTray shows the tray icon for the life of the serve daemon. The
 // returned func removes the icon and waits briefly for the tray thread, so no
 // stale icon is left behind when the process exits.
-func startDaemonTray(cfg *config.Holder, stop func(), dataDir string, panelLive bool) func() {
-	t := tray.New(&daemonTray{cfg: cfg, stop: stop, dataDir: dataDir, panelLive: panelLive})
+func startDaemonTray(cfg *config.Holder, stop func(), dataDir string, panelLive bool, eng *presence.Engine, upd *update.Service) func() {
+	t := tray.New(&daemonTray{cfg: cfg, stop: stop, dataDir: dataDir, panelLive: panelLive, eng: eng, update: upd})
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
