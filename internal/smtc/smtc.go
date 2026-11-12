@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 	"unsafe"
@@ -320,56 +319,6 @@ func dataReaderFactory() (*wrt.Object, error) {
 		rdrFac, rdrFacErr = wrt.GetActivationFactory(classDataReader, wrt.MustGUID(iidDataRdrFac))
 	})
 	return rdrFac, rdrFacErr
-}
-
-var youtubeMusicIDs = []struct {
-	value  string
-	prefix bool
-}{
-	{"_crx_cinhimbnkkaeohfgghhklpknlkffjgod", false},
-	{"music.youtube.com-5929f88e_vezhnr0wkvrcy", true},
-	{"com.github.th-ch.youtube-music", false},
-	{"com.squirrel.youtube_music_desktop_app.youtube-music-desktop-app", false},
-}
-
-func Classify(appID string) string {
-	a := strings.ToLower(appID)
-	for _, id := range youtubeMusicIDs {
-		if (id.prefix && strings.HasPrefix(a, id.value)) || (!id.prefix && strings.Contains(a, id.value)) {
-			return "youtubemusic"
-		}
-	}
-	switch {
-	case strings.Contains(a, "apple"):
-		return "applemusic"
-	case strings.Contains(a, "spotify"):
-		return "spotify"
-	case strings.Contains(a, "chrome"), strings.Contains(a, "msedge"),
-		strings.Contains(a, "edge"), strings.Contains(a, "firefox"),
-		strings.Contains(a, "brave"), strings.Contains(a, "opera"),
-		strings.Contains(a, "vivaldi"), strings.Contains(a, "arc"):
-		return "browser"
-	default:
-		return "generic"
-	}
-}
-
-func FriendlyName(appID string) string {
-	switch Classify(appID) {
-	case "youtubemusic":
-		return "YouTube Music"
-	case "applemusic":
-		return "Apple Music"
-	case "spotify":
-		return "Spotify"
-	case "browser":
-		return "Browser"
-	default:
-		if i := strings.LastIndex(appID, "."); i >= 0 && i+1 < len(appID) {
-			return appID[i+1:]
-		}
-		return appID
-	}
 }
 
 func (m *Manager) eachSession(fn func(i uint32, sess *wrt.Object) bool) error {

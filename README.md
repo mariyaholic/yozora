@@ -71,7 +71,8 @@ For this local Rich Presence path, desktop Discord must be running; no Discord c
 
 ## Card layout
 
-- Header: **Listening to Spotify**, **Listening to Apple Music**, or the known player name. Unknown browser sessions are shown as Browser rather than guessed to be a specific streaming service.
+- Header: **Listening to Spotify**, **Listening to Apple Music**, or the player's name. Browser sessions show the browser (Microsoft Edge, Google Chrome, Firefox and so on) rather than a guess at the streaming service playing in it.
+- Players are recognised from a fixed table of Windows app IDs and exe names in `internal/smtc/players.go`, matched exactly rather than by part of the name, so the Apple TV app is not mistaken for Apple Music. Tidal, Deezer, Qobuz, Amazon Music, foobar2000, MusicBee, AIMP, VLC, iTunes, Apple TV, Media Player and Windows Media Player are named on the card but stay under **Other media players** (`generic`), with that source's switch, priority and activity type. An app missing from the table is also `generic` and gets a name from its exe or app ID (`strawberry.exe` shows as Strawberry).
 - Large image: album artwork, resolved asynchronously. A slow artwork service must not delay the song text or playback timestamps.
 - Small image: Yozora's application icon. Override `discord.small_image` with a Discord asset key or a publicly accessible image URL if the app icon changes.
 - First button: **Listen on [service]**. A custom `buttons.label` is preserved; the legacy/default `Listen along` label becomes the service-specific label.
