@@ -391,3 +391,28 @@ func TestLoadNormalizesPanelLanguage(t *testing.T) {
 		t.Fatalf("missing language loaded as %v, %v", cfg, err)
 	}
 }
+
+func TestUpdateCheckDefaultsOnAndCanBeTurnedOff(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cadence.toml")
+	if err := os.WriteFile(path, []byte("[ui]\ntheme = \"pine\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err := Load(path); err != nil || !cfg.Update.Check {
+		t.Fatalf("a config without [update] must check: %v, %v", cfg, err)
+	}
+	if err := os.WriteFile(path, []byte("[update]\ncheck = false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil || cfg.Update.Check {
+		t.Fatalf("check = false not honoured: %v, %v", cfg, err)
+	}
+	// Saving keeps the choice rather than writing the default back.
+	if err := Save(cfg, path); err != nil {
+		t.Fatal(err)
+	}
+	if again, err := Load(path); err != nil || again.Update.Check {
+		t.Fatalf("saved config re-enabled the check: %v, %v", again, err)
+	}
+}

@@ -85,6 +85,7 @@ const (
 const (
 	cmdOpenPanel = 1001
 	cmdQuit      = 1002
+	cmdUpdate    = 1010
 )
 
 // Actions is what the tray asks its owner (the serve daemon) to do. Both are
@@ -102,6 +103,13 @@ type Languager interface {
 	Language() string
 }
 
+// Updater is optionally implemented by Actions to offer an update. UpdateVersion
+// is "" when there is nothing to offer, and the row is then left out of the menu.
+type Updater interface {
+	UpdateVersion() string
+	InstallUpdate()
+}
+
 // menuItem is one row of the tray's context menu. New entries only need a
 // row here: the popup is built from this table and WM_COMMAND is routed
 // through it. Labels holds each language's text; English is the fallback.
@@ -113,6 +121,11 @@ type menuItem struct {
 
 var menuItems = []menuItem{
 	{cmdOpenPanel, map[string]string{"en": "Open control panel", "ja": "コントロールパネルを開く"}, func(p *Panel) { p.actions.ShowPanel() }},
+	{cmdUpdate, map[string]string{"en": "Update to %s", "ja": "%s に更新"}, func(p *Panel) {
+		if u, ok := p.actions.(Updater); ok {
+			u.InstallUpdate()
+		}
+	}},
 	{cmdQuit, map[string]string{"en": "Quit Yozora", "ja": "Yozora を終了"}, func(p *Panel) {
 		p.actions.Quit()
 		p.PostClose()
@@ -145,6 +158,14 @@ func menuLabels(lang string) []string {
 		}
 	}
 	return out
+}
+
+// updateVersion is the version the update row offers, "" for no row.
+func (p *Panel) updateVersion() string {
+	if u, ok := p.actions.(Updater); ok {
+		return u.UpdateVersion()
+	}
+	return ""
 }
 
 func (p *Panel) language() string {
@@ -226,7 +247,15 @@ func (p *Panel) popupMenu() {
 	defer procDestroyMenu.Call(menu)
 	labels := menuLabels(p.language())
 	for i, item := range menuItems {
-		appendMenuItem(menu, item.ID, labels[i])
+		label := labels[i]
+		if item.ID == cmdUpdate {
+			v := p.updateVersion()
+			if v == "" {
+				continue
+			}
+			label = fmt.Sprintf(label, v)
+		}
+		appendMenuItem(menu, item.ID, label)
 	}
 
 	host := p.HostHandle()

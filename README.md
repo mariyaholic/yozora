@@ -16,7 +16,7 @@ Advanced: a portable [Yozora.exe](https://github.com/mariyaholic/yozora/releases
 
 Yozora keeps an icon in the notification area for as long as it runs, including after it starts on its own at sign-in. Closing the control panel ends the panel completely while Yozora keeps running in the tray. Use **Open control panel** from the tray (or click the icon) or launch Yozora again to reopen it; choose **Quit Yozora** to stop Yozora and close the panel if it is open.
 
-Installing a newer `Yozora-Setup.exe` over an existing install upgrades it in place: setup quits the running Yozora first (the same way **Quit Yozora** does) and keeps your settings. If autostart is on and Yozora now runs from a different folder than when you turned it on, Yozora points the sign-in entry at its current location the next time it starts.
+Installing a newer `Yozora-Setup.exe` over an existing install upgrades it in place: setup quits the running Yozora first (the same way **Quit Yozora** does), keeps your settings, and starts Yozora again afterwards if it was running (also for a silent `/VERYSILENT` upgrade). A fresh install, or an upgrade while Yozora was not running, starts nothing on its own. If autostart is on and Yozora now runs from a different folder than when you turned it on, Yozora points the sign-in entry at its current location the next time it starts.
 
 ### Uninstalling
 
@@ -28,6 +28,24 @@ Use **Settings > Apps > Installed apps > Yozora > Uninstall**. The uninstaller q
 - the `uika-resonance:spotify-refresh` and `uika-resonance:spotify-secret` entries in Windows Credential Manager
 
 A silent uninstall (`unins000.exe /VERYSILENT`) keeps all of this unless you add `/PURGE=1`.
+
+## Updating
+
+Yozora asks GitHub for the latest release at most once a day (and once about two minutes after it starts, if a day has passed since the last check). The request goes to `api.github.com` with the user agent `Yozora/<version>` and nothing else about you or your machine; the time and result are remembered in `update.json` beside the other status files, so restarting Yozora does not check again. A local `dev` build never checks. To turn it off:
+
+```toml
+[update]
+check = false
+```
+
+When a newer `v0.1.N` exists, the control panel shows "Yozora 0.1.N is available" at the top with **Update now** and **What's new** (the release page). It stays until you dismiss it, and returns for the next version. The tray menu gains an **Update to 0.1.N** row. Nothing is ever installed unless you press one of these.
+
+**Update now** downloads `Yozora-Setup.exe` and `SHA256SUMS.txt` from that exact release, only over HTTPS and only from github.com and GitHub's release download hosts (any other redirect is refused), up to 50 MB, into a fresh temporary folder. It checks the installer's SHA-256 against `SHA256SUMS.txt`, then runs it silently (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`). Setup quits Yozora, replaces it and starts it again; the panel closes with it, so open it again from the tray. The panel shows downloading, checking and installing, and says why if anything fails, leaving your install untouched.
+
+How the download is trusted depends on the running Yozora, and `/api/update` reports it as `"verification"`:
+
+- `"signature"`: the running `Yozora.exe` has a valid Authenticode signature. The installer must then have a valid signature from the same signer as well as the right checksum.
+- `"checksum"`: the running `Yozora.exe` is not signed (every release until [code signing](#code-signing) is switched on, and local builds). Only the checksum is checked, and it comes from the same release as the installer, so it catches a corrupted or truncated download but not a tampered release. Update by hand from the release page if that is not enough for you.
 
 ## Repository
 
@@ -206,7 +224,7 @@ Settings live in `%APPDATA%\uika-resonance\cadence.toml`. Each time it loads or 
 
 Private Windows named-pipe regression tests exercise simultaneous read/write using a unique `yozora-test-*` pipe, not the live Discord client. Ordinary `go test ./...` never publishes experimental activity to a Discord profile. Tests also cover slow artwork, session gaps and out-of-order lookups, coherent track/art transitions, paused clear/resume and visibility-policy reloads under the send-rate gate, label-only Discord button readback, loopback-art filtering, source-toggle API validation and concurrency, launcher endpoint validation, service names, icon placement, platform-specific links, button ordering, display enums, config bounds, and newest-snapshot retention.
 
-The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, every theme (applied, saved, rolled back on failure, and checked for 4.5:1 text), motion (no animation at idle in any theme, cues fire once per change and never on reconnect, every drag, cancel and reorder ends with no leftover transform or running animation, busy cursors clear after failed saves, Windows reduced motion and the Reduced mode each disable everything, and Full overrides Windows), mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, the Appearance dialog, that each theme loads its own fonts, the Twitch card, the first-run checklist (test card states, the unconfirmed-card hint, application ID validation, completion, reopening) and the Spotify connect states, Discord-offline and panel-offline notes, the config-restored notice, the version line, Japanese (the saved payload, translated key regions, and no overflow at 320px), Windows High Contrast (visible focus rings, chosen tiles, segments, checks and drop line), responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
+The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, every theme (applied, saved, rolled back on failure, and checked for 4.5:1 text), motion (no animation at idle in any theme, cues fire once per change and never on reconnect, every drag, cancel and reorder ends with no leftover transform or running animation, busy cursors clear after failed saves, Windows reduced motion and the Reduced mode each disable everything, and Full overrides Windows), mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, the Appearance dialog, that each theme loads its own fonts, the Twitch card, the first-run checklist (test card states, the unconfirmed-card hint, application ID validation, completion, reopening) and the Spotify connect states, Discord-offline and panel-offline notes, the config-restored notice, the update line (available, dismissed per version, and every install state), the version line, Japanese (the saved payload, translated key regions, and no overflow at 320px), Windows High Contrast (visible focus rings, chosen tiles, segments, checks and drop line), responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
 
 ```sh
 npm install --prefix /tmp/yozora-ui-tools --no-save --no-package-lock playwright@1.62.1

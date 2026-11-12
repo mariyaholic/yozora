@@ -3,6 +3,7 @@
 package tray
 
 import (
+	"fmt"
 	"runtime"
 	"testing"
 	"time"
@@ -142,21 +143,66 @@ func TestTrayTooltipShape(t *testing.T) {
 }
 
 func TestMenuLabelsShape(t *testing.T) {
-	items := menuItems
-	if len(items) != 2 {
-		t.Fatalf("menu has %d items, want 2", len(items))
+	labelOf := func(lang string, id uintptr) string {
+		for i, item := range menuItems {
+			if item.ID == id {
+				return menuLabels(lang)[i]
+			}
+		}
+		t.Fatalf("no menu item %d", id)
+		return ""
 	}
-	if items[0].ID != cmdOpenPanel || items[1].ID != cmdQuit {
-		t.Fatalf("menu ids = %d, %d", items[0].ID, items[1].ID)
+	if got := labelOf("en", cmdOpenPanel); got != "Open control panel" {
+		t.Fatalf("English open label = %q", got)
 	}
-	if got := menuLabels("en"); got[0] != "Open control panel" || got[1] != "Quit Yozora" {
-		t.Fatalf("English labels = %q", got)
+	if got := labelOf("en", cmdQuit); got != "Quit Yozora" {
+		t.Fatalf("English quit label = %q", got)
 	}
-	if got := menuLabels("ja"); got[0] != "コントロールパネルを開く" || got[1] != "Yozora を終了" {
-		t.Fatalf("Japanese labels = %q", got)
+	if got := labelOf("ja", cmdOpenPanel); got != "コントロールパネルを開く" {
+		t.Fatalf("Japanese open label = %q", got)
 	}
-	if got := menuLabels("fr"); got[0] != "Open control panel" {
+	if got := labelOf("ja", cmdQuit); got != "Yozora を終了" {
+		t.Fatalf("Japanese quit label = %q", got)
+	}
+	if got := labelOf("fr", cmdOpenPanel); got != "Open control panel" {
 		t.Fatalf("unknown language labels = %q", got)
+	}
+	if menuItems[0].ID != cmdOpenPanel || menuItems[len(menuItems)-1].ID != cmdQuit {
+		t.Fatal("Open control panel must stay first and Quit last")
+	}
+}
+
+type updateActions struct {
+	fakeActions
+	version string
+}
+
+func (u *updateActions) UpdateVersion() string { return u.version }
+func (u *updateActions) InstallUpdate()        { u.fired = append(u.fired, "update") }
+
+func TestTrayMenuUpdateRow(t *testing.T) {
+	a := &updateActions{version: "0.1.9"}
+	p := New(a)
+	if got := p.updateVersion(); got != "0.1.9" {
+		t.Fatalf("updateVersion = %q", got)
+	}
+	if !p.Dispatch(wmCommand, cmdUpdate) || len(a.fired) != 1 || a.fired[0] != "update" {
+		t.Fatalf("update row dispatched %v", a.fired)
+	}
+	for lang, want := range map[string]string{"en": "Update to 0.1.9", "ja": "0.1.9 に更新"} {
+		for i, item := range menuItems {
+			if item.ID == cmdUpdate && fmt.Sprintf(menuLabels(lang)[i], "0.1.9") != want {
+				t.Errorf("%s update label = %q", lang, menuLabels(lang)[i])
+			}
+		}
+	}
+	// Nothing to offer, or an owner that cannot update: no row, and the command does nothing.
+	if v := New(&updateActions{}).updateVersion(); v != "" {
+		t.Fatalf("empty offer = %q", v)
+	}
+	plain, pa := newTestPanel()
+	if plain.updateVersion() != "" || !plain.Dispatch(wmCommand, cmdUpdate) || len(pa.fired) != 0 {
+		t.Fatalf("plain actions: version %q, fired %v", plain.updateVersion(), pa.fired)
 	}
 }
 
