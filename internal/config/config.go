@@ -89,6 +89,8 @@ type Log struct {
 type UI struct {
 	Theme  string `toml:"theme"`
 	Motion string `toml:"motion"`
+	// Onboarded hides the panel's first-run checklist once its checks have passed.
+	Onboarded bool `toml:"onboarded"`
 }
 
 // DefaultMotion follows the Windows "Show animations" setting.

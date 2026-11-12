@@ -43,6 +43,7 @@ type Status struct {
 	Via          string               `json:"art_via,omitempty"`
 	LastErr      string               `json:"last_error,omitempty"`
 	Sends        int64                `json:"sends"`
+	TestCard     *TestCard            `json:"test_card,omitempty"`
 }
 
 type artworkResolver interface {
@@ -105,6 +106,7 @@ type Engine struct {
 	published         *discordipc.Activity
 	publishedTrack    *player.Track
 	acknowledged      json.RawMessage
+	test              testCardState
 }
 
 func New(cfg *config.Holder, a *art.Resolver, smtcCh <-chan []smtc.Track, spotifyCh <-chan player.Track, stateDir string) *Engine {
@@ -206,6 +208,9 @@ func (e *Engine) pick(now time.Time) *player.Track {
 }
 
 func (e *Engine) step(now time.Time) {
+	if e.stepTestCard(now) {
+		return
+	}
 	cfg := e.Cfg.Get()
 	resolverKey := artworkConfigKey(cfg)
 	e.mu.Lock()
@@ -872,6 +877,10 @@ func (e *Engine) Status() Status {
 		Via:          e.lastVia,
 		Published:    e.published,
 		Acknowledged: e.acknowledged,
+	}
+	if e.test.card.State != "" {
+		card := e.test.card
+		s.TestCard = &card
 	}
 	if e.Cfg != nil {
 		s.SmallImage = e.Cfg.Get().Discord.SmallImage
