@@ -44,6 +44,8 @@ type Status struct {
 	LastErr      string               `json:"last_error,omitempty"`
 	Sends        int64                `json:"sends"`
 	TestCard     *TestCard            `json:"test_card,omitempty"`
+	Paused       bool                 `json:"paused"`
+	PausedUntil  *time.Time           `json:"paused_until,omitempty"`
 }
 
 type artworkResolver interface {
@@ -108,6 +110,7 @@ type Engine struct {
 	acknowledged      json.RawMessage
 	tickEvery         atomic.Int64
 	test              testCardState
+	pause             pauseState
 }
 
 func New(cfg *config.Holder, a *art.Resolver, smtcCh <-chan []smtc.Track, spotifyCh <-chan player.Track, stateDir string) *Engine {
@@ -184,7 +187,7 @@ func (e *Engine) quiet() bool {
 	spotify := e.spotify != nil && strings.TrimSpace(e.spotify.Title) != ""
 	// A requested or showing test card must be sent and cleared on time.
 	testing := e.test.requested || e.test.card.State == "sending" || e.test.card.State == "shown"
-	return len(e.lastSMTCSessions) == 0 && !spotify && !shown && !testing
+	return len(e.lastSMTCSessions) == 0 && !spotify && !shown && !testing && !e.pauseNearExpiry(time.Now())
 }
 
 func (e *Engine) ingest(tracks []smtc.Track) {
@@ -243,10 +246,12 @@ func (e *Engine) pick(now time.Time) *player.Track {
 }
 
 func (e *Engine) step(now time.Time) {
-	if e.stepTestCard(now) {
+	cfg := e.Cfg.Get()
+	// Pause comes first: it ends a test card, and an expiry falls through to a normal step.
+	paused := e.stepPause(now, time.Duration(cfg.Presence.MinUpdateSecs)*time.Second)
+	if !paused && e.stepTestCard(now) {
 		return
 	}
-	cfg := e.Cfg.Get()
 	resolverKey := artworkConfigKey(cfg)
 	e.mu.Lock()
 	resolverConfigChanged := e.Art != nil && e.artConfig != resolverKey
@@ -360,6 +365,10 @@ func (e *Engine) step(now time.Time) {
 		if revoked && (lastSend.IsZero() || now.Sub(lastSend) >= time.Duration(cfg.Presence.MinUpdateSecs)*time.Second) {
 			e.clear(now, "")
 		}
+		return
+	}
+	// Detection and artwork above keep running while paused, so the panel preview follows the player.
+	if paused {
 		return
 	}
 	if now.Sub(e.identityAt) < time.Duration(cfg.Presence.TrackDebounceMS)*time.Millisecond {
@@ -919,6 +928,12 @@ func (e *Engine) Status() Status {
 	}
 	if e.Cfg != nil {
 		s.SmallImage = e.Cfg.Get().Discord.SmallImage
+	}
+	if paused, until := e.pausedLocked(time.Now()); paused {
+		s.Paused = true
+		if !until.IsZero() {
+			s.PausedUntil = &until
+		}
 	}
 	if e.cur != nil {
 		now := time.Now()
