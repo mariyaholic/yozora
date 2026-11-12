@@ -19,6 +19,7 @@ import (
 	"github.com/jchv/go-webview2/pkg/edge"
 
 	"uika-resonance/internal/config"
+	"uika-resonance/internal/presence"
 	"uika-resonance/internal/tray"
 )
 
@@ -394,6 +395,7 @@ type daemonTray struct {
 	stop      func() // cancels serve's context
 	dataDir   string
 	panelLive bool // the dashboard server is listening and its endpoint written
+	eng       *presence.Engine
 	quitting  atomic.Bool
 }
 
@@ -448,8 +450,8 @@ func (d *daemonTray) Quit() {
 // startDaemonTray shows the tray icon for the life of the serve daemon. The
 // returned func removes the icon and waits briefly for the tray thread, so no
 // stale icon is left behind when the process exits.
-func startDaemonTray(cfg *config.Holder, stop func(), dataDir string, panelLive bool) func() {
-	t := tray.New(&daemonTray{cfg: cfg, stop: stop, dataDir: dataDir, panelLive: panelLive})
+func startDaemonTray(cfg *config.Holder, stop func(), dataDir string, panelLive bool, eng *presence.Engine) func() {
+	t := tray.New(&daemonTray{cfg: cfg, stop: stop, dataDir: dataDir, panelLive: panelLive, eng: eng})
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
