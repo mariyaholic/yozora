@@ -11,6 +11,7 @@ import (
 	"uika-resonance/internal/config"
 	"uika-resonance/internal/discordipc"
 	"uika-resonance/internal/player"
+	"uika-resonance/internal/smtc"
 )
 
 func TestSendUsesPlatformPresentation(t *testing.T) {
@@ -64,5 +65,30 @@ func TestStatusDisplayTypeMatchesDiscordEnum(t *testing.T) {
 		if got := statusDisplayType(value); got != want {
 			t.Errorf("statusDisplayType(%q) = %d, want %d", value, got, want)
 		}
+	}
+}
+
+func TestServiceNameUsesPlayerTable(t *testing.T) {
+	for _, tc := range []struct{ appID, want string }{
+		{"TIDAL.exe", "Tidal"},
+		{"foobar2000.exe", "foobar2000"},
+		{"AppleInc.AppleTVWin_nzyj5cx40ttqa!App", "Apple TV"},
+		{"AppleInc.AppleMusicWin_nzyj5cx40ttqa!App", "Apple Music"},
+		{"VideoLAN.VLC_paz6r1rewnh0a!App", "VLC"},
+		{"MSEdge", "Microsoft Edge"},
+		{"strawberry.exe", "Strawberry"},
+	} {
+		tr := player.Track{Source: smtc.Classify(tc.appID), AppID: tc.appID, Player: smtc.FriendlyName(tc.appID)}
+		if got := serviceName(&tr); got != tc.want {
+			t.Errorf("serviceName(%q) = %q, want %q", tc.appID, got, tc.want)
+		}
+		// Players outside the dedicated music sources keep the configured
+		// activity type; only the name changes.
+		if tr.Source == "generic" && trackActivityType(&tr, "watching") != "watching" {
+			t.Errorf("%q lost the configured activity type", tc.appID)
+		}
+	}
+	if got := musicURL(&player.Track{Source: smtc.Classify("AppleInc.AppleTVWin_nzyj5cx40ttqa!App"), Title: "a", Artist: "b"}, "", false); got != "" {
+		t.Errorf("Apple TV got an Apple Music link %q", got)
 	}
 }

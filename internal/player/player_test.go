@@ -2,7 +2,11 @@
 
 package player
 
-import "testing"
+import (
+	"testing"
+
+	"uika-resonance/internal/smtc"
+)
 
 func TestIsBlockedSharesCanonicalAndAppIDRules(t *testing.T) {
 	for _, b := range []string{" BrOwSeR ", "FIREFOX"} {
@@ -71,5 +75,29 @@ func TestYouTubeServiceBlockingAndFallback(t *testing.T) {
 	got := Arbitrate([]Track{youtube, music}, []string{"browser", "youtubemusic"}, []string{"youtube"})
 	if got == nil || got.Source != "youtubemusic" {
 		t.Fatal("blocked YouTube did not fall through")
+	}
+}
+
+// Custom per-app filters still substring-match the raw AppID, independent of
+// how the player table classifies or names the session.
+func TestCustomAppFiltersMatchAppID(t *testing.T) {
+	for _, tc := range []struct {
+		appID, filter string
+		want          bool
+	}{
+		{"MSEdge", "msedge", true},
+		{"MSEdge.Profile1", "msedge", true},
+		{"MSEdge._crx_cinhimbnkkaeohfgghhklpknlkffjgod", "msedge", true},
+		{"Chrome", "msedge", false},
+		{"foobar2000.exe", "foobar", true},
+		{"AppleInc.AppleTVWin_nzyj5cx40ttqa!App", "AppleTVWin", true},
+		{"AppleInc.AppleMusicWin_nzyj5cx40ttqa!App", "AppleTVWin", false},
+		{"TIDAL.exe", "generic", true},
+		{"AppleInc.AppleTVWin_nzyj5cx40ttqa!App", "applemusic", false},
+	} {
+		tr := Track{Source: smtc.Classify(tc.appID), AppID: tc.appID, Player: smtc.FriendlyName(tc.appID), Title: "t", Playing: true}
+		if got := IsBlocked(tr, []string{tc.filter}); got != tc.want {
+			t.Errorf("IsBlocked(%q, %q) = %v, want %v", tc.appID, tc.filter, got, tc.want)
+		}
 	}
 }
