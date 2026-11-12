@@ -303,6 +303,21 @@
   #setup-reopen { margin:4px 2px 2px; }
   .diagnostics { margin-top:4px; border-bottom:0; }
   .diagnostics summary { padding:2px; }
+  .diag-tools { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; margin:6px 2px 2px; }
+  #diag-status:empty { display:none; }
+  #diag-text { display:block; width:100%; min-height:7.5em; margin:6px 0 0; padding:6px 8px; border:1px solid var(--line-strong); border-radius:var(--radius-sm); background:var(--bg); color:var(--text); font:11px/1.5 var(--font-label); resize:vertical; }
+  .recent summary { padding:2px; }
+  .recent { border-bottom:0; }
+  .recent-list { list-style:none; margin:0; padding:0 2px 6px; }
+  .recent-list li { display:flex; align-items:center; gap:10px; padding:5px 0; border-top:1px solid var(--line); }
+  .recent-list li:first-child { border-top:0; }
+  .recent-list img, .recent-list .no-art { flex:none; width:36px; height:36px; border-radius:var(--radius-sm); background:var(--panel-2); object-fit:cover; }
+  .recent-text { min-width:0; flex:1; }
+  .recent-text b, .recent-text span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .recent-text b { font-size:13px; font-weight:600; }
+  .recent-text span { font-size:12px; color:var(--muted); }
+  .recent-list time { flex:none; font-size:11px; color:var(--dim); font-variant-numeric:tabular-nums; }
+  #recent-status:empty { display:none; }
   .meta { color:var(--muted); font:12px/1.6 var(--font-label); white-space:pre-wrap; overflow-wrap:anywhere; padding:8px 2px 2px; }
   .made-by a { text-decoration:underline; text-underline-offset:2px; }
   .made-by { margin:14px 0 0; text-align:center; font-size:12px; color:var(--dim); }
@@ -412,7 +427,9 @@
     .bar i { forced-color-adjust:none; background:Highlight; }
     .status[data-tone="pending"], .row-state[data-tone="good"] { color:Highlight; }
     .status[data-tone="error"], .err, .dependency-note, .preview-note.restored { color:CanvasText; font-weight:600; border-inline-start:3px solid CanvasText; padding-inline-start:6px; }
-    .subtitle, .source-option small, .t, .made-by, #version-meta { color:GrayText; }
+    .subtitle, .source-option small, .t, .made-by, #version-meta, .recent-list time { color:GrayText; }
+    .recent-list li, #diag-text { border-color:CanvasText; }
+    .recent-list img, .recent-list .no-art { border:1px solid CanvasText; }
     .checks li::before { border-color:CanvasText; }
     .checks li[data-state="done"]::before { forced-color-adjust:none; background:Highlight; border-color:Highlight; color:HighlightText; }
     .checks li[data-state="busy"]::before { border-color:Highlight; }
@@ -530,7 +547,14 @@
       <summary data-i18n="diagnostics">Diagnostics</summary>
       <div class="meta" id="meta" data-i18n="diagnostics.waiting">Waiting for status…</div>
       <div class="meta" id="version-meta"></div>
+      <div class="diag-tools"><button type="button" id="diag-copy" data-i18n="diag.copy">Copy report</button><p id="diag-status" class="status" role="status" aria-live="polite"></p></div>
+      <textarea id="diag-text" readonly hidden spellcheck="false" aria-label="Diagnostics report" data-i18n-attr="aria-label:diag.report"></textarea>
       <button type="button" id="setup-reopen" data-i18n="setup.reopen">Show setup checklist</button>
+    </details>
+    <details class="recent" id="recent">
+      <summary data-i18n="recent.title">Recent</summary>
+      <ol class="recent-list" id="recent-list"></ol>
+      <p id="recent-status" class="status" role="status" aria-live="polite"></p>
     </details>
   </section>
   <p class="made-by"><span data-i18n="footer.before">Made with love by </span><a href="https://github.com/mariyaholic" target="_blank" rel="noopener noreferrer">Maria</a><span data-i18n="footer.after"></span> <span class="version" id="version-footer"></span></p>
@@ -620,6 +644,8 @@ const strings = {
     "startup.label":"Startup and diagnostics", "startup.title":"Startup", "startup.autostart":"Start Yozora when I sign in to Windows", "diagnostics":"Diagnostics", "diagnostics.waiting":"Waiting for status…",
     "startup.readFailed":"Could not read startup setting: {error}", "startup.saving":"Saving startup setting…", "startup.on":"Yozora will start with Windows.", "startup.off":"Yozora will not start with Windows.", "startup.failed":"Could not change startup setting: {error}",
     "footer.before":"Made with love by ", "footer.after":"",
+    "recent.title":"Recent", "recent.empty":"Nothing has been shown on Discord yet.", "recent.failed":"Could not load recent tracks: {error}", "recent.now":"just now",
+    "diag.copy":"Copy report", "diag.report":"Diagnostics report", "diag.copied":"Report copied.", "diag.copyFailed":"Could not copy. Select the text below.", "diag.failed":"Could not build the report: {error}",
     "theme.title":"Theme", "theme.yozora":"Night sky", "theme.astra-light":"Astra light",
     "motion.title":"Motion", "motion.system":"Follow Windows", "motion.reduced":"Reduced", "motion.full":"Full",
     "motion.system.hint":"Uses the Windows Show animations setting", "motion.reduced.hint":"No animations or transitions", "motion.full.hint":"Animate even when Windows asks for less",
@@ -671,6 +697,8 @@ const strings = {
     "startup.label":"起動と診断", "startup.title":"起動", "startup.autostart":"Windows へのサインイン時に Yozora を起動", "diagnostics":"診断情報", "diagnostics.waiting":"状態を取得中…",
     "startup.readFailed":"起動設定を読み込めませんでした: {error}", "startup.saving":"起動設定を保存中…", "startup.on":"Windows の起動時に Yozora を開始します。", "startup.off":"Windows の起動時に Yozora を開始しません。", "startup.failed":"起動設定を変更できませんでした: {error}",
     "footer.before":"", "footer.after":" が心を込めて作りました",
+    "recent.title":"最近の再生", "recent.empty":"まだ Discord に表示したトラックはありません。", "recent.failed":"最近のトラックを読み込めませんでした: {error}", "recent.now":"たった今",
+    "diag.copy":"レポートをコピー", "diag.report":"診断レポート", "diag.copied":"レポートをコピーしました。", "diag.copyFailed":"コピーできませんでした。下のテキストを選択してコピーしてください。", "diag.failed":"レポートを作成できませんでした: {error}",
     "theme.title":"テーマ", "theme.yozora":"夜空", "theme.astra-light":"Astra ライト",
     "motion.title":"アニメーション", "motion.system":"Windows に従う", "motion.reduced":"減らす", "motion.full":"すべて",
     "motion.system.hint":"Windows の「アニメーションを表示する」設定に従います", "motion.reduced.hint":"アニメーションと切り替え効果を止めます", "motion.full.hint":"Windows で減らす設定にしていてもアニメーションします",
@@ -1068,6 +1096,7 @@ function showLanguage(language) {
 function relocalize() {
   if (savedOrder.length && !drag) renderOrder();
   updateDirty();
+  drawRecent();
   refreshSoon();
 }
 // The server rendered the saved appearance into <html>, so it is the starting saved state.
@@ -1410,6 +1439,7 @@ async function tick() {
     setText(playbackState, t(hasTrack ? (s.playing ? "state.playing" : "state.paused") : "state.idle"));
     playbackState.dataset.live = String(Boolean(s.discord_connected && hasTrack && s.playing));
     const track = hasTrack ? [s.title, s.artist || "", s.album || "", s.service || ""].join("\u0001") : "";
+    if (lastTrack !== null && track !== lastTrack && recentBox.open) loadRecent();
     if (lastTrack !== null && track !== lastTrack) cue("track-changed");
     else if (lastPlayState !== null && playbackState.textContent !== lastPlayState) cue("state-changed");
     lastTrack = track;
@@ -1454,6 +1484,76 @@ async function tick() {
     polling = false;
   }
 }
+// Diagnostics: a copyable plain-text report built by the daemon, and the in-memory Recent list.
+const diagStatus = document.getElementById("diag-status");
+const diagText = document.getElementById("diag-text");
+document.getElementById("diag-copy").addEventListener("click", async () => {
+  diagText.hidden = true;
+  let report;
+  try {
+    const r = await fetch(`/api/diagnostics?t=${encodeURIComponent(token)}`, {cache:"no-store"});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    report = await r.text();
+  } catch (e) {
+    updateStatus(diagStatus, t("diag.failed", {error:e}));
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(report);
+    updateStatus(diagStatus, t("diag.copied"));
+  } catch {
+    // No clipboard access: show the text so it can be selected by hand.
+    diagText.value = report;
+    diagText.hidden = false;
+    diagText.select();
+    updateStatus(diagStatus, t("diag.copyFailed"));
+  }
+});
+const recentBox = document.getElementById("recent");
+const recentList = document.getElementById("recent-list");
+const recentStatus = document.getElementById("recent-status");
+function relativeTime(iso) {
+  const secs = Math.round((new Date(iso).getTime() - Date.now()) / 1000);
+  if (!Number.isFinite(secs) || secs > -45) return t("recent.now");
+  const rtf = new Intl.RelativeTimeFormat(lang, {numeric:"auto"});
+  const mins = Math.round(secs / 60);
+  if (Math.abs(mins) < 60) return rtf.format(mins, "minute");
+  const hours = Math.round(mins / 60);
+  return Math.abs(hours) < 24 ? rtf.format(hours, "hour") : rtf.format(Math.round(hours / 24), "day");
+}
+let recentData = [];
+function drawRecent() {
+  recentList.replaceChildren();
+  for (const item of recentData) {
+    const li = document.createElement("li");
+    let thumb;
+    if (item.art_url) {
+      thumb = document.createElement("img");
+      thumb.alt = ""; thumb.loading = "lazy"; thumb.src = item.art_url;
+      thumb.addEventListener("error", () => { const blank = document.createElement("span"); blank.className = "no-art"; thumb.replaceWith(blank); });
+    } else { thumb = document.createElement("span"); thumb.className = "no-art"; }
+    const text = document.createElement("div"); text.className = "recent-text";
+    const title = document.createElement("b"); title.textContent = item.title; title.title = item.title;
+    const artist = document.createElement("span"); artist.textContent = [item.artist, item.service].filter(Boolean).join(" · ");
+    text.append(title, artist);
+    const when = document.createElement("time"); when.dateTime = item.at; when.textContent = relativeTime(item.at);
+    li.append(thumb, text, when);
+    recentList.appendChild(li);
+  }
+  updateStatus(recentStatus, recentData.length ? "" : t("recent.empty"));
+}
+async function loadRecent() {
+  try {
+    const r = await fetch(`/api/recent?t=${encodeURIComponent(token)}`, {cache:"no-store"});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    recentData = (await r.json()).recent || [];
+    drawRecent();
+  } catch (e) {
+    updateStatus(recentStatus, t("recent.failed", {error:e}));
+  }
+}
+// Loaded when opened and again on each track change while open; there is no timer.
+recentBox.addEventListener("toggle", () => { if (recentBox.open) loadRecent(); });
 // An action refreshes at once instead of waiting for the next tick.
 async function refreshSoon() {
   while (polling) await new Promise(resolve => setTimeout(resolve, 20));

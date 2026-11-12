@@ -108,6 +108,7 @@ type Engine struct {
 	acknowledged      json.RawMessage
 	tickEvery         atomic.Int64
 	test              testCardState
+	recent            recentRing
 }
 
 func New(cfg *config.Holder, a *art.Resolver, smtcCh <-chan []smtc.Track, spotifyCh <-chan player.Track, stateDir string) *Engine {
@@ -691,7 +692,9 @@ func (e *Engine) send(t *player.Track, now time.Time) {
 	e.lastSend = now
 	e.sends++
 	e.cleared = false
+	shownArt := e.lastArtURL
 	e.mu.Unlock()
+	e.recent.add(RecentTrack{Title: t.Title, Artist: t.Artist, Service: serviceName(t), ArtURL: shownArt, At: now})
 	e.setErr("")
 	e.writeState()
 }

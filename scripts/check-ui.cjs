@@ -38,6 +38,11 @@ const setupPosts = [];
 let testCardHTTP = 202;
 const testCardPosts = [];
 let spotifyHTTP = 200;
+let recentHTTP = 200;
+let recent = [];
+const recentGets = [];
+// A sample of what the daemon sends: no track text, no IDs, no user paths.
+const diagnosticsReport = 'Yozora diagnostics\nVersion: 0.1.42\nWindows: 10.0.22631\nSource: spotify\nArtwork route: deezer\nDiscord: connected\nLast error: none\nEnabled sources: applemusic, spotify, spotifyapi\nTheme: yozora\n';
 const spotifyPosts = [];
 const posts = [];
 const errors = [];
@@ -102,6 +107,12 @@ const server = http.createServer(async (req, res) => {
     if (posted.action === 'disconnect') Object.assign(sp, { waiting: false, connected: false });
     state = { ...state, spotify: sp };
     json(sp);
+  } else if (url.pathname === '/api/recent') {
+    recentGets.push(Date.now());
+    json({ recent }, recentHTTP);
+  } else if (url.pathname === '/api/diagnostics') {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end(diagnosticsReport);
   } else if (url.pathname === '/api/autostart') {
     if (req.method === 'POST') {
       let body = '';
@@ -993,6 +1004,66 @@ const server = http.createServer(async (req, res) => {
       assert.equal(await l.locator('#restored-note').isVisible(), true, 'a later restore shows again');
       check('the config-restored notice names the file set aside, and dismisses for that restore');
 
+      // Recent tracks and the copyable report, in English.
+      const minutesAgo = n => new Date(Date.now() - n * 60000).toISOString();
+      recent = [
+        { title:'Night Walk', artist:'Mira', service:'Spotify', art_url:'/test-art.svg', at:minutesAgo(0) },
+        { title:'Glass Rain', artist:'Ode', service:'Apple Music', art_url:'/missing-art.png', at:minutesAgo(7) },
+        { title:'A very long title that has to be cut short before it pushes the clock off the card', artist:'Someone', service:'YouTube Music', at:minutesAgo(190) },
+      ];
+      await l.evaluate(() => { window.copied = null; Object.defineProperty(navigator, 'clipboard', { configurable:true, value:{ writeText: async text => { window.copied = text; } } }); });
+      await l.locator('.diagnostics summary').click();
+      assert.equal(await l.locator('#recent-list').isHidden(), true, 'Recent starts collapsed');
+      const getsBefore = recentGets.length;
+      await l.locator('#recent summary').click();
+      await l.waitForFunction(() => document.querySelectorAll('#recent-list li').length === 3);
+      assert.equal(recentGets.length, getsBefore + 1, 'opening Recent loads it once');
+      assert.deepEqual(await l.locator('#recent-list li b').allTextContents(), recent.map(r => r.title));
+      assert.equal(await l.locator('#recent-list li').first().locator('span').textContent(), 'Mira · Spotify');
+      assert.deepEqual(await l.locator('#recent-list time').allTextContents(), ['just now', '7 minutes ago', '3 hours ago']);
+      assert.equal(await l.locator('#recent-list img').count(), 1, 'a track without working art gets a plain tile, not a broken image');
+      assert.equal(await l.locator('#recent-list .no-art').count(), 2);
+      assert.equal(await l.evaluate(() => document.getElementById('recent-list').querySelector('img').naturalWidth > 0), true, 'the thumbnail loads');
+      await l.setViewportSize({ width:320, height:760 });
+      assert.equal(await l.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Recent fits 320px');
+      await l.locator('#recent').scrollIntoViewIfNeeded();
+      await l.screenshot({ path:path.join(output, 'recent-320.png'), fullPage:true });
+      await l.setViewportSize({ width:560, height:760 });
+      const getsOpen = recentGets.length;
+      state = { ...state, title:'Another Song' };
+      await lRefresh();
+      await l.waitForTimeout(150);
+      assert.equal(recentGets.length, getsOpen + 1, 'a track change reloads an open Recent list');
+      state = { ...state, title:'Night Walk' };
+      await lRefresh();
+      await l.waitForTimeout(150);
+      recent = [];
+      await l.locator('#recent summary').click();
+      await l.locator('#recent summary').click();
+      await l.waitForFunction(() => document.getElementById('recent-status').textContent.includes('Nothing has been shown'));
+      assert.equal(await l.locator('#recent-list li').count(), 0);
+      recentHTTP = 500;
+      await l.locator('#recent summary').click();
+      await l.locator('#recent summary').click();
+      await l.waitForFunction(() => document.getElementById('recent-status').textContent.includes('Could not load recent tracks: Error: HTTP 500'));
+      recentHTTP = 200;
+      await l.locator('#diag-copy').click();
+      await l.waitForFunction(() => window.copied !== null);
+      const copied = await l.evaluate(() => window.copied);
+      console.log('copied diagnostics (English page):\n' + copied);
+      assert.equal(copied, diagnosticsReport);
+      assert.doesNotMatch(copied, /Night Walk|Mira|After Hours|[A-Za-z]:\\|\d{15,}|token/i, 'the report carries no track text, paths, IDs or tokens');
+      assert.equal(await l.locator('#diag-status').textContent(), 'Report copied.');
+      assert.equal(await l.locator('#diag-text').isHidden(), true);
+      await l.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable:true, value:{ writeText: async () => { throw new Error('denied'); } } }));
+      await l.locator('#diag-copy').click();
+      await l.waitForFunction(() => !document.getElementById('diag-text').hidden);
+      assert.equal(await l.locator('#diag-text').inputValue(), diagnosticsReport, 'without clipboard access the text is shown to select');
+      assert.equal(await l.locator('#diag-status').textContent(), 'Could not copy. Select the text below.');
+      await l.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { configurable:true, value:{ writeText: async text => { window.copied = text; } } }); });
+      await l.screenshot({ path:path.join(output, 'diagnostics-560.png'), fullPage:true });
+      check('Recent lists the last tracks with a thumbnail, title, artist and relative time, and Copy report puts the plain-text report on the clipboard');
+
       // Japanese, chosen in the Appearance dialog.
       state = { ...state, discord_connected:false };
       await choose(l, 'language', 'ja', '言語（日本語）を保存しました');
@@ -1006,6 +1077,28 @@ const server = http.createServer(async (req, res) => {
       assert.equal(await l.locator('#version-meta').evaluate(node => node.textContent), 'バージョン 0.1.42');
       assert.match(await text('#restored-text'), /前回の設定に戻しました。編集したファイルは cadence\.toml\.broken-20261112-101500 として/);
       assert.equal(await text('#preview-note'), 'Discord が起動していないため、まだプロフィールに表示されていません。');
+      recent = [{ title:'夜道', artist:'ミラ', service:'Spotify', art_url:'/test-art.svg', at:minutesAgo(7) }, { title:'ガラスの雨', artist:'オード', service:'Apple Music', at:minutesAgo(190) }];
+      await l.evaluate(() => { window.copied = null; });
+      await l.locator('#recent summary').click();
+      await l.locator('#recent summary').click();
+      await l.waitForFunction(() => document.querySelectorAll('#recent-list li').length === 2);
+      assert.equal(await text('#recent summary'), '最近の再生');
+      assert.deepEqual(await l.locator('#recent-list time').allTextContents(), ['7 分前', '3 時間前']);
+      assert.equal(await text('#diag-copy'), 'レポートをコピー');
+      await l.locator('#diag-copy').click();
+      await l.waitForFunction(() => window.copied !== null);
+      assert.equal(await text('#diag-status'), 'レポートをコピーしました。');
+      assert.equal(await l.evaluate(() => window.copied), diagnosticsReport);
+      await l.evaluate(() => Object.defineProperty(navigator, 'clipboard', { configurable:true, value:{ writeText: async () => { throw new Error('denied'); } } }));
+      await l.locator('#diag-copy').click();
+      await l.waitForFunction(() => document.getElementById('diag-status').textContent.startsWith('コピーできませんでした'));
+      await l.locator('#recent').scrollIntoViewIfNeeded();
+      await l.screenshot({ path:path.join(output, 'recent-ja-560.png'), fullPage:true });
+      recent = [];
+      await l.locator('#recent summary').click();
+      await l.locator('#recent summary').click();
+      await l.waitForFunction(() => document.getElementById('recent-status').textContent === 'まだ Discord に表示したトラックはありません。');
+      check('Recent and Copy report read naturally in Japanese');
       assert.match(await l.locator('#source-order li').first().getAttribute('aria-label'), /^優先順位 1: /);
       assert.equal(await l.locator('#source-order li[data-source="spotify"] .drag-handle').getAttribute('aria-label'), 'Spotify（デスクトップ） を並べ替え');
       assert.equal(await l.locator('#appearance-open').getAttribute('aria-label'), '外観');

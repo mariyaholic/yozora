@@ -92,7 +92,7 @@ Until setup is done, the panel opens with a short checklist above the preview: *
 - Yozora's own Discord application ID is built in, so nothing needs entering. If Discord refuses the handshake (for example a custom `discord.client_id` that does not exist), the checklist shows an application ID field; it accepts 17 to 20 digits, and an empty value goes back to Yozora's app.
 - When every check passes, the checklist saves `onboarded = true` under `[ui]` in `cadence.toml` and folds away for good. Its close button does the same. **Show setup checklist** under Diagnostics brings it back.
 
-The terminal `setup` command still exists for scripted installs.
+The terminal `setup` command still exists for scripted installs. Its Spotify step uses the same PKCE flow as the panel: it asks for the client ID only (no secret), prints the sign-in address and opens it in your browser, and waits on `http://127.0.0.1:8977/spotify/callback` for up to 10 minutes. Add that exact Redirect URI to your Spotify app first. Earlier versions asked for a client secret and stored it in Credential Manager; nothing reads it now, and a successful `setup` deletes the old `spotify-secret` entry. If you connected through the old terminal flow, run `setup` again (or use **Connect** in the panel) to get a working token.
 
 ## Spotify Web API
 
@@ -110,7 +110,12 @@ This flow is covered by tests against a local fake token endpoint; it has not ye
 
 - Header: **Listening to Spotify**, **Listening to Apple Music**, or the player's name. Browser sessions show the browser (Microsoft Edge, Google Chrome, Firefox and so on) rather than a guess at the streaming service playing in it.
 - Players are recognised from a fixed table of Windows app IDs and exe names in `internal/smtc/players.go`, matched exactly rather than by part of the name, so the Apple TV app is not mistaken for Apple Music. Tidal, Deezer, Qobuz, Amazon Music, foobar2000, MusicBee, AIMP, VLC, iTunes, Apple TV, Media Player and Windows Media Player are named on the card but stay under **Other media players** (`generic`), with that source's switch, priority and activity type. An app missing from the table is also `generic` and gets a name from its exe or app ID (`strawberry.exe` shows as Strawberry).
-- Large image: album artwork, resolved asynchronously. A slow artwork service must not delay the song text or playback timestamps.
+- Large image: album artwork, resolved asynchronously. A slow artwork service must not delay the song text or playback timestamps. Yozora asks the iTunes Search service first, for the storefront of your Windows region (for example `JP` for Japan; the United States if the region is unknown), so songs listed only outside the US are found. If iTunes has nothing, it asks Deezer's public search, which needs no key, and uses the album's `cover_xl` (or `cover_big`) image only when both the title and the artist match the playing track; a near miss is dropped and the card falls back as before. Deezer art carries no track link, so it adds no **Listen** button. Results are cached for a day per storefront. Override the storefront in `cadence.toml`; it takes effect from the next track:
+
+  ```toml
+  [art]
+  country = "GB"   # ISO 3166 alpha-2 code; empty follows the Windows region
+  ```
 - Small image: Yozora's application icon. Override `discord.small_image` with a Discord asset key or a publicly accessible image URL if the app icon changes.
 - First button: **Listen on [service]**. A custom `buttons.label` is preserved; the legacy/default `Listen along` label becomes the service-specific label.
 - Second button: **Yozora**, using `buttons.yozora_url`.
@@ -135,6 +140,10 @@ The **Appearance** button in the panel's header opens a dialog with 11 themes, t
 ```
 
 The panel's footer and Diagnostics show the running version, or "dev build" for a local build.
+
+**Copy report** under Diagnostics copies a plain-text report for bug reports: version, Windows build, source, artwork route, Discord state, last error, enabled sources and theme. It never contains track titles, artists, tokens, client IDs or file paths with your user name; the last error has those stripped before it is included. If the browser refuses clipboard access, the text is shown in a box to select by hand.
+
+**Recent** (just below Diagnostics) lists the last 20 distinct tracks Yozora published to Discord this run, newest first, with a thumbnail, title, artist and how long ago. It is kept in memory only: nothing is written to disk and it is empty after a restart. It loads when you open it and again when the track changes while it is open; there is no timer.
 
 ### Language
 
@@ -189,7 +198,7 @@ With media playing, Yozora checks Windows media sessions every `sources.poll_ms`
 
 ## Logs
 
-The daemon writes `%LOCALAPPDATA%\uika-resonance\logs\uika-resonance.log`. When the file passes 5 MB it is renamed to `uika-resonance.log.1`, replacing the previous one, and a new file starts, so the logs never take more than about 10 MB however long Yozora runs. `log.level` in `cadence.toml` is read at startup:
+The daemon writes `%LOCALAPPDATA%\uika-resonance\logs\uika-resonance.log`. When the file passes 5 MB it is renamed to `uika-resonance.log.1`, replacing the previous one, and a new file starts, so the logs never take more than about 10 MB however long Yozora runs. `log.level` in `cadence.toml` is read at startup and again whenever the config reloads, so a hand edit or a panel save takes effect without a restart:
 
 ```toml
 [log]
