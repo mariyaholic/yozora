@@ -57,8 +57,9 @@ func StoreRefreshToken(tok string) error { return credman.Set(credKey, tok) }
 func ClearRefreshToken() error { return credman.Delete(credKey) }
 
 type tokenResp struct {
-	AccessToken string `json:"access_token"`
-	ExpiresIn   int    `json:"expires_in"`
+	AccessToken  string `json:"access_token"`
+	ExpiresIn    int    `json:"expires_in"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 func (p *Provider) Token() (string, error) {
@@ -91,6 +92,12 @@ func (p *Provider) Token() (string, error) {
 	var tr tokenResp
 	if err := json.NewDecoder(resp.Body).Decode(&tr); err != nil {
 		return "", err
+	}
+	// PKCE clients get a rotated refresh token; the old one may stop working, so keep the new one.
+	if tr.RefreshToken != "" && tr.RefreshToken != refresh {
+		if err := StoreRefreshToken(tr.RefreshToken); err != nil {
+			log.Printf("spotify: could not store the rotated refresh token: %v", err)
+		}
 	}
 	p.access = tr.AccessToken
 	p.accessExp = time.Now().Add(time.Duration(tr.ExpiresIn) * time.Second / 2)

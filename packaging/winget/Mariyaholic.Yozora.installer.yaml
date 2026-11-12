@@ -1,0 +1,25 @@
+# Template: the release workflow fills {{...}} from the built Yozora-Setup.exe.
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.9.0.schema.json
+PackageIdentifier: Mariyaholic.Yozora
+PackageVersion: '{{VERSION}}'
+MinimumOSVersion: 10.0.17763.0
+InstallerType: inno
+# installer/yozora.iss sets PrivilegesRequired=lowest: per-user, no UAC prompt.
+Scope: user
+InstallModes:
+  - interactive
+  - silent
+  - silentWithProgress
+UpgradeBehavior: install
+# Inno registers its uninstall key as "<AppId>_is1".
+ProductCode: '{6B0C1D52-5E0A-4C8E-9C57-3F0D7B6A21E4}_is1'
+AppsAndFeaturesEntries:
+  - DisplayName: Yozora
+    Publisher: Maria
+    ProductCode: '{6B0C1D52-5E0A-4C8E-9C57-3F0D7B6A21E4}_is1'
+Installers:
+  - Architecture: x64
+    InstallerUrl: '{{INSTALLER_URL}}'
+    InstallerSha256: '{{SHA256}}'
+ManifestType: installer
+ManifestVersion: 1.9.0

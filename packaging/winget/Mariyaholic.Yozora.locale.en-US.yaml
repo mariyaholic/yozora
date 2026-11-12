@@ -1,0 +1,25 @@
+# Template: the release workflow fills {{...}}.
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.9.0.schema.json
+PackageIdentifier: Mariyaholic.Yozora
+PackageVersion: '{{VERSION}}'
+PackageLocale: en-US
+Publisher: Maria
+PublisherUrl: https://github.com/mariyaholic
+PublisherSupportUrl: 'https://github.com/{{REPOSITORY}}/issues'
+Author: Maria
+PackageName: Yozora
+PackageUrl: 'https://github.com/{{REPOSITORY}}'
+License: MIT
+LicenseUrl: 'https://github.com/{{REPOSITORY}}/blob/main/LICENSE'
+Copyright: Copyright (c) 2026 Maria (mariyaholic)
+ShortDescription: Lightweight Discord Rich Presence for the music you play on Windows.
+Description: Yozora detects what is playing through Windows media sessions (Spotify, YouTube Music, browsers and more) and shows it on your Discord profile, using about 10 MB of RAM.
+Tags:
+  - discord
+  - rich-presence
+  - music
+  - spotify
+  - youtube-music
+ReleaseNotesUrl: 'https://github.com/{{REPOSITORY}}/releases/tag/v{{VERSION}}'
+ManifestType: defaultLocale
+ManifestVersion: 1.9.0

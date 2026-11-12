@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"uika-resonance/internal/config"
+	"uika-resonance/internal/version"
 )
 
 func fixtureHandler(t *testing.T) (http.Handler, *config.Holder) {
@@ -295,7 +296,7 @@ func TestAppearanceSavesKnownThemesOnly(t *testing.T) {
 		t.Fatal("theme save changed unrelated settings")
 	}
 	page := request(h, "GET", "/?t=fixture-token", "", false).Body.String()
-	if !strings.Contains(page, `<html lang="en" data-theme="ava" data-motion="system">`) {
+	if !strings.Contains(page, `<html lang="en" data-theme="ava" data-motion="system" data-language="system"`) {
 		t.Fatal("dashboard does not render the saved theme before scripts run")
 	}
 }
@@ -322,7 +323,7 @@ func TestAppearanceSavesMotionWithoutTouchingTheme(t *testing.T) {
 		t.Fatalf("combined save = %d %+v", w.Code, cfg.Get().UI)
 	}
 	page := request(h, "GET", "/?t=fixture-token", "", false).Body.String()
-	if !strings.Contains(page, `<html lang="en" data-theme="pine" data-motion="full">`) {
+	if !strings.Contains(page, `<html lang="en" data-theme="pine" data-motion="full"`) {
 		t.Fatal("dashboard does not render the saved motion mode before scripts run")
 	}
 }
@@ -348,5 +349,86 @@ func TestDashboardOffersEveryTheme(t *testing.T) {
 	}
 	if got := strings.Count(uiHTML, `name="theme" value="`); got != len(config.Themes) {
 		t.Errorf("picker offers %d themes, config allows %d", got, len(config.Themes))
+	}
+}
+
+// The old whole-config POST decoded over defaults, so a partial body reset every other
+// setting. Nothing used it and it is gone; a stray request must not touch the file.
+func TestWholeConfigPostIsGone(t *testing.T) {
+	h, cfg := fixtureHandler(t)
+	before := cfg.Get()
+	for _, path := range []string{"/api/config", "/api/config?t=fixture-token"} {
+		request(h, "POST", path, `{"UI":{"Theme":"pine"}}`, true)
+		loaded, err := config.Load(cfg.Path())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(loaded, before) || cfg.Get() != before {
+			t.Fatalf("POST %s changed config", path)
+		}
+	}
+}
+
+func TestAppearanceSavesLanguageAllOrNothing(t *testing.T) {
+	h, cfg := fixtureHandler(t)
+	w := request(h, "GET", "/api/appearance", "", true)
+	if !strings.Contains(w.Body.String(), `"language":"system"`) || !strings.Contains(w.Body.String(), `"languages":["system","en","ja"]`) {
+		t.Fatalf("language read = %s", w.Body.String())
+	}
+	before := cfg.Get()
+	for _, body := range []string{`{"language":null}`, `{"language":"fr"}`, `{"language":"JA"}`, `{"language":"ja-JP"}`, `{"language":1}`,
+		`{"theme":"ava","language":"fr"}`, `{"language":"ja","motion":"slow"}`, `{"language":"ja","theme":"neon"}`} {
+		if w := request(h, "POST", "/api/appearance", body, true); w.Code != 400 {
+			t.Errorf("accepted %q: %d", body, w.Code)
+		}
+		if cfg.Get() != before {
+			t.Fatalf("rejected %q changed config", body)
+		}
+	}
+	w = request(h, "POST", "/api/appearance", `{"language":"ja"}`, true)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"language":"ja"`) || !strings.Contains(w.Body.String(), `"theme":"yozora"`) {
+		t.Fatalf("language save = %d %s", w.Code, w.Body.String())
+	}
+	loaded, err := config.Load(cfg.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.UI.Language != "ja" || cfg.Get().UI.Language != "ja" || loaded.UI.Theme != before.UI.Theme || loaded.Template.State != "custom template" {
+		t.Fatalf("language not persisted alone: %+v", loaded.UI)
+	}
+	page := request(h, "GET", "/?t=fixture-token", "", false).Body.String()
+	if !strings.Contains(page, `<html lang="ja" data-theme="yozora" data-motion="system" data-language="ja" data-version="`) {
+		t.Fatal("dashboard does not render the saved language before scripts run")
+	}
+	if w := request(h, "POST", "/api/appearance", `{"theme":"pine","language":"en"}`, true); w.Code != 200 || cfg.Get().UI.Theme != "pine" || cfg.Get().UI.Language != "en" {
+		t.Fatalf("combined save = %d %+v", w.Code, cfg.Get().UI)
+	}
+}
+
+func TestPageLangFollowsSettingThenBrowser(t *testing.T) {
+	for _, c := range []struct{ setting, accept, want string }{
+		{"ja", "en-US,en;q=0.9", "ja"},
+		{"en", "ja-JP", "en"},
+		{"system", "ja-JP,ja;q=0.9,en;q=0.8", "ja"},
+		{"system", "ja", "ja"},
+		{"system", "JA-jp;q=1", "ja"},
+		{"system", "en-GB,ja;q=0.5", "en"},
+		{"system", "jam", "en"},
+		{"system", "", "en"},
+	} {
+		if got := pageLang(c.setting, c.accept); got != c.want {
+			t.Errorf("pageLang(%q, %q) = %q, want %q", c.setting, c.accept, got, c.want)
+		}
+	}
+}
+
+func TestDashboardRendersVersion(t *testing.T) {
+	h, _ := fixtureHandler(t)
+	old := version.Version
+	t.Cleanup(func() { version.Version = old })
+	version.Version = "0.1.42"
+	page := request(h, "GET", "/?t=fixture-token", "", false).Body.String()
+	if !strings.Contains(page, `data-version="0.1.42"`) {
+		t.Fatal("dashboard does not carry the running version")
 	}
 }

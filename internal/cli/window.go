@@ -4,6 +4,7 @@ package cli
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -17,7 +18,7 @@ import (
 	webview "github.com/jchv/go-webview2"
 	"github.com/jchv/go-webview2/pkg/edge"
 
-	"uika-resonance/internal/sysutil"
+	"uika-resonance/internal/config"
 	"uika-resonance/internal/tray"
 )
 
@@ -54,23 +55,32 @@ func createPanelEntry(panelHwnd uintptr) uintptr {
 		uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)),
 		0, 0, 0, 0, 0, hwndMessage, 0, 0, 0)
 	if entry != 0 {
-		prop, _ := syscall.UTF16PtrFromString(panelHWNDProp)
-		procSetPropW.Call(entry, uintptr(unsafe.Pointer(prop)), panelHwnd)
+		setPanelEntry(entry, panelHwnd)
 	}
 	return entry
 }
 
-func activateRunningPanel() int {
+// focusRunningPanel brings an open control panel to the front. It reports
+// false when no panel window is live, including while one is closing.
+func focusRunningPanel() bool {
 	title, _ := syscall.UTF16PtrFromString(panelEntryTitle)
 	class, _ := syscall.UTF16PtrFromString(panelEntryClass)
 	entry, _, _ := procFindWindowExW.Call(hwndMessage, 0,
 		uintptr(unsafe.Pointer(class)), uintptr(unsafe.Pointer(title)))
 	if entry == 0 {
-
-		return 0
+		return false
 	}
-	showPanelEntry(entry)
-	return 0
+	prop, _ := syscall.UTF16PtrFromString(panelHWNDProp)
+	panel, _, _ := procGetPropW.Call(entry, uintptr(unsafe.Pointer(prop)))
+	if panel == 0 {
+		return false
+	}
+	if live, _, _ := procIsPanelWindow.Call(panel); live == 0 {
+		return false
+	}
+	procShowWindow.Call(panel, 9) // SW_RESTORE
+	procForeground.Call(panel)
+	return true
 }
 
 const (
@@ -116,12 +126,12 @@ func openDashboardWindow(endpoint dashboardEndpoint, dataDir string) (ok bool) {
 		}
 	}()
 	width, height := scaledWindowSize()
-	actions := &panelTrayActions{
-		dashboardJSON: dashboardEndpointPath(dataDir),
-		daemonExe:     daemonExecutableOrEmpty(dataDir), dataDir: dataDir,
-	}
-	actions.initEntry()
-	defer procDestroyPanelWindow.Call(actions.entry)
+	session := &panelSession{dataDir: dataDir}
+	session.initEntry()
+	defer procDestroyPanelWindow.Call(session.entry)
+	// The panel lives only as long as the daemon that serves it: Quit Yozora,
+	// a crash, or a shutdown that races this launch all close it.
+	go watchDaemonExit(endpoint.PID, dataDir, session.Quit)
 	factory := func() panelView {
 		w := webview.NewWithOptions(webview.WebViewOptions{
 			AutoFocus: true, DataPath: filepath.Join(dataDir, "webview"),
@@ -132,85 +142,73 @@ func openDashboardWindow(endpoint dashboardEndpoint, dataDir string) (ok bool) {
 		}
 		return &nativePanelView{WebView: w, dataDir: dataDir}
 	}
-
-	trayPanel := tray.New(actions)
-	trayDone := make(chan struct{})
-	go func() {
-		defer close(trayDone)
-		if err := trayPanel.Run(); err != nil {
-			launcherLog(dataDir, err.Error())
-		}
-		actions.trayStopped()
-	}()
-	defer func() {
-
-		trayPanel.PostClose()
-		select {
-		case <-trayDone:
-		case <-time.After(2 * time.Second):
-		}
-	}()
-
-	return runPanelLifecycle(actions, u.String(), factory)
+	return runPanelLifecycle(session, u.String(), factory)
 }
 
-type panelTrayActions struct {
-	mu              sync.Mutex
-	panel           panelView
-	entry           uintptr
-	panelHwnd       uintptr
-	dashboardJSON   string
-	daemonExe       string
-	dataDir         string
-	trayReady       atomic.Bool
-	reopenRequested atomic.Bool
-	quitRequested   atomic.Bool
+// panelSession is the state of the one panel window this process shows.
+type panelSession struct {
+	mu            sync.Mutex
+	panel         panelView
+	entry         uintptr
+	panelHwnd     uintptr
+	dataDir       string
+	quitRequested atomic.Bool
 }
 
-func (a *panelTrayActions) initEntry() {
+func (a *panelSession) initEntry() {
 	a.entry = createPanelEntry(0)
-	if a.entry != 0 {
-		if err := installPanelWindowHook(a.entry, a); err == nil {
-			return
-		} else {
-			launcherLog(a.dataDir, "panel entry hook: "+err.Error())
-		}
-		procDestroyPanelWindow.Call(a.entry)
-		a.entry = 0
+	if a.entry == 0 {
+		launcherLog(a.dataDir, "panel entry unavailable; a second launch cannot focus this panel")
 	}
-	launcherLog(a.dataDir, "panel entry unavailable; closing the panel will exit")
 }
 
-func (a *panelTrayActions) trayStopped() {
-	a.trayReady.Store(false)
+// Quit closes the panel from any goroutine. A quit that lands while the window
+// is still being created is honoured once runPanelLifecycle publishes it.
+func (a *panelSession) Quit() {
+	a.quitRequested.Store(true)
+	a.closePanel()
+}
+
+func (a *panelSession) closePanel() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.panelHwnd == 0 && a.entry != 0 {
-		procPostPanelMessage.Call(a.entry, 0, 0, 0)
+	if a.panelHwnd != 0 {
+		procPostPanelMessage.Call(a.panelHwnd, 0x0010, 0, 0)
 	}
 }
 
-func (a *panelTrayActions) ShowPanel() {
-	showPanelEntry(a.entry)
-}
+const (
+	synchronize     = 0x00100000
+	waitInfinite    = 0xFFFFFFFF
+	errInvalidParam = syscall.Errno(87)
+)
 
-func (a *panelTrayActions) TrayReady() {
-	a.trayReady.Store(true)
-}
+var (
+	procOpenProcess         = syscall.NewLazyDLL("kernel32.dll").NewProc("OpenProcess")
+	procWaitForSingleObject = syscall.NewLazyDLL("kernel32.dll").NewProc("WaitForSingleObject")
+	procCloseHandle         = syscall.NewLazyDLL("kernel32.dll").NewProc("CloseHandle")
+)
 
-func (a *panelTrayActions) Quit() {
-	if !a.quitRequested.CompareAndSwap(false, true) {
+// watchDaemonExit calls onExit once the daemon process pid has ended. It parks
+// in one blocking wait, so it costs no CPU while the panel is open.
+func watchDaemonExit(pid int, dataDir string, onExit func()) {
+	h, _, err := procOpenProcess.Call(synchronize, 0, uintptr(pid))
+	if h == 0 {
+		if err == errInvalidParam {
+			onExit() // Already gone.
+			return
+		}
+		launcherLog(dataDir, fmt.Sprintf("cannot watch daemon pid %d: %v", pid, err))
 		return
 	}
-	if err := sysutil.StopDaemon(a.dashboardJSON, a.daemonExe); err != nil {
-		launcherLog(a.dataDir, "tray quit: stop daemon: "+err.Error())
-	}
-	a.closePanel()
+	defer procCloseHandle.Call(h)
+	procWaitForSingleObject.Call(h, waitInfinite)
+	onExit()
 }
 
 type panelWindowHook struct {
 	original uintptr
-	actions  *panelTrayActions
+	actions  *panelSession
 }
 
 var panelWindowHooks = struct {
@@ -220,7 +218,7 @@ var panelWindowHooks = struct {
 
 var panelWindowProcCallback = syscall.NewCallback(panelWindowProc)
 
-func installPanelWindowHook(hwnd uintptr, actions *panelTrayActions) error {
+func installPanelWindowHook(hwnd uintptr, actions *panelSession) error {
 	if hwnd == 0 {
 		return fmt.Errorf("empty panel HWND")
 	}
@@ -242,18 +240,7 @@ func panelWindowProc(hwnd, msg, wp, lp uintptr) uintptr {
 	panelWindowHooks.RLock()
 	hook := panelWindowHooks.windows[hwnd]
 	panelWindowHooks.RUnlock()
-	if hook.actions != nil && hwnd == hook.actions.entry && msg == panelReopenMessage {
-		a := hook.actions
-		a.mu.Lock()
-		closed := a.panelHwnd == 0
-		a.mu.Unlock()
-		if closed {
-			a.reopenRequested.Store(true)
-			procPostPanelMessage.Call(hwnd, 0, 0, 0)
-		}
-		return 0
-	}
-	if (msg == 0x0010 || msg == 0x0002) && hook.actions != nil && hwnd != hook.actions.entry {
+	if (msg == 0x0010 || msg == 0x0002) && hook.actions != nil {
 		a := hook.actions
 		a.mu.Lock()
 		view := a.panel
@@ -273,14 +260,6 @@ func panelWindowProc(hwnd, msg, wp, lp uintptr) uintptr {
 		panelWindowHooks.Unlock()
 	}
 	return r
-}
-
-func daemonExecutableOrEmpty(dataDir string) string {
-	exe, err := daemonExecutable()
-	if err != nil {
-		return ""
-	}
-	return exe
 }
 
 func launcherLog(dataDir, line string) {
@@ -353,143 +332,136 @@ func (v *nativePanelView) teardown() {
 }
 
 var (
-	procRegisterPanelMessage  = syscall.NewLazyDLL("user32.dll").NewProc("RegisterWindowMessageW")
-	procPostPanelMessage      = syscall.NewLazyDLL("user32.dll").NewProc("PostMessageW")
-	procIsPanelWindow         = syscall.NewLazyDLL("user32.dll").NewProc("IsWindow")
-	procDestroyPanelWindow    = syscall.NewLazyDLL("user32.dll").NewProc("DestroyWindow")
-	procPeekPanelMessage      = syscall.NewLazyDLL("user32.dll").NewProc("PeekMessageW")
-	procGetPanelMessage       = syscall.NewLazyDLL("user32.dll").NewProc("GetMessageW")
-	procTranslatePanelMessage = syscall.NewLazyDLL("user32.dll").NewProc("TranslateMessage")
-	procDispatchPanelMessage  = syscall.NewLazyDLL("user32.dll").NewProc("DispatchMessageW")
-	panelReopenMessage        = registerPanelMessage()
+	procPostPanelMessage   = syscall.NewLazyDLL("user32.dll").NewProc("PostMessageW")
+	procIsPanelWindow      = syscall.NewLazyDLL("user32.dll").NewProc("IsWindow")
+	procDestroyPanelWindow = syscall.NewLazyDLL("user32.dll").NewProc("DestroyWindow")
 )
 
-func registerPanelMessage() uintptr {
-	name, _ := syscall.UTF16PtrFromString("YozoraReopenPanel")
-	msg, _, _ := procRegisterPanelMessage.Call(uintptr(unsafe.Pointer(name)))
-	return msg
-}
-
 func setPanelEntry(entry, panel uintptr) {
-	prop, _ := syscall.UTF16PtrFromString(panelHWNDProp)
-	procSetPropW.Call(entry, uintptr(unsafe.Pointer(prop)), panel)
-}
-
-func showPanelEntry(entry uintptr) {
 	if entry == 0 {
 		return
 	}
 	prop, _ := syscall.UTF16PtrFromString(panelHWNDProp)
-	panel, _, _ := procGetPropW.Call(entry, uintptr(unsafe.Pointer(prop)))
-	live, _, _ := procIsPanelWindow.Call(panel)
-	if panel != 0 && live != 0 {
-		procShowWindow.Call(panel, 9)
-		procForeground.Call(panel)
-	} else {
-		panelWindowHooks.RLock()
-		hook := panelWindowHooks.windows[entry]
-		panelWindowHooks.RUnlock()
-		if hook.actions != nil {
-			hook.actions.reopenRequested.Store(true)
-		}
-		procPostPanelMessage.Call(entry, panelReopenMessage, 0, 0)
-	}
+	procSetPropW.Call(entry, uintptr(unsafe.Pointer(prop)), panel)
 }
 
-func (a *panelTrayActions) closePanel() {
+// runPanelLifecycle shows one panel window and returns when it closes; the
+// process then exits. It reports false only when no view could be created, so
+// the caller can fall back to the browser.
+func runPanelLifecycle(a *panelSession, url string, factory func() panelView) bool {
+	if a.quitRequested.Load() {
+		return true
+	}
+	view := factory()
+	if view == nil {
+		launcherLog(a.dataDir, "webview unavailable; falling back to browser")
+		return false
+	}
+	hwnd := uintptr(view.Window())
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.panelHwnd != 0 {
-		procPostPanelMessage.Call(a.panelHwnd, 0x0010, 0, 0)
-	} else if a.entry != 0 {
-		// Wake the idle pump; quitRequested/trayReady determine whether to exit.
-		procPostPanelMessage.Call(a.entry, 0, 0, 0)
+	a.panel, a.panelHwnd = view, hwnd
+	a.mu.Unlock()
+	setPanelEntry(a.entry, hwnd)
+	if err := installPanelWindowHook(hwnd, a); err != nil {
+		launcherLog(a.dataDir, "panel close hook: "+err.Error())
+	}
+	view.Navigate(url)
+	// Quit stores the flag before reading panelHwnd under the lock, so a quit
+	// that ran while the factory was busy is caught here.
+	if a.quitRequested.Load() {
+		a.closePanel()
+	}
+	view.Run()
+	a.mu.Lock()
+	remaining := a.panel
+	a.panel, a.panelHwnd = nil, 0
+	a.mu.Unlock()
+	if remaining != nil {
+		remaining.teardown()
+	}
+	setPanelEntry(a.entry, 0)
+	return true
+}
+
+var procAllowSetForegroundWindow = syscall.NewLazyDLL("user32.dll").NewProc("AllowSetForegroundWindow")
+
+const asfwAny = uintptr(0xFFFFFFFF)
+
+// daemonTray is the serve daemon's side of the tray icon. The icon lives as
+// long as the daemon; the panel is a separate, short-lived process.
+type daemonTray struct {
+	cfg       *config.Holder
+	stop      func() // cancels serve's context
+	dataDir   string
+	panelLive bool // the dashboard server is listening and its endpoint written
+	quitting  atomic.Bool
+}
+
+func (d *daemonTray) ShowPanel() {
+	if d.quitting.Load() {
+		return
+	}
+	if !d.panelLive {
+		go d.explainPanelOff()
+		return
+	}
+	if focusRunningPanel() {
+		return
+	}
+	// Explorer lets the icon's owner take the foreground after a click; pass
+	// that on so the panel process can raise its window.
+	procAllowSetForegroundWindow.Call(asfwAny)
+	exe, err := daemonExecutable()
+	if err == nil {
+		err = spawnPanel(exe)
+	}
+	if err != nil {
+		log.Printf("tray: open control panel: %v", err)
 	}
 }
 
-type panelMessage struct {
-	hwnd           uintptr
-	message        uint32
-	wParam, lParam uintptr
-	time           uint32
-	pt             struct{ X, Y int32 }
-	lPrivate       uint32
-}
-
-func waitPanelReopen(a *panelTrayActions) bool {
-	var msg panelMessage
-	for {
-		if a.quitRequested.Load() || !a.trayReady.Load() || a.entry == 0 {
-			return false
-		}
-		if a.reopenRequested.Load() {
-			return true
-		}
-		r, _, _ := procGetPanelMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
-		if r == 0 || int32(r) == -1 {
-			return false
-		}
-		if a.quitRequested.Load() || !a.trayReady.Load() || a.entry == 0 {
-			return false
-		}
-		if a.reopenRequested.Load() || (msg.hwnd == a.entry && uintptr(msg.message) == panelReopenMessage) {
-			return true
-		}
-		procTranslatePanelMessage.Call(uintptr(unsafe.Pointer(&msg)))
-		procDispatchPanelMessage.Call(uintptr(unsafe.Pointer(&msg)))
+func (d *daemonTray) explainPanelOff() {
+	cfgPath, _, _ := config.Paths()
+	if err := ensureDashboardConfig(cfgPath); err != nil {
+		launcherNotify("Yozora", "Could not prepare the settings file:\n"+err.Error(), notifyError)
+		return
 	}
+	launcherNotify("Yozora", "The control panel is not available in this session. Quit Yozora and open it again to use it.", notifyInfo)
 }
 
-func runPanelLifecycle(a *panelTrayActions, url string, factory func() panelView) bool {
-	for {
-		if a.quitRequested.Load() {
-			return true
+// Language gives the tray menu the panel's language setting.
+func (d *daemonTray) Language() string {
+	if d.cfg == nil {
+		return config.DefaultLanguage
+	}
+	return d.cfg.Get().UI.Language
+}
+
+func (d *daemonTray) Quit() {
+	if !d.quitting.CompareAndSwap(false, true) {
+		return
+	}
+	log.Println("tray: quit requested")
+	d.stop()
+}
+
+// startDaemonTray shows the tray icon for the life of the serve daemon. The
+// returned func removes the icon and waits briefly for the tray thread, so no
+// stale icon is left behind when the process exits.
+func startDaemonTray(cfg *config.Holder, stop func(), dataDir string, panelLive bool) func() {
+	t := tray.New(&daemonTray{cfg: cfg, stop: stop, dataDir: dataDir, panelLive: panelLive})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if err := t.Run(); err != nil {
+			log.Printf("tray: %v", err)
 		}
-		a.reopenRequested.Store(false)
-		view := factory()
-		if view == nil {
-			launcherLog(a.dataDir, "webview unavailable; falling back to browser")
-			return false
-		}
-		hwnd := uintptr(view.Window())
-		a.mu.Lock()
-		a.panel, a.panelHwnd = view, hwnd
-		a.mu.Unlock()
-		// Requests that arrived before or while the factory pumped messages are
-		// satisfied by this view.
-		if a.entry != 0 {
-			var msg panelMessage
-			for {
-				r, _, _ := procPeekPanelMessage.Call(uintptr(unsafe.Pointer(&msg)), a.entry, panelReopenMessage, panelReopenMessage, 1)
-				if r == 0 {
-					break
-				}
-			}
-		}
-		a.reopenRequested.Store(false)
-		setPanelEntry(a.entry, hwnd)
-		if err := installPanelWindowHook(hwnd, a); err != nil {
-			launcherLog(a.dataDir, "panel close hook: "+err.Error())
-		}
-		view.Navigate(url)
-		// A quit can arrive while the factory is creating the view.
-		if a.quitRequested.Load() {
-			a.closePanel()
-		}
-		view.Run()
-		a.mu.Lock()
-		remaining := a.panel
-		a.panel = nil
-		a.mu.Unlock()
-		if remaining != nil {
-			remaining.teardown()
-		}
-		a.mu.Lock()
-		a.panel, a.panelHwnd = nil, 0
-		a.mu.Unlock()
-		setPanelEntry(a.entry, 0)
-		if !waitPanelReopen(a) {
-			return true
+	}()
+	return func() {
+		t.PostClose()
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
 		}
 	}
 }

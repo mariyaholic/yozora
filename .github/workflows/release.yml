@@ -3,6 +3,21 @@ name: release
 on:
   push:
     branches: [main]
+    # Release only when the shipped binary or installer can change. Docs-only
+    # merges (README, docs/, scripts/, tests) do not cut a version; use
+    # "Run workflow" to republish by hand.
+    paths:
+      - '**.go'
+      - '!**_test.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '**.syso'
+      - 'installer/**'
+      - 'assets/yozora.ico'
+      - 'internal/server/ui.html'
+      - 'internal/server/fonts/**'
+      - 'internal/tray/*.ico'
+      - '.github/workflows/release.yml'
   workflow_dispatch:
 
 permissions:
@@ -35,8 +50,8 @@ jobs:
       - name: Test
         run: go test ./...
       - name: Build
-        run: go build -trimpath -ldflags "-s -w -H=windowsgui" -o Yozora.exe ./cmd/yozora
-      - name: Check GUI subsystem
+        run: go build -trimpath -ldflags "-s -w -H=windowsgui -X uika-resonance/internal/version.Version=${{ steps.version.outputs.version }}" -o Yozora.exe ./cmd/yozora
+      - name: Check GUI subsystem and version
         run: |
           # A console-subsystem exe opens a terminal window on double-click (the v0.1.1 daemon did). Require GUI (2).
           $b = [IO.File]::ReadAllBytes("Yozora.exe")
@@ -44,14 +59,109 @@ jobs:
           $sub = [BitConverter]::ToUInt16($b, $pe + 24 + 68)
           if ($sub -ne 2) { throw "Yozora.exe PE subsystem is $sub, expected 2 (Windows GUI)" }
           Write-Host "Yozora.exe PE subsystem: $sub (Windows GUI)"
+          # The -X path must match internal/version, or the binary silently stays "dev".
+          $text = [Text.Encoding]::ASCII.GetString($b)
+          if (-not $text.Contains("${{ steps.version.outputs.version }}")) { throw "version ${{ steps.version.outputs.version }} not stamped into Yozora.exe" }
+
+      # Code signing (SignPath Foundation). Inert until the owner adds the
+      # SIGNPATH_API_TOKEN secret and the SIGNPATH_ORGANIZATION_ID variable;
+      # without them every signing step is skipped and the release ships
+      # unsigned exactly as before. See README "Code signing".
+      - name: Signing available
+        id: signing
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+        run: |
+          $on = (-not [string]::IsNullOrEmpty($env:SIGNPATH_API_TOKEN)) -and (-not [string]::IsNullOrEmpty($env:SIGNPATH_ORGANIZATION_ID))
+          Write-Host "Code signing: $(if ($on) { 'enabled' } else { 'skipped (secrets not configured)' })"
+          "enabled=$($on.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+      - name: Upload unsigned Yozora.exe for signing
+        id: unsigned-exe
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-exe
+          path: Yozora.exe
+          if-no-files-found: error
+      - name: Sign Yozora.exe
+        if: steps.signing.outputs.enabled == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'yozora' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_EXE_CONFIG_SLUG || 'exe' }}
+          github-artifact-id: ${{ steps.unsigned-exe.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-exe
+      - name: Use signed Yozora.exe
+        if: steps.signing.outputs.enabled == 'true'
+        run: |
+          Copy-Item signed-exe\Yozora.exe Yozora.exe -Force
+          $s = Get-AuthenticodeSignature Yozora.exe
+          if ($s.Status -ne 'Valid') { throw "Yozora.exe signature status: $($s.Status)" }
+          Write-Host "Yozora.exe signed by $($s.SignerCertificate.Subject)"
+
       - name: Installer
         run: |
           choco install innosetup -y --no-progress
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.version.outputs.version }}" installer\yozora.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with $LASTEXITCODE" }
+
+      - name: Upload unsigned installer for signing
+        id: unsigned-setup
+        if: steps.signing.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-setup
+          path: dist/Yozora-Setup.exe
+          if-no-files-found: error
+      - name: Sign installer
+        if: steps.signing.outputs.enabled == 'true'
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'yozora' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_SETUP_CONFIG_SLUG || 'setup' }}
+          github-artifact-id: ${{ steps.unsigned-setup.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed-setup
+      - name: Use signed installer
+        if: steps.signing.outputs.enabled == 'true'
+        run: |
+          Copy-Item signed-setup\Yozora-Setup.exe dist\Yozora-Setup.exe -Force
+          $s = Get-AuthenticodeSignature dist\Yozora-Setup.exe
+          if ($s.Status -ne 'Valid') { throw "Yozora-Setup.exe signature status: $($s.Status)" }
+
       - name: Checksums
         run: |
           Copy-Item Yozora.exe dist\Yozora.exe
-          Get-ChildItem dist | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Set-Content dist\SHA256SUMS.txt
+          Get-ChildItem dist -File | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Set-Content dist\SHA256SUMS.txt
+      - name: Winget manifests
+        run: |
+          # Fills packaging/winget templates for this release. Uploaded as a build
+          # artifact only; submitting to microsoft/winget-pkgs stays a manual step.
+          $v = "${{ steps.version.outputs.version }}"
+          $sha = (Get-FileHash dist\Yozora-Setup.exe -Algorithm SHA256).Hash.ToUpper()
+          $url = "https://github.com/${{ github.repository }}/releases/download/v$v/Yozora-Setup.exe"
+          $out = "winget\$v"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Get-ChildItem packaging\winget\*.yaml | ForEach-Object {
+            $text = (Get-Content $_.FullName -Raw).Replace('{{VERSION}}', $v).Replace('{{SHA256}}', $sha).Replace('{{INSTALLER_URL}}', $url).Replace('{{REPOSITORY}}', '${{ github.repository }}')
+            if ($text -match '\{\{[A-Z_0-9]+\}\}') { throw "unfilled placeholder in $($_.Name): $($Matches[0])" }
+            [IO.File]::WriteAllText((Join-Path $out $_.Name), $text, [Text.UTF8Encoding]::new($false))
+          }
+          Get-ChildItem $out | ForEach-Object { Write-Host $_.Name }
+      - name: Upload winget manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: winget-manifests-${{ steps.version.outputs.version }}
+          path: winget/
+          if-no-files-found: error
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

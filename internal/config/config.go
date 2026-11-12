@@ -3,6 +3,9 @@
 package config
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -89,6 +92,10 @@ type Log struct {
 type UI struct {
 	Theme  string `toml:"theme"`
 	Motion string `toml:"motion"`
+	// Language is the panel and tray language; one of Languages.
+	Language string `toml:"language"`
+	// Onboarded hides the panel's first-run checklist once its checks have passed.
+	Onboarded bool `toml:"onboarded"`
 }
 
 // DefaultMotion follows the Windows "Show animations" setting.
@@ -99,6 +106,15 @@ var Motions = []string{DefaultMotion, "reduced", "full"}
 
 // ValidMotion reports whether id names a control panel motion mode.
 func ValidMotion(id string) bool { return slices.Contains(Motions, id) }
+
+// DefaultLanguage follows the Windows display language.
+const DefaultLanguage = "system"
+
+// Languages lists the panel and tray languages: follow Windows, English, or Japanese.
+var Languages = []string{DefaultLanguage, "en", "ja"}
+
+// ValidLanguage reports whether id names a panel language.
+func ValidLanguage(id string) bool { return slices.Contains(Languages, id) }
 
 // DefaultTheme is Yozora's own night palette.
 const DefaultTheme = "yozora"
@@ -163,6 +179,7 @@ func Defaults() *Config {
 	c.Log.Level = "info"
 	c.UI.Theme = DefaultTheme
 	c.UI.Motion = DefaultMotion
+	c.UI.Language = DefaultLanguage
 	return c
 }
 
@@ -182,22 +199,53 @@ func Paths() (cfgPath, dataDir, cacheDir string) {
 }
 
 func Load(path string) (*Config, error) {
-	c := Defaults()
-	if b, err := os.ReadFile(path); err == nil {
+	c, _, err := load(path)
+	return c, err
+}
 
+// decodeError marks a file that was read but is not a valid config, as opposed
+// to one that could not be read at all. Only the former is worth restoring over:
+// a file another program has locked is not broken. The message is unchanged.
+type decodeError struct{ error }
+
+func (e decodeError) Unwrap() error { return e.error }
+
+// load also returns the exact bytes it parsed, so the last-good copy is the file
+// that was validated even if it changes on disk a moment later.
+func load(path string) (*Config, []byte, error) {
+	c := Defaults()
+	b, err := os.ReadFile(path)
+	if err == nil {
 		c.Sources.Blocked = nil
 		c.Sources.Known = nil
 		if err := toml.Unmarshal(b, c); err != nil {
-			return nil, err
+			return nil, nil, decodeError{err}
 		}
 	} else if !os.IsNotExist(err) {
-		return nil, err
+		return nil, nil, err
+	} else {
+		b = nil
 	}
 	c.normalize()
-	return c, nil
+	return c, b, nil
 }
 
 func Save(c *Config, path string) error {
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(c); err != nil {
+		return err
+	}
+	if err := writeAtomic(path, buf.Bytes()); err != nil {
+		return err
+	}
+	keepLastGood(path, buf.Bytes())
+	return nil
+}
+
+// LastGoodPath is where the most recent config that loaded or saved cleanly is kept.
+func LastGoodPath(path string) string { return path + ".last-good" }
+
+func writeAtomic(path string, b []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -205,16 +253,69 @@ func Save(c *Config, path string) error {
 	if err != nil {
 		return err
 	}
-	enc := toml.NewEncoder(f)
-	if err := enc.Encode(c); err != nil {
+	if _, err := f.Write(b); err != nil {
 		f.Close()
 		os.Remove(f.Name())
 		return err
 	}
 	if err := f.Close(); err != nil {
+		os.Remove(f.Name())
 		return err
 	}
-	return os.Rename(f.Name(), path)
+	if err := os.Rename(f.Name(), path); err != nil {
+		os.Remove(f.Name())
+		return err
+	}
+	return nil
+}
+
+// keepLastGood is best effort: failing to refresh the safety copy must never
+// fail the load or save that produced it. Unchanged content is not rewritten.
+func keepLastGood(path string, b []byte) {
+	if b == nil {
+		return
+	}
+	lg := LastGoodPath(path)
+	if old, err := os.ReadFile(lg); err == nil && bytes.Equal(old, b) {
+		return
+	}
+	if err := writeAtomic(lg, b); err != nil {
+		log.Printf("config: could not update %s: %v", lg, err)
+	}
+}
+
+// Restore describes a startup that fell back to the last-good config.
+type Restore struct {
+	At         time.Time `json:"at"`
+	BrokenPath string    `json:"broken_path"`
+	Err        string    `json:"error"`
+}
+
+// restoreLastGood handles a config file that no longer parses: the broken file
+// is moved aside under a timestamped name for the user to fix, and the last-good
+// copy takes its place so the app starts with the settings it last ran with.
+func restoreLastGood(path string, loadErr error, now time.Time) (*Config, *Restore, error) {
+	b, err := os.ReadFile(LastGoodPath(path))
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w (no usable last-good copy: %v)", loadErr, err)
+	}
+	c := Defaults()
+	c.Sources.Blocked = nil
+	c.Sources.Known = nil
+	if err := toml.Unmarshal(b, c); err != nil {
+		return nil, nil, fmt.Errorf("%w (last-good copy is invalid too: %v)", loadErr, err)
+	}
+	c.normalize()
+	broken := path + ".broken-" + now.Format("20060102-150405")
+	if err := os.Rename(path, broken); err != nil {
+		return nil, nil, fmt.Errorf("%w (could not move it aside: %v)", loadErr, err)
+	}
+	if err := writeAtomic(path, b); err != nil {
+		// Put the user's file back rather than leave no config at all.
+		_ = os.Rename(broken, path)
+		return nil, nil, fmt.Errorf("%w (could not restore last-good copy: %v)", loadErr, err)
+	}
+	return c, &Restore{At: now, BrokenPath: broken, Err: loadErr.Error()}, nil
 }
 
 func (c *Config) normalize() {
@@ -256,6 +357,10 @@ func (c *Config) normalize() {
 	if !ValidMotion(c.UI.Motion) {
 		c.UI.Motion = DefaultMotion
 	}
+	c.UI.Language = strings.ToLower(strings.TrimSpace(c.UI.Language))
+	if !ValidLanguage(c.UI.Language) {
+		c.UI.Language = DefaultLanguage
+	}
 	if c.Spotify.PollSecs < 5 {
 		c.Spotify.PollSecs = 12
 	}
@@ -296,16 +401,32 @@ func (c *Config) normalize() {
 }
 
 type Holder struct {
-	path string
-	val  atomic.Pointer[Config]
+	path     string
+	val      atomic.Pointer[Config]
+	restored *Restore
 }
 
+// NewHolder loads the config. If the file exists but no longer parses, it falls
+// back to the last-good copy (see restoreLastGood) and logs that loudly; without
+// a usable copy the original error is returned as before.
 func NewHolder(path string) (*Holder, error) {
-	c, err := Load(path)
-	if err != nil {
-		return nil, err
-	}
 	h := &Holder{path: path}
+	c, b, err := load(path)
+	if err != nil {
+		var de decodeError
+		if !errors.As(err, &de) {
+			return nil, err
+		}
+		var r *Restore
+		c, r, err = restoreLastGood(path, err, time.Now())
+		if err != nil {
+			return nil, err
+		}
+		h.restored = r
+		log.Printf("config: WARNING %s is invalid (%s). Started with the last good copy; your edited file was kept as %s", path, r.Err, r.BrokenPath)
+	} else {
+		keepLastGood(path, b)
+	}
 	h.val.Store(c)
 	return h, nil
 }
@@ -313,11 +434,16 @@ func NewHolder(path string) (*Holder, error) {
 func (h *Holder) Get() *Config { return h.val.Load() }
 func (h *Holder) Path() string { return h.path }
 
+// Restored reports whether startup fell back to the last-good config, and why.
+// It is nil after a normal start.
+func (h *Holder) Restored() *Restore { return h.restored }
+
 func (h *Holder) Reload() (bool, error) {
-	c, err := Load(h.path)
+	c, b, err := load(h.path)
 	if err != nil {
 		return false, err
 	}
+	keepLastGood(h.path, b)
 	old := h.val.Load()
 	changed := !reflect.DeepEqual(old, c)
 	if changed {

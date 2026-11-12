@@ -23,7 +23,7 @@ func TestWindowMessagePumpDispatchesTrayNotification(t *testing.T) {
 	if hwnd == 0 {
 		t.Fatal("createHostWindow failed")
 	}
-	p.hostHwnd = hwnd
+	p.hostHwnd.Store(hwnd)
 	defer procDestroyWindow.Call(hwnd)
 
 	threadID, _, _ := modKernel32.NewProc("GetCurrentThreadId").Call()
@@ -49,7 +49,7 @@ func TestWindowProcReadsMenuCommandFromWParam(t *testing.T) {
 	if hwnd == 0 {
 		t.Fatal("createHostWindow failed")
 	}
-	p.hostHwnd = hwnd
+	p.hostHwnd.Store(hwnd)
 	defer procDestroyWindow.Call(hwnd)
 	modUser32.NewProc("SendMessageW").Call(hwnd, wmCommand, cmdOpenPanel, 0)
 	if len(actions.fired) != 1 || actions.fired[0] != "show" {
@@ -142,14 +142,108 @@ func TestTrayTooltipShape(t *testing.T) {
 }
 
 func TestMenuLabelsShape(t *testing.T) {
-	items := menuLabels()
+	items := menuItems
 	if len(items) != 2 {
 		t.Fatalf("menu has %d items, want 2", len(items))
 	}
-	if items[0].ID != cmdOpenPanel || items[0].Label != "Open control panel" {
-		t.Fatalf("first item = %+v", items[0])
+	if items[0].ID != cmdOpenPanel || items[1].ID != cmdQuit {
+		t.Fatalf("menu ids = %d, %d", items[0].ID, items[1].ID)
 	}
-	if items[1].ID != cmdQuit || items[1].Label != "Quit Yozora" {
-		t.Fatalf("second item = %+v", items[1])
+	if got := menuLabels("en"); got[0] != "Open control panel" || got[1] != "Quit Yozora" {
+		t.Fatalf("English labels = %q", got)
+	}
+	if got := menuLabels("ja"); got[0] != "コントロールパネルを開く" || got[1] != "Yozora を終了" {
+		t.Fatalf("Japanese labels = %q", got)
+	}
+	if got := menuLabels("fr"); got[0] != "Open control panel" {
+		t.Fatalf("unknown language labels = %q", got)
+	}
+}
+
+func TestMenuLanguageFollowsSettingThenWindows(t *testing.T) {
+	const japanese, english, englishUK = 0x0411, 0x0409, 0x0809
+	for _, c := range []struct {
+		setting string
+		ui      uint16
+		want    string
+	}{
+		{"ja", english, "ja"},
+		{"en", japanese, "en"},
+		{"system", japanese, "ja"},
+		{"system", englishUK, "en"},
+		{"", japanese, "ja"},
+		{"fr", japanese, "en"},
+	} {
+		if got := menuLanguage(c.setting, c.ui); got != c.want {
+			t.Errorf("menuLanguage(%q, %#x) = %q, want %q", c.setting, c.ui, got, c.want)
+		}
+	}
+}
+
+func TestUnknownMenuCommandIsNotHandled(t *testing.T) {
+	p, a := newTestPanel()
+	if p.Dispatch(wmCommand, 4242) {
+		t.Fatal("unknown menu command was handled")
+	}
+	if len(a.fired) != 0 {
+		t.Fatalf("actions fired on unknown command: %v", a.fired)
+	}
+}
+
+func TestMenuItemIDsAreUnique(t *testing.T) {
+	seen := map[uintptr]bool{}
+	for _, item := range menuItems {
+		if item.ID == 0 || seen[item.ID] {
+			t.Fatalf("menu id %d is zero or repeated", item.ID)
+		}
+		if item.Labels["en"] == "" || item.Labels["ja"] == "" || item.run == nil {
+			t.Fatalf("menu item %d is incomplete", item.ID)
+		}
+		seen[item.ID] = true
+	}
+}
+
+func TestPostCloseBeforeRunStopsTray(t *testing.T) {
+	p, _ := newTestPanel()
+	p.PostClose()
+	done := make(chan error, 1)
+	go func() { done <- p.Run() }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run ignored a close requested before its window existed")
+	}
+	if p.HostHandle() != 0 {
+		t.Fatal("host window survived Run")
+	}
+}
+
+func TestRunStopsOnPostClose(t *testing.T) {
+	p, _ := newTestPanel()
+	done := make(chan error, 1)
+	go func() { done <- p.Run() }()
+	deadline := time.Now().Add(5 * time.Second)
+	for p.HostHandle() == 0 {
+		select {
+		case err := <-done:
+			t.Fatalf("Run returned early: %v", err)
+		default:
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("host window never appeared")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	p.PostClose()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not stop on PostClose")
+	}
+	if p.HostHandle() != 0 {
+		t.Fatal("host window survived Run")
 	}
 }
