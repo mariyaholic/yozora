@@ -135,6 +135,25 @@ Like the theme, it applies at once and is saved in `cadence.toml`; an unknown va
 | Sumimi | New track: the card fades in | A gold wash spreads from the press point | Paper-lift preview; rows ease 300ms |
 | Confluence | None | Oxblood underline | Oxblood drop rule; rows slide 200ms |
 
+## Performance
+
+With media playing, Yozora checks Windows media sessions every `sources.poll_ms` (default 1000 ms) and updates its state every 250 ms. After a minute with no media session and nothing on your Discord profile, it slows to one session check every 5 seconds and one update every 2 seconds. It returns to full speed as soon as any session appears. A newly started track therefore shows in Yozora within about 5.25 seconds at worst, and on Discord after the usual `presence.track_debounce_ms` (default 500 ms) on top. While a card is still on your profile, Yozora stays at full speed so the `presence.idle_clear_secs` clear is not delayed. A `poll_ms` of 5000 or more is left as it is.
+
+## Logs
+
+The daemon writes `%LOCALAPPDATA%\uika-resonance\logs\uika-resonance.log`. When the file passes 5 MB it is renamed to `uika-resonance.log.1`, replacing the previous one, and a new file starts, so the logs never take more than about 10 MB however long Yozora runs. `log.level` in `cadence.toml` is read at startup:
+
+```toml
+[log]
+level = "info"   # debug, info, warn, error or off
+```
+
+`debug` adds the source file and line to each entry and `off` writes no log file. Yozora's log lines carry no severity yet, so `warn` and `error` currently write the same lines as `info`. An unknown value is logged and treated as `info`.
+
+## Config file
+
+Settings live in `%APPDATA%\uika-resonance\cadence.toml`. Each time it loads or saves cleanly, Yozora keeps a copy beside it as `cadence.toml.last-good`. If a hand edit breaks the file while Yozora is running, the change is ignored, the previous settings stay in use, and the log says why. If the file is broken when Yozora starts, it starts with the last good copy instead, moves your edited file to `cadence.toml.broken-YYYYMMDD-HHMMSS` so you can fix it, and writes a `config: WARNING` line to the log naming both files. Without a usable last-good copy, startup fails with the parse error as before.
+
 ## Verification
 
 Private Windows named-pipe regression tests exercise simultaneous read/write using a unique `yozora-test-*` pipe, not the live Discord client. Ordinary `go test ./...` never publishes experimental activity to a Discord profile. Tests also cover slow artwork, session gaps and out-of-order lookups, coherent track/art transitions, paused clear/resume and visibility-policy reloads under the send-rate gate, label-only Discord button readback, loopback-art filtering, source-toggle API validation and concurrency, launcher endpoint validation, service names, icon placement, platform-specific links, button ordering, display enums, config bounds, and newest-snapshot retention.

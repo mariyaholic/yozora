@@ -350,3 +350,20 @@ func TestDashboardOffersEveryTheme(t *testing.T) {
 		t.Errorf("picker offers %d themes, config allows %d", got, len(config.Themes))
 	}
 }
+
+// The old whole-config POST decoded over defaults, so a partial body reset every other
+// setting. Nothing used it and it is gone; a stray request must not touch the file.
+func TestWholeConfigPostIsGone(t *testing.T) {
+	h, cfg := fixtureHandler(t)
+	before := cfg.Get()
+	for _, path := range []string{"/api/config", "/api/config?t=fixture-token"} {
+		request(h, "POST", path, `{"UI":{"Theme":"pine"}}`, true)
+		loaded, err := config.Load(cfg.Path())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(loaded, before) || cfg.Get() != before {
+			t.Fatalf("POST %s changed config", path)
+		}
+	}
+}
