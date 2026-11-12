@@ -43,6 +43,7 @@ type Status struct {
 	Via          string               `json:"art_via,omitempty"`
 	LastErr      string               `json:"last_error,omitempty"`
 	Sends        int64                `json:"sends"`
+	TestCard     *TestCard            `json:"test_card,omitempty"`
 }
 
 type artworkResolver interface {
@@ -106,6 +107,7 @@ type Engine struct {
 	publishedTrack    *player.Track
 	acknowledged      json.RawMessage
 	tickEvery         atomic.Int64
+	test              testCardState
 }
 
 func New(cfg *config.Holder, a *art.Resolver, smtcCh <-chan []smtc.Track, spotifyCh <-chan player.Track, stateDir string) *Engine {
@@ -173,14 +175,16 @@ func (e *Engine) Run(ctx context.Context) {
 }
 
 // quiet reports whether a step has nothing to do: no media session, no Spotify
-// track and nothing on the Discord profile. A card left up keeps full speed so
-// its idle clear is not delayed.
+// track, no test card and nothing on the Discord profile. A card left up keeps
+// full speed so its idle clear is not delayed.
 func (e *Engine) quiet() bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	shown := e.published != nil && e.ipc != nil && e.ipc.Alive()
 	spotify := e.spotify != nil && strings.TrimSpace(e.spotify.Title) != ""
-	return len(e.lastSMTCSessions) == 0 && !spotify && !shown
+	// A requested or showing test card must be sent and cleared on time.
+	testing := e.test.requested || e.test.card.State == "sending" || e.test.card.State == "shown"
+	return len(e.lastSMTCSessions) == 0 && !spotify && !shown && !testing
 }
 
 func (e *Engine) ingest(tracks []smtc.Track) {
@@ -239,6 +243,9 @@ func (e *Engine) pick(now time.Time) *player.Track {
 }
 
 func (e *Engine) step(now time.Time) {
+	if e.stepTestCard(now) {
+		return
+	}
 	cfg := e.Cfg.Get()
 	resolverKey := artworkConfigKey(cfg)
 	e.mu.Lock()
@@ -905,6 +912,10 @@ func (e *Engine) Status() Status {
 		Via:          e.lastVia,
 		Published:    e.published,
 		Acknowledged: e.acknowledged,
+	}
+	if e.test.card.State != "" {
+		card := e.test.card
+		s.TestCard = &card
 	}
 	if e.Cfg != nil {
 		s.SmallImage = e.Cfg.Get().Discord.SmallImage
