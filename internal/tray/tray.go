@@ -37,6 +37,9 @@ var (
 	procDispatchMessageW = modUser32.NewProc("DispatchMessageW")
 )
 
+// The tray follows the Windows display language when [ui] language is "system".
+var procGetUserDefaultUILanguage = modKernel32.NewProc("GetUserDefaultUILanguage")
+
 const (
 	trayClassName = "YozoraTrayHost"
 	trayTooltip   = "Yozora"
@@ -92,21 +95,65 @@ type Actions interface {
 	Quit()
 }
 
+// Languager is optionally implemented by Actions to give the [ui] language
+// setting ("system", "en" or "ja"). It is read each time the menu opens, so a
+// change in the panel applies without restarting.
+type Languager interface {
+	Language() string
+}
+
 // menuItem is one row of the tray's context menu. New entries only need a
 // row here: the popup is built from this table and WM_COMMAND is routed
-// through it.
+// through it. Labels holds each language's text; English is the fallback.
 type menuItem struct {
-	ID    uintptr
-	Label string
-	run   func(*Panel)
+	ID     uintptr
+	Labels map[string]string
+	run    func(*Panel)
 }
 
 var menuItems = []menuItem{
-	{cmdOpenPanel, "Open control panel", func(p *Panel) { p.actions.ShowPanel() }},
-	{cmdQuit, "Quit Yozora", func(p *Panel) {
+	{cmdOpenPanel, map[string]string{"en": "Open control panel", "ja": "コントロールパネルを開く"}, func(p *Panel) { p.actions.ShowPanel() }},
+	{cmdQuit, map[string]string{"en": "Quit Yozora", "ja": "Yozora を終了"}, func(p *Panel) {
 		p.actions.Quit()
 		p.PostClose()
 	}},
+}
+
+// langJapanese is LANG_JAPANESE, the primary language of a Windows LANGID.
+const langJapanese = 0x11
+
+// menuLanguage resolves a [ui] language setting. "system" follows the Windows
+// display language (uiLang is a LANGID); anything unknown falls back to English.
+func menuLanguage(setting string, uiLang uint16) string {
+	switch setting {
+	case "en", "ja":
+		return setting
+	case "", "system":
+		if uiLang&0x3ff == langJapanese {
+			return "ja"
+		}
+	}
+	return "en"
+}
+
+// menuLabels returns the menu's labels, in menu order, for a resolved language.
+func menuLabels(lang string) []string {
+	out := make([]string, len(menuItems))
+	for i, item := range menuItems {
+		if out[i] = item.Labels[lang]; out[i] == "" {
+			out[i] = item.Labels["en"]
+		}
+	}
+	return out
+}
+
+func (p *Panel) language() string {
+	setting := "system"
+	if l, ok := p.actions.(Languager); ok {
+		setting = l.Language()
+	}
+	id, _, _ := procGetUserDefaultUILanguage.Call()
+	return menuLanguage(setting, uint16(id))
 }
 
 type Panel struct {
@@ -177,8 +224,9 @@ func (p *Panel) popupMenu() {
 		return
 	}
 	defer procDestroyMenu.Call(menu)
-	for _, item := range menuItems {
-		appendMenuItem(menu, item.ID, item.Label)
+	labels := menuLabels(p.language())
+	for i, item := range menuItems {
+		appendMenuItem(menu, item.ID, labels[i])
 	}
 
 	host := p.HostHandle()

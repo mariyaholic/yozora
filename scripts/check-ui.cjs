@@ -11,7 +11,9 @@ const root = path.resolve(__dirname, '..');
 const output = path.resolve(process.env.UI_EVIDENCE_DIR || path.join(os.tmpdir(), 'yozora-ui-check'));
 fs.mkdirSync(output, { recursive: true });
 const nonce = 'synthetic-ui-test';
-const html = fs.readFileSync(path.join(root, 'internal/server/ui.html'), 'utf8').replace('{{.Nonce}}', nonce).replace('{{.Theme}}', 'yozora').replace('{{.Motion}}', 'system');
+const template = fs.readFileSync(path.join(root, 'internal/server/ui.html'), 'utf8').replace('{{.Nonce}}', nonce).replace('{{.Theme}}', 'yozora').replace('{{.Motion}}', 'system');
+// Like the server: the saved language, with "system" drawn first in the browser's Accept-Language.
+const html = accept => template.replace('{{.Lang}}', language !== 'system' ? language : /^ja(-|$)/i.test(accept || '') ? 'ja' : 'en').replace('{{.Language}}', language).replace('{{.Version}}', version);
 // Use the production policy, including its nonce and restriction on image URLs.
 const serverSource = fs.readFileSync(path.join(root, 'internal/server/server.go'), 'utf8');
 const cspExpression = serverSource.match(/Set\("Content-Security-Policy", (.+)\)/)[1];
@@ -26,6 +28,8 @@ let autostartHTTP = 200;
 let autostart = false;
 let theme = 'yozora';
 let motion = 'system';
+let language = 'system';
+let version = 'dev';
 let themeHTTP = 200;
 const themePosts = [];
 let saveDelay = 0;
@@ -44,7 +48,7 @@ const server = http.createServer(async (req, res) => {
   const json = (body, code = 200) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
   if (url.pathname === '/') {
     res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Security-Policy': csp, 'Referrer-Policy': 'no-referrer' });
-    res.end(html);
+    res.end(html(req.headers['accept-language']));
   } else if (/^\/fonts\/[a-z0-9-]+\.woff2$/.test(url.pathname) && fs.existsSync(path.join(root, 'internal/server', url.pathname))) {
     res.writeHead(200, { 'Content-Type': 'font/woff2' });
     res.end(fs.readFileSync(path.join(root, 'internal/server', url.pathname)));
@@ -68,9 +72,9 @@ const server = http.createServer(async (req, res) => {
       for await (const chunk of req) body += chunk;
       const posted = JSON.parse(body);
       themePosts.push(posted);
-      if (themeHTTP === 200) { theme = posted.theme ?? theme; motion = posted.motion ?? motion; }
+      if (themeHTTP === 200) { theme = posted.theme ?? theme; motion = posted.motion ?? motion; language = posted.language ?? language; }
     }
-    json({ theme, themes: [], motion, motions: [] }, themeHTTP);
+    json({ theme, themes: [], motion, motions: [], language, languages: [] }, themeHTTP);
   } else if (url.pathname === '/api/setup') {
     if (req.method === 'POST') {
       let body = '';
@@ -141,7 +145,7 @@ const server = http.createServer(async (req, res) => {
     // Picks a theme or motion mode through the dialog, waits for the save, and closes it again.
     const choose = async (p, name, value, saved) => {
       await openAppearance(p);
-      const tile = name === 'theme' ? p.locator('label.theme-option', { has: p.locator(`input[value="${value}"]`) }) : p.locator('.segmented label', { has: p.locator(`input[value="${value}"]`) });
+      const tile = name === 'theme' ? p.locator('label.theme-option', { has: p.locator(`input[value="${value}"]`) }) : p.locator('.segmented label', { has: p.locator(`input[name="${name}"][value="${value}"]`) });
       await tile.scrollIntoViewIfNeeded();
       await tile.click();
       await p.waitForFunction(text => document.querySelector('#theme-status').textContent.includes(text), saved);
@@ -938,6 +942,217 @@ const server = http.createServer(async (req, res) => {
       await sc.close();
       setup = { ...setup, onboarded:true };
       state = { ...playingTrack, discord_connected:true, sends:12 };
+    }
+
+    // Language, version, the config-restored notice, and Windows High Contrast.
+    {
+      const lc = await browser.newContext({ viewport:{ width:560, height:760 }, reducedMotion:'reduce', locale:'en-US' });
+      await lc.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+      await lc.addInitScript(() => {
+        window.cspViolations = [];
+        document.addEventListener('securitypolicyviolation', event => window.cspViolations.push(event.violatedDirective));
+      });
+      const l = await lc.newPage();
+      l.on('pageerror', error => errors.push(error.message));
+      const lRefresh = () => l.evaluate(async () => { while (polling) await new Promise(resolve => setTimeout(resolve, 10)); await tick(); });
+      const lShot = async name => { await l.evaluate(() => scrollTo(0, 0)); await l.screenshot({ path:path.join(output, `${name}.png`), fullPage:true }); };
+      const text = selector => l.locator(selector).first().textContent();
+      const playingTrack = { playing:true, activity_type:'listening', title:'Night Walk', artist:'Mira', album:'After Hours', service:'Spotify', source:'spotify', elapsed_sec:82, duration_sec:243, art_url:'/test-art.svg', small_image:'/test-badge.svg', discord_connected:true, sends:4 };
+      state = { ...playingTrack };
+      await l.goto(`${origin}/?t=synthetic`);
+      await ready(l);
+      await lRefresh();
+
+      assert.equal(await text('#version-footer'), '· dev build');
+      assert.equal(await l.locator('#version-meta').evaluate(node => node.textContent), 'Version dev build');
+      version = '0.1.42';
+      await l.reload();
+      await ready(l);
+      assert.equal(await text('#version-footer'), '· v0.1.42');
+      assert.equal(await l.locator('#version-meta').evaluate(node => node.textContent), 'Version 0.1.42');
+      check('the running version shows in the footer and Diagnostics, and a dev build says so');
+
+      const brokenPath = 'C:\\Users\\mira\\AppData\\Roaming\\uika-resonance\\cadence.toml.broken-20261112-101500';
+      state = { ...playingTrack, config_restored:{ at:'2026-11-12T10:15:00Z', broken_path:brokenPath, error:'toml: line 3: expected value' } };
+      await lRefresh();
+      assert.equal(await l.locator('#restored-note').isVisible(), true, 'a restored config earns a line');
+      assert.match(await text('#restored-text'), /previous settings were restored\. Your edited file was saved as cadence\.toml\.broken-20261112-101500\./);
+      assert.equal(await l.locator('#restored-text').getAttribute('title'), `${brokenPath}\ntoml: line 3: expected value`);
+      assert.equal(await l.locator('#preview-note').isHidden(), true, 'the restored line does not borrow the connection note');
+      await l.screenshot({ path:path.join(output, 'restored-notice-560.png') });
+      await l.locator('#restored-dismiss').click();
+      assert.equal(await l.locator('#restored-note').isHidden(), true);
+      await lRefresh();
+      assert.equal(await l.locator('#restored-note').isHidden(), true, 'a dismissed notice stays away while the panel polls');
+      await l.reload();
+      await ready(l);
+      await lRefresh();
+      assert.equal(await l.locator('#restored-note').isHidden(), true, 'a dismissed notice stays away after a reload');
+      state = { ...state, config_restored:{ ...state.config_restored, at:'2026-11-13T08:00:00Z' } };
+      await lRefresh();
+      assert.equal(await l.locator('#restored-note').isVisible(), true, 'a later restore shows again');
+      check('the config-restored notice names the file set aside, and dismisses for that restore');
+
+      // Japanese, chosen in the Appearance dialog.
+      state = { ...state, discord_connected:false };
+      await choose(l, 'language', 'ja', '言語（日本語）を保存しました');
+      assert.deepEqual(themePosts.at(-1), { language:'ja' }, 'a language change posts only the language');
+      assert.deepEqual(await l.evaluate(() => [document.documentElement.lang, document.documentElement.dataset.language, document.title]), ['ja', 'ja', 'Yozora コントロールパネル']);
+      await lRefresh();
+      assert.equal(await text('#playback-state'), '再生中');
+      assert.equal(await text('#head'), 'Spotify で再生中');
+      assert.equal(await text('#source-save'), '変更を適用');
+      assert.equal(await text('#version-footer'), '· v0.1.42');
+      assert.equal(await l.locator('#version-meta').evaluate(node => node.textContent), 'バージョン 0.1.42');
+      assert.match(await text('#restored-text'), /前回の設定に戻しました。編集したファイルは cadence\.toml\.broken-20261112-101500 として/);
+      assert.equal(await text('#preview-note'), 'Discord が起動していないため、まだプロフィールに表示されていません。');
+      assert.match(await l.locator('#source-order li').first().getAttribute('aria-label'), /^優先順位 1: /);
+      assert.equal(await l.locator('#source-order li[data-source="spotify"] .drag-handle').getAttribute('aria-label'), 'Spotify（デスクトップ） を並べ替え');
+      assert.equal(await l.locator('#appearance-open').getAttribute('aria-label'), '外観');
+      assert.equal(await l.locator('#spotify-id').getAttribute('placeholder'), 'Spotify の開発者アプリから取得');
+      // Only names stay in Latin script; anything else left in a key region is untranslated English.
+      const names = /[A-Z]:\\\S+|cadence\.toml[\w.-]*|toml: [^\n]*|Yozora|Discord|Spotify Web API|Web API|Spotify|YouTube Music|YouTube|Twitch|Apple Music|Windows|Edge|Chrome|Mariyaholic-98|Uika|Pine|Kurisu|Ava|Astra|Sumimi|Ledger|Confluence|Maria|Aa|ID|URI|UI|PWA|VOD|msedge|Esc|dev|v\d[\d.]*/g;
+      const regions = ['.masthead', '.preview-label', '#preview-note', '#restored-note', '#sources-form', '.startup', '.made-by', '#appearance .dialog-head', '#theme-fields > legend', '#appearance .motion-row', '#language-title'];
+      for (const selector of regions) {
+        const found = await l.locator(selector).first().evaluate((node, source) => {
+          const labels = [...node.querySelectorAll('[aria-label],[title],[placeholder]')].flatMap(el => ['aria-label', 'title', 'placeholder'].map(a => el.getAttribute(a) || ''));
+          const all = [node.innerText, node.textContent, node.getAttribute('aria-label') || '', ...labels].join(' ');
+          return all.replace(new RegExp(source, 'gi'), ' ').match(/[A-Za-z]{2,}/g) || [];
+        }, names.source);
+        assert.deepEqual(found, [], `${selector} still has English in Japanese`);
+      }
+      check('Japanese: the picker saves only the language, and key regions, labels and live text are translated');
+
+      const ja320 = [];
+      for (const id of ['yozora', 'ledger', 'mariyaholic-98']) {
+        if (id !== 'yozora') await choose(l, 'theme', id, 'を保存しました');
+        setup = { ...setup, onboarded:false };
+        state = { ...state, discord_connected:true, test_card:{ state:'failed', confirmed:false, error:'discordipc: no discord pipe found' }, spotify:{ available:true, connected:false, waiting:false, client_id:'', redirect_uri:'http://127.0.0.1:50123/spotify/callback' } };
+        await l.reload();
+        await ready(l);
+        await l.waitForFunction(() => !document.getElementById('setup').hidden);
+        await lRefresh();
+        await l.evaluate(() => document.fonts.ready);
+        assert.equal(await text('#setup-title'), 'はじめに');
+        assert.equal(await text('#spotify-state'), '未接続');
+        await lShot(`ja-${id}-560`);
+        await l.setViewportSize({ width:320, height:760 });
+        ja320.push([id, await l.evaluate(() => document.documentElement.scrollWidth <= innerWidth)]);
+        // Phrase breaking must not push a label under its row's arrow buttons.
+        const clashes = await l.locator('#source-order li').evaluateAll(rows => rows.filter(row => row.querySelector('.source-option > span').getBoundingClientRect().right > row.querySelector('.move').getBoundingClientRect().left + 0.5).map(row => row.dataset.source));
+        assert.deepEqual(clashes, [], `${id}: source labels overlap their arrows at 320px`);
+        await lShot(`ja-${id}-320`);
+        await openAppearance(l);
+        assert.equal(await l.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${id}: the Japanese Appearance dialog fits 320px`);
+        await l.screenshot({ path:path.join(output, `ja-${id}-appearance-320.png`) });
+        await closeAppearance(l);
+        await l.setViewportSize({ width:560, height:760 });
+      }
+      assert.deepEqual(ja320.filter(([, fits]) => !fits), [], 'Japanese must not overflow at 320px');
+      setup = { ...setup, onboarded:true };
+      state = { ...playingTrack };
+      check('Japanese at 320px in a dark, a light and the PC-98 theme has no horizontal overflow');
+
+      themeHTTP = 500;
+      await choose(l, 'language', 'en', '言語を保存できませんでした');
+      assert.equal(await l.evaluate(() => document.documentElement.lang), 'ja', 'a failed save keeps the saved language');
+      assert.equal(await l.locator('input[name="language"][value="ja"]').isChecked(), true);
+      themeHTTP = 200;
+      await choose(l, 'language', 'en', 'Language (English) saved');
+      assert.deepEqual(themePosts.at(-1), { language:'en' });
+      assert.equal(await l.evaluate(() => document.documentElement.lang), 'en');
+      await lRefresh();
+      assert.equal(await text('#source-save'), 'Apply changes');
+      assert.match(await l.locator('#source-order li').first().getAttribute('aria-label'), /^Priority 1: /);
+      await choose(l, 'language', 'system', 'Language (Follow Windows) saved');
+      assert.deepEqual(themePosts.at(-1), { language:'system' });
+      assert.equal(await l.evaluate(() => document.documentElement.lang), 'en', 'Follow Windows in an English browser is English');
+      await choose(l, 'theme', 'yozora', 'theme saved');
+      violations.push(...await l.evaluate(() => window.cspViolations));
+      await lc.close();
+      check('switching back to English and to Follow Windows posts each choice; a failed save keeps Japanese');
+
+      // Follow Windows in a Japanese browser is Japanese from the first paint.
+      const jc = await browser.newContext({ viewport:{ width:560, height:760 }, reducedMotion:'reduce', locale:'ja-JP' });
+      await jc.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+      const j = await jc.newPage();
+      j.on('pageerror', error => errors.push(error.message));
+      const served = await (await j.request.get(`${origin}/?t=synthetic`, { headers:{ 'Accept-Language':'ja-JP,ja;q=0.9' } })).text();
+      assert.match(served, /<html lang="ja" [^>]*data-language="system"/, 'the server draws Follow Windows in the browser language');
+      await j.goto(`${origin}/?t=synthetic`);
+      await ready(j);
+      assert.deepEqual(await j.evaluate(() => [document.documentElement.lang, document.getElementById('source-save').textContent]), ['ja', '変更を適用']);
+      await jc.close();
+      check('Follow Windows picks Japanese from a Japanese browser');
+
+      // Windows High Contrast.
+      const fc = await browser.newContext({ viewport:{ width:560, height:760 }, reducedMotion:'reduce', forcedColors:'active', locale:'en-US' });
+      await fc.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+      const f = await fc.newPage();
+      f.on('pageerror', error => errors.push(error.message));
+      setup = { ...setup, onboarded:false };
+      state = { ...playingTrack, discord_connected:true, test_card:{ state:'failed', confirmed:false } };
+      await f.goto(`${origin}/?t=synthetic`);
+      await ready(f);
+      await f.waitForFunction(() => !document.getElementById('setup').hidden);
+      await f.evaluate(async () => { while (polling) await new Promise(resolve => setTimeout(resolve, 10)); await tick(); });
+      assert.equal(await f.evaluate(() => matchMedia('(forced-colors: active)').matches), true);
+      const transparent = color => color === 'transparent' || /rgba\(.*,\s*0\)$/.test(color);
+      const ring = node => { const style = getComputedStyle(node); return [style.outlineStyle, style.outlineWidth, style.outlineColor]; };
+      await f.keyboard.press('Tab');
+      assert.equal(await f.evaluate(() => document.activeElement.id), 'appearance-open');
+      let [style, width, color] = await f.locator('#appearance-open').evaluate(ring);
+      assert.ok(style === 'solid' && width === '2px' && !transparent(color), `button focus ring: ${style} ${width} ${color}`);
+      await f.evaluate(() => document.getElementById('source-applemusic').focus());
+      [style, width, color] = await f.locator('label[for=source-applemusic]').evaluate(ring);
+      assert.ok(style === 'solid' && !transparent(color), `checkbox row focus ring: ${style} ${color}`);
+      const rowEdge = await f.locator('#source-order li:has(input:checked)').first().evaluate(node => [getComputedStyle(node).borderTopWidth, getComputedStyle(node).borderTopColor]);
+      assert.ok(rowEdge[0] === '2px' && !transparent(rowEdge[1]), `a checked source row keeps a heavy edge: ${rowEdge}`);
+      const marks = await f.evaluate(() => ['discord', 'card'].map(id => { const s = getComputedStyle(document.getElementById(`check-${id}`), '::before'); return [s.content, s.backgroundColor, s.borderTopColor]; }));
+      assert.ok(marks[0][0] === '"✓"' && !transparent(marks[0][1]), `a passed check is filled: ${marks[0]}`);
+      assert.ok(marks[1][0] === '"!"' && !transparent(marks[1][2]), `a problem check is marked: ${marks[1]}`);
+      await f.evaluate(() => scrollTo(0, 0));
+      await f.screenshot({ path:path.join(output, 'forced-colors-560.png'), fullPage:true });
+
+      await f.locator('#source-order').evaluate(list => list.scrollIntoView({ block:'center' }));
+      const grip = await f.locator('#source-order li').first().locator('.drag-handle').boundingBox();
+      const last = await f.locator('#source-order li').last().boundingBox();
+      await f.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+      await f.mouse.down();
+      await f.mouse.move(grip.x + grip.width / 2, last.y + last.height - 8, { steps:10 });
+      const line = await f.locator('.drop-after').evaluate(node => getComputedStyle(node, '::after').backgroundColor);
+      const preview = await f.locator('.drag-preview').evaluate(node => [getComputedStyle(node).borderTopColor, getComputedStyle(node).borderTopWidth]);
+      assert.ok(!transparent(line), `the drop line is drawn: ${line}`);
+      assert.ok(!transparent(preview[0]) && preview[1] === '2px', `the drop preview is outlined: ${preview}`);
+      await f.screenshot({ path:path.join(output, 'forced-colors-drag-560.png') });
+      await f.keyboard.press('Escape');
+      await f.mouse.up();
+
+      await f.evaluate(() => scrollTo(0, 0));
+      await f.locator('#appearance-open').click();
+      const tiles = await f.evaluate(() => {
+        const edge = node => [getComputedStyle(node).borderTopWidth, getComputedStyle(node).borderTopColor];
+        const on = document.querySelector('.theme-option:has(input:checked)');
+        const off = document.querySelector('.theme-option:not(:has(input:checked))');
+        const seg = document.querySelector('.segmented label:has(input:checked)');
+        const segOff = document.querySelector('.segmented label:not(:has(input:checked))');
+        return { on:edge(on), off:edge(off), seg:getComputedStyle(seg).backgroundColor, segOff:getComputedStyle(segOff).backgroundColor };
+      });
+      assert.ok(tiles.on[0] === '2px' && !transparent(tiles.on[1]) && tiles.on[1] !== tiles.off[1], `the checked theme tile stands out: ${JSON.stringify(tiles)}`);
+      assert.ok(!transparent(tiles.seg) && tiles.seg !== tiles.segOff, `the chosen segment is filled: ${JSON.stringify(tiles)}`);
+      await f.keyboard.press('Tab');
+      await f.keyboard.press('Shift+Tab');
+      const tileRing = await f.evaluate(() => { const s = getComputedStyle(document.querySelector('.theme-option:has(input:focus-visible)')); return [s.outlineStyle, s.outlineColor]; });
+      assert.ok(tileRing[0] === 'solid' && !transparent(tileRing[1]), `theme tile focus ring: ${tileRing}`);
+      await f.screenshot({ path:path.join(output, 'forced-colors-appearance-560.png') });
+      await f.keyboard.press('Escape');
+      await f.setViewportSize({ width:320, height:760 });
+      assert.equal(await f.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'forced colours fit 320px');
+      await fc.close();
+      setup = { ...setup, onboarded:true };
+      state = { ...playingTrack };
+      version = 'dev';
+      check('forced colours keep focus rings, checked rows and tiles, the chosen segment, checks and the drop line visible');
     }
 
     violations.push(...await page.evaluate(() => window.cspViolations));

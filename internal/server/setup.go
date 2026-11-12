@@ -36,6 +36,8 @@ type spotifyState struct {
 type stateResponse struct {
 	presence.Status
 	Spotify spotifyState `json:"spotify"`
+	// Restored is set when startup replaced a broken config with the last-good copy.
+	Restored *config.Restore `json:"config_restored,omitempty"`
 }
 
 func (d Deps) spotifyAvailable() bool {
