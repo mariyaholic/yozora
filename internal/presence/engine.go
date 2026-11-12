@@ -615,7 +615,7 @@ func (e *Engine) send(t *player.Track, now time.Time) {
 	}
 	clientID := discordClientID(cfg, t)
 	if strings.TrimSpace(clientID) == "" {
-		e.setErr("no discord.client_id configured (run `uika-resonance setup`)")
+		e.setErr("no discord.client_id configured (run `Yozora.exe setup`)")
 		return
 	}
 	if !e.ensureIPC(clientID, now) {

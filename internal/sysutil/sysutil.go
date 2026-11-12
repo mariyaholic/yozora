@@ -72,20 +72,58 @@ func runKeyPath() (uintptr, error) {
 	return h, nil
 }
 
-func valueName() (*uint16, error) { return syscall.UTF16PtrFromString("UikaResonance") }
+// runValueName stays "UikaResonance": installs from every earlier release
+// registered under it, and the name is never shown to users (Task Manager's
+// Startup tab shows the executable's own description), so a rename would only
+// add a migration path that could leave a stale duplicate behind.
+const runValueName = "UikaResonance"
 
-func InstallAutostart() error {
+const errorMoreData = 234
+
+// readRunValue returns the command registered under name; ok is false when
+// the value is absent or unreadable.
+func readRunValue(name string) (string, bool) {
+	h, err := runKeyPath()
+	if err != nil {
+		return "", false
+	}
+	defer procRegClose.Call(h)
+	vn, err := syscall.UTF16PtrFromString(name)
+	if err != nil {
+		return "", false
+	}
+	buf := make([]uint16, 512)
+	for range 2 {
+		var typ uint32
+		sz := uint32(len(buf) * 2)
+		r1, _, _ := procRegQuery.Call(h, uintptr(unsafe.Pointer(vn)), 0, uintptr(unsafe.Pointer(&typ)), uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&sz)))
+		switch r1 {
+		case 0:
+			n := min(int(sz/2), len(buf))
+			return syscall.UTF16ToString(buf[:n]), true
+		case errorMoreData:
+			buf = make([]uint16, sz/2+1)
+		default:
+			return "", false
+		}
+	}
+	return "", false
+}
+
+func writeRunValue(name, command string) error {
 	h, err := runKeyPath()
 	if err != nil {
 		return err
 	}
 	defer procRegClose.Call(h)
-	exe, err := os.Executable()
+	vn, err := syscall.UTF16PtrFromString(name)
 	if err != nil {
 		return err
 	}
-	vn, _ := valueName()
-	data, _ := syscall.UTF16FromString(`"` + exe + `" serve`)
+	data, err := syscall.UTF16FromString(command)
+	if err != nil {
+		return err
+	}
 	r1, _, _ := procRegSet.Call(h, uintptr(unsafe.Pointer(vn)), 0, regSZ, uintptr(unsafe.Pointer(&data[0])), uintptr(len(data)*2))
 	if r1 != 0 {
 		return fmt.Errorf("sysutil: set run value: %w", syscall.Errno(r1))
@@ -93,13 +131,16 @@ func InstallAutostart() error {
 	return nil
 }
 
-func RemoveAutostart() error {
+func deleteRunValue(name string) error {
 	h, err := runKeyPath()
 	if err != nil {
 		return err
 	}
 	defer procRegClose.Call(h)
-	vn, _ := valueName()
+	vn, err := syscall.UTF16PtrFromString(name)
+	if err != nil {
+		return err
+	}
 	r1, _, _ := procRegDel.Call(h, uintptr(unsafe.Pointer(vn)))
 	if r1 != 0 {
 		return fmt.Errorf("sysutil: delete run value: %w", syscall.Errno(r1))
@@ -107,16 +148,36 @@ func RemoveAutostart() error {
 	return nil
 }
 
-func AutostartEnabled() bool {
-	h, err := runKeyPath()
+func InstallAutostart() error {
+	exe, err := os.Executable()
 	if err != nil {
-		return false
+		return err
 	}
-	defer procRegClose.Call(h)
-	vn, _ := valueName()
-	var typ uint32
-	var buf [512]uint16
-	var sz uint32 = 1024
-	r1, _, _ := procRegQuery.Call(h, uintptr(unsafe.Pointer(vn)), 0, uintptr(unsafe.Pointer(&typ)), uintptr(unsafe.Pointer(&buf[0])), uintptr(unsafe.Pointer(&sz)))
-	return r1 == 0
+	return writeRunValue(runValueName, autostartCommand(exe))
+}
+
+func RemoveAutostart() error { return deleteRunValue(runValueName) }
+
+func AutostartEnabled() bool {
+	_, ok := readRunValue(runValueName)
+	return ok
+}
+
+// RepairAutostart points an existing autostart entry at the running
+// executable when it was registered from another path (a moved install, an
+// old portable copy). It never turns autostart on; rewrote reports a change.
+func RepairAutostart() (rewrote bool, err error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return false, err
+	}
+	return repairAutostart(runValueName, exe, os.TempDir())
+}
+
+func repairAutostart(name, exe, tempDir string) (bool, error) {
+	registered, ok := readRunValue(name)
+	if !ok || !autostartNeedsRewrite(registered, exe, tempDir) {
+		return false, nil
+	}
+	return true, writeRunValue(name, autostartCommand(exe))
 }
