@@ -38,6 +38,8 @@ const setupPosts = [];
 let testCardHTTP = 202;
 const testCardPosts = [];
 let spotifyHTTP = 200;
+let pauseHTTP = 200;
+const pausePosts = [];
 const spotifyPosts = [];
 const posts = [];
 const errors = [];
@@ -90,6 +92,15 @@ const server = http.createServer(async (req, res) => {
     if (testCardHTTP === 202) state = { ...state, test_card: { state: 'sending', confirmed: false } };
     res.writeHead(testCardHTTP, { 'Content-Type': 'text/plain' });
     res.end(testCardHTTP === 202 ? '{"state":"sending"}' : 'a test card is already showing');
+  } else if (url.pathname === '/api/pause' && req.method === 'POST') {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    const posted = JSON.parse(body);
+    pausePosts.push(posted);
+    if (pauseHTTP !== 200) { res.writeHead(pauseHTTP, { 'Content-Type': 'text/plain' }); res.end('pause failed'); return; }
+    const { paused, paused_until, ...rest } = state;
+    state = posted.action === 'pause' ? { ...rest, paused: true, ...(posted.minutes ? { paused_until: new Date(Date.now() + posted.minutes * 60000).toISOString() } : {}) } : rest;
+    json({ paused: Boolean(state.paused) });
   } else if (url.pathname === '/api/spotify' && req.method === 'POST') {
     let body = '';
     for await (const chunk of req) body += chunk;
@@ -181,6 +192,58 @@ const server = http.createServer(async (req, res) => {
     assert.equal(await page.locator('#playback-state').textContent(), 'Paused');
     await shot('paused-560');
     check('polling preserves link focus and paused progress');
+
+    // Pause sharing: a small control opens the two choices; a paused state shows one compact line with Resume.
+    assert.equal(await page.locator('#pause-line').isHidden(), true, 'no pause line while sharing');
+    assert.equal(await page.locator('#pause-choices').isHidden(), true);
+    assert.equal(await page.locator('#pause-open').textContent(), 'Pause sharing');
+    await page.locator('#pause-open').click();
+    assert.equal(await page.locator('#pause-open').getAttribute('aria-expanded'), 'true');
+    assert.deepEqual(await page.locator('#pause-choices button').allTextContents(), ['For 1 hour', 'Until I resume']);
+    await page.locator('#pause-hour').focus();
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#pause-choices').isHidden(), true, 'Escape closes the choices');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'pause-open', 'focus returns to the control');
+    await page.locator('#pause-open').click();
+    await page.locator('#pause-hour').click();
+    await page.waitForFunction(() => !document.getElementById('pause-line').hidden);
+    assert.deepEqual(pausePosts.at(-1), { action: 'pause', minutes: 60 });
+    assert.match(await page.locator('#pause-text').textContent(), /^Sharing paused until \d\d:\d\d$/);
+    assert.equal(await page.locator('#pause-open').isHidden(), true, 'the pause control gives way to Resume');
+    assert.equal(await page.locator('#pause-choices').isHidden(), true);
+    await shot('paused-560');
+    await page.setViewportSize({ width: 320, height: 760 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the pause line fits 320px');
+    await shot('paused-320');
+    await page.setViewportSize({ width: 560, height: 760 });
+    await page.locator('#pause-resume').click();
+    await page.waitForFunction(() => document.getElementById('pause-line').hidden);
+    assert.deepEqual(pausePosts.at(-1), { action: 'resume' });
+    assert.equal(await page.locator('#pause-open').isVisible(), true);
+    await page.locator('#pause-open').click();
+    await page.locator('#pause-open-ended').click();
+    await page.waitForFunction(() => document.getElementById('pause-text').textContent === 'Sharing paused');
+    assert.deepEqual(pausePosts.at(-1), { action: 'pause' });
+    state = { ...state, paused: true, paused_until: '2026-11-12T15:30:00' };
+    await refresh();
+    assert.equal(await page.locator('#pause-text').textContent(), 'Sharing paused until 15:30');
+    await page.locator('#pause-resume').click();
+    await page.waitForFunction(() => document.getElementById('pause-line').hidden);
+    await page.setViewportSize({ width: 320, height: 760 });
+    await page.locator('#pause-open').click();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the pause choices fit 320px');
+    await page.setViewportSize({ width: 560, height: 760 });
+    await page.locator('#pause-open').click();
+    pauseHTTP = 500;
+    await page.locator('#pause-open').click();
+    await page.locator('#pause-hour').click();
+    await waitText('#preview-note', 'Could not change the pause');
+    assert.equal(await page.locator('#pause-line').isHidden(), true, 'a failed pause shows no pause line');
+    pauseHTTP = 200;
+    await page.evaluate(() => { pauseFailure = ''; });
+    await refresh();
+    assert.equal(await page.locator('#preview-note').isHidden(), true);
+    check('Pause sharing: choices, 1 hour and until-resumed, the paused line with Resume, a failed save, and 320px');
 
     await page.locator('label[for=source-youtube]').click({ position: { x: 3, y: 3 } });
     assert.equal(await page.locator('#browser-dependency').isVisible(), true);
@@ -1023,6 +1086,25 @@ const server = http.createServer(async (req, res) => {
       }
       check('Japanese: the picker saves only the language, and key regions, labels and live text are translated');
 
+      // The pause control and line in Japanese.
+      state = { ...state, paused:true, paused_until:'2026-11-12T15:30:00' };
+      await lRefresh();
+      assert.equal(await text('#pause-text'), '15:30 まで共有を一時停止中');
+      assert.equal(await text('#pause-resume'), '再開');
+      await lShot('ja-paused-560');
+      state = { ...state, paused_until:undefined };
+      await lRefresh();
+      assert.equal(await text('#pause-text'), '共有を一時停止中');
+      const { paused, paused_until, ...unpaused } = state;
+      state = unpaused;
+      await lRefresh();
+      assert.equal(await text('#pause-open'), '共有を一時停止');
+      await l.locator('#pause-open').click();
+      assert.deepEqual(await l.locator('#pause-choices button').allTextContents(), ['1 時間', '再開するまで']);
+      assert.equal(await l.locator('#pause-choices').getAttribute('aria-label'), '共有を一時停止');
+      await l.locator('#pause-open').click();
+      check('Japanese: the pause control, its choices, and the paused line with and without an end time');
+
       const ja320 = [];
       for (const id of ['yozora', 'ledger', 'mariyaholic-98']) {
         if (id !== 'yozora') await choose(l, 'theme', id, 'を保存しました');
@@ -1111,6 +1193,17 @@ const server = http.createServer(async (req, res) => {
       const marks = await f.evaluate(() => ['discord', 'card'].map(id => { const s = getComputedStyle(document.getElementById(`check-${id}`), '::before'); return [s.content, s.backgroundColor, s.borderTopColor]; }));
       assert.ok(marks[0][0] === '"✓"' && !transparent(marks[0][1]), `a passed check is filled: ${marks[0]}`);
       assert.ok(marks[1][0] === '"!"' && !transparent(marks[1][2]), `a problem check is marked: ${marks[1]}`);
+      state = { ...state, paused:true, paused_until:'2026-11-12T15:30:00' };
+      await f.evaluate(async () => { while (polling) await new Promise(resolve => setTimeout(resolve, 10)); await tick(); });
+      const pauseEdge = await f.locator('#pause-line').evaluate(node => [getComputedStyle(node).borderTopWidth, getComputedStyle(node).borderTopColor]);
+      assert.ok(pauseEdge[0] === '2px' && !transparent(pauseEdge[1]), `the paused line keeps a heavy edge: ${pauseEdge}`);
+      const { paused: pausedOnce, paused_until: pausedUntilOnce, ...notPaused } = state;
+      state = notPaused;
+      await f.evaluate(async () => { while (polling) await new Promise(resolve => setTimeout(resolve, 10)); await tick(); });
+      await f.locator('#pause-open').click();
+      const openEdge = await f.locator('#pause-open').evaluate(node => [getComputedStyle(node).borderTopWidth, getComputedStyle(node).borderTopColor]);
+      assert.ok(openEdge[0] === '2px' && !transparent(openEdge[1]), `the open pause control is marked: ${openEdge}`);
+      await f.locator('#pause-open').click();
       await f.evaluate(() => scrollTo(0, 0));
       await f.screenshot({ path:path.join(output, 'forced-colors-560.png'), fullPage:true });
 
