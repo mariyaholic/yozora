@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -16,36 +17,60 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
-
-	"uika-resonance/internal/player"
 
 	"uika-resonance/internal/art"
 	"uika-resonance/internal/config"
 	"uika-resonance/internal/credman"
 	"uika-resonance/internal/discordipc"
+	"uika-resonance/internal/logfile"
 	"uika-resonance/internal/presence"
 	"uika-resonance/internal/server"
 	"uika-resonance/internal/smtc"
 	"uika-resonance/internal/spotifyapi"
 	"uika-resonance/internal/sysutil"
+	"uika-resonance/internal/version"
 )
 
 const logMaxBytes = 5 << 20
 
+// logOut is the rotating log file, nil if it could not be opened.
+var logOut *logfile.Writer
+
+// setupLogging opens the log before the config is read, so startup problems are
+// recorded. The file rotates whenever it passes logMaxBytes, keeping one old file.
 func setupLogging(dataDir string, level string) {
 	dir := filepath.Join(dataDir, "logs")
 	_ = os.MkdirAll(dir, 0o755)
-	path := filepath.Join(dir, "uika-resonance.log")
-	if st, err := os.Stat(path); err == nil && st.Size() > logMaxBytes {
-		_ = os.Rename(path, path+".1")
+	if w, err := logfile.Open(filepath.Join(dir, "uika-resonance.log"), logMaxBytes); err == nil {
+		logOut = w
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err == nil {
-		log.SetOutput(io.MultiWriter(f, os.Stderr))
+	applyLogLevel(level)
+}
+
+// applyLogLevel applies the log.level setting once the config is loaded.
+func applyLogLevel(level string) {
+	lv, known := logfile.ParseLevel(level)
+	flags := log.LstdFlags | log.LUTC
+	if lv.Source {
+		flags |= log.Lmicroseconds | log.Lshortfile
 	}
-	log.SetFlags(log.LstdFlags | log.LUTC)
+	log.SetFlags(flags)
+	switch {
+	case lv.File && logOut != nil:
+		log.SetOutput(io.MultiWriter(logOut, os.Stderr))
+	default:
+		log.SetOutput(os.Stderr)
+		if logOut != nil {
+			// Closed, not dropped: a later write reopens it.
+			_ = logOut.Close()
+		}
+	}
+	if !known {
+		log.Printf("log: unknown level %q, using info (choose one of %s)", level, strings.Join(logfile.Levels, ", "))
+	}
 }
 
 func tokenOf() (string, error) {
@@ -64,6 +89,9 @@ func Main(args []string) int {
 	switch cmd {
 	case "serve":
 		return serve()
+	case "panel":
+		// Not in usage: the daemon's tray runs this to open the control panel.
+		return trayPanel()
 	case "setup":
 		return setup()
 	case "status":
@@ -84,6 +112,17 @@ func Main(args []string) int {
 		}
 		fmt.Println("autostart removed")
 		return 0
+	case "stop":
+		_, dataDir, _ := config.Paths()
+		if err := sysutil.StopRunning(dashboardEndpointPath(dataDir), 5*time.Second); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		fmt.Println("Yozora stopped")
+		return 0
+	case "version", "--version":
+		fmt.Println("Yozora", version.Version)
+		return 0
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 		return 0
@@ -96,7 +135,7 @@ func Main(args []string) int {
 
 const usage = `Yozora — your music, live on your Discord profile.
 
-Usage: uika-resonance [serve|setup|status|doctor|install|uninstall]
+Usage: Yozora.exe [serve|setup|status|doctor|install|uninstall|stop|version]
 
   serve        run the daemon (default)
   setup        interactive first-run setup
@@ -104,6 +143,8 @@ Usage: uika-resonance [serve|setup|status|doctor|install|uninstall]
   doctor       diagnose pipes, media, art, config
   install      register autostart (HKCU Run)
   uninstall    remove autostart
+  stop         quit a running Yozora, as the tray's Quit does
+  version      print the version
 `
 
 func serve() int {
@@ -120,6 +161,11 @@ func serve() int {
 		return 1
 	}
 	defer done()
+	if rewrote, err := sysutil.RepairAutostart(); err != nil {
+		log.Printf("autostart: %v", err)
+	} else if rewrote {
+		log.Println("autostart: repointed at this executable")
+	}
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		log.Println(err)
 	}
@@ -134,6 +180,7 @@ func serve() int {
 		log.Printf("config: wrote starter config to %s", cfgPath)
 	}
 	cfg := holder.Get()
+	applyLogLevel(cfg.Log.Level)
 
 	res := art.New(cacheDir, int64(cfg.Art.CacheMB)<<20)
 	base, err := res.StartServer(cfg.Art.Port)
@@ -151,17 +198,17 @@ func serve() int {
 	w.OnError(func(err error) { log.Printf("smtc: %v", err) })
 	go w.Run(ctx)
 
-	var spotifyCh <-chan player.Track
+	// The panel can connect or disconnect the Web API later, so the poller lives behind a manager.
+	spotify := spotifyapi.NewManager()
 	if cfg.Spotify.Mode == "api" && cfg.Spotify.ClientID != "" {
-		p := spotifyapi.New(cfg.Spotify.ClientID, time.Duration(cfg.Spotify.PollSecs)*time.Second)
-		p.Market = cfg.Spotify.Market
-		spotifyCh = p.Out
-		go p.RunLoop(ctx.Done())
-		log.Printf("spotify: api mode (poll %s)", p.PollEvery)
+		spotify.Start(cfg.Spotify.ClientID, cfg.Spotify.Market, time.Duration(cfg.Spotify.PollSecs)*time.Second)
+		log.Printf("spotify: api mode (poll %ds)", cfg.Spotify.PollSecs)
 	}
+	go func() { <-ctx.Done(); spotify.Stop() }()
 
-	eng := presence.New(holder, res, w.Out, spotifyCh, dataDir)
+	eng := presence.New(holder, res, w.Out, spotify.Out(), dataDir)
 
+	panelLive := false
 	if cfg.Server.Enabled {
 		tok, tokenErr := tokenOf()
 		if tokenErr != nil {
@@ -169,6 +216,7 @@ func serve() int {
 		} else if base, err := server.Start(server.Deps{
 			Engine: eng, Cfg: holder, CfgPath: cfgPath, Token: tok,
 			DiscordApp: cfg.Discord.AppName,
+			Spotify:    spotify, SpotifyLink: &spotifyapi.Link{}, OpenURL: openURL,
 		}, cfg.Server.Port); err == nil {
 			log.Printf("dashboard: %s (session token redacted)", base)
 			endpointPath := dashboardEndpointPath(dataDir)
@@ -178,10 +226,18 @@ func serve() int {
 				defer os.Remove(endpointPath)
 			}
 			fmt.Printf("Dashboard URL (session token; do not share): %s?t=%s\n", base, tok)
+			panelLive = true
 		} else {
 			log.Printf("dashboard: %v", err)
 		}
 	}
+
+	// The tray comes up only after the dashboard is listening and its endpoint
+	// is written, so "Open control panel" never races the server's start.
+	// Deferred after the endpoint cleanup, so it runs first: the icon goes
+	// away before the endpoint file does.
+	closeTray := startDaemonTray(holder, stop, dataDir, panelLive)
+	defer closeTray()
 
 	log.Printf("Yozora serving — config: %s", cfgPath)
 	eng.Run(ctx)
@@ -221,6 +277,7 @@ func fmtSec(s float64) string {
 func doctor() int {
 	cfgPath, dataDir, cacheDir := config.Paths()
 	fmt.Println("== Yozora doctor ==")
+	fmt.Println("version:", version.Version)
 	fmt.Println("config:", cfgPath)
 	if _, err := os.Stat(cfgPath); err == nil {
 		if _, err := config.Load(cfgPath); err != nil {
@@ -233,7 +290,7 @@ func doctor() int {
 	}
 	cfg, _ := config.Load(cfgPath)
 	if cfg.Discord.ClientID == "" {
-		fmt.Println("discord client_id: MISSING (run `uika-resonance setup`)")
+		fmt.Println("discord client_id: MISSING (run `Yozora.exe setup`)")
 	} else {
 		fmt.Printf("discord client_id: %s…\n", cfg.Discord.ClientID[:min(6, len(cfg.Discord.ClientID))])
 	}
@@ -345,7 +402,7 @@ func setup() int {
 		return 1
 	}
 	fmt.Printf("saved %s\n", cfgPath)
-	fmt.Println("Start the daemon with: uika-resonance serve")
+	fmt.Println("Start the daemon with: Yozora.exe serve")
 	return 0
 }
 
@@ -354,6 +411,15 @@ func trim(s string) string {
 		s = s[:len(s)-1]
 	}
 	return s
+}
+
+// openURL hands an https URL to the system browser; the panel's WebView never opens it.
+func openURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" {
+		return errors.New("only https URLs open in the browser")
+	}
+	return exec.Command("rundll32", "url.dll,FileProtocolHandler", raw).Start()
 }
 
 func openBrowser(raw string) {

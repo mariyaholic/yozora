@@ -3,10 +3,8 @@
 package cli
 
 import (
-	"os"
-	"path/filepath"
+	"os/exec"
 	"runtime"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -14,22 +12,6 @@ import (
 
 	"github.com/jchv/go-webview2/pkg/edge"
 )
-
-func TestFirstTrayQuitRequestRunsShutdownPath(t *testing.T) {
-	dir := t.TempDir()
-	a := &panelTrayActions{
-		dashboardJSON: filepath.Join(dir, "missing-dashboard.json"),
-		dataDir:       dir,
-	}
-	a.Quit()
-	b, err := os.ReadFile(filepath.Join(dir, "launcher.log"))
-	if err != nil {
-		t.Fatalf("first quit request skipped shutdown path: %v", err)
-	}
-	if !strings.Contains(string(b), "tray quit: stop daemon:") {
-		t.Fatalf("shutdown error not recorded: %s", b)
-	}
-}
 
 type fakePanelView struct {
 	hwnd       unsafe.Pointer
@@ -59,86 +41,79 @@ func testPanelHWND(t *testing.T) unsafe.Pointer {
 	return *(*unsafe.Pointer)(unsafe.Pointer(&hwnd))
 }
 
+// pumpUntilDestroyed models the WebView2 message loop: it dispatches this
+// thread's messages until hwnd is gone.
+func pumpUntilDestroyed(t *testing.T, hwnd uintptr) {
+	t.Helper()
+	peek := syscall.NewLazyDLL("user32.dll").NewProc("PeekMessageW")
+	dispatch := syscall.NewLazyDLL("user32.dll").NewProc("DispatchMessageW")
+	var msg [48]byte
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		if live, _, _ := procIsPanelWindow.Call(hwnd); live == 0 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("panel window was never closed")
+		}
+		if r, _, _ := peek.Call(uintptr(unsafe.Pointer(&msg[0])), 0, 0, 0, 1); r != 0 {
+			dispatch.Call(uintptr(unsafe.Pointer(&msg[0])))
+			continue
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 func TestPanelLifecycle(t *testing.T) {
-	for _, mode := range []string{"reopen", "reopen-launch", "quit-closed", "tray-not-ready", "tray-failure-open", "tray-exit-closed", "reopen-teardown", "reopen-external-teardown", "no-entry"} {
+	for _, mode := range []string{"user-close", "focus-running", "quit-open", "quit-during-factory", "no-entry"} {
 		t.Run(mode, func(t *testing.T) {
 			runtime.LockOSThread()
 			defer runtime.UnlockOSThread()
-			dir := t.TempDir()
-			a := &panelTrayActions{dataDir: dir, dashboardJSON: filepath.Join(dir, "missing-dashboard.json")}
+			a := &panelSession{dataDir: t.TempDir()}
 			if mode != "no-entry" {
 				a.initEntry()
 				if a.entry == 0 {
 					t.Fatal("entry creation failed")
 				}
+				defer procDestroyPanelWindow.Call(a.entry)
 			}
-			defer procDestroyPanelWindow.Call(a.entry)
-			a.trayReady.Store(mode != "tray-not-ready")
 			var views []*fakePanelView
-			var asyncDone chan struct{}
 			factory := func() panelView {
 				v := &fakePanelView{hwnd: testPanelHWND(t)}
 				views = append(views, v)
-				if len(views) == 1 && (mode == "reopen-teardown" || mode == "reopen-external-teardown") {
-					v.onTeardown = func() {
-						if mode == "reopen-teardown" {
-							a.ShowPanel()
-						} else {
-							// A second process cannot set the in-process flag.
-							procPostPanelMessage.Call(a.entry, panelReopenMessage, 0, 0)
-						}
-						// Model the library dispatching the request during teardown.
-						var msg panelMessage
-						procGetPanelMessage.Call(uintptr(unsafe.Pointer(&msg)), a.entry, panelReopenMessage, panelReopenMessage)
-						procDispatchPanelMessage.Call(uintptr(unsafe.Pointer(&msg)))
-					}
+				if mode == "quit-during-factory" {
+					a.Quit()
 				}
 				v.run = func() {
 					hwnd := uintptr(v.hwnd)
-					prop, _ := syscall.UTF16PtrFromString(panelHWNDProp)
-					got, _, _ := procGetPropW.Call(a.entry, uintptr(unsafe.Pointer(prop)))
-					if a.entry != 0 && got != hwnd {
-						t.Fatalf("entry prop = %x, want %x", got, hwnd)
-					}
-					if mode == "tray-failure-open" {
-						a.trayStopped()
-						// Dispatch all pending messages: tray failure must not post WM_CLOSE.
-						var msg panelMessage
-						peek := syscall.NewLazyDLL("user32.dll").NewProc("PeekMessageW")
-						for {
-							r, _, _ := peek.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0, 1)
-							if r == 0 {
-								break
-							}
-							procDispatchPanelMessage.Call(uintptr(unsafe.Pointer(&msg)))
-						}
-						if v.closed != 0 {
-							t.Fatal("tray failure closed live panel")
+					if a.entry != 0 {
+						prop, _ := syscall.UTF16PtrFromString(panelHWNDProp)
+						got, _, _ := procGetPropW.Call(a.entry, uintptr(unsafe.Pointer(prop)))
+						if got != hwnd {
+							t.Fatalf("entry prop = %x, want %x", got, hwnd)
 						}
 					}
-					syscall.NewLazyDLL("user32.dll").NewProc("SendMessageW").Call(hwnd, 0x0010, 0, 0)
+					switch mode {
+					case "focus-running":
+						if !focusRunningPanel() {
+							t.Fatal("a second launch could not find the open panel")
+						}
+						fallthrough
+					case "user-close", "no-entry":
+						syscall.NewLazyDLL("user32.dll").NewProc("SendMessageW").Call(hwnd, 0x0010, 0, 0)
+					case "quit-open":
+						done := make(chan struct{})
+						go func() { defer close(done); a.Quit() }()
+						<-done
+						pumpUntilDestroyed(t, hwnd)
+					case "quit-during-factory":
+						pumpUntilDestroyed(t, hwnd)
+					}
 					if live, _, _ := procIsPanelWindow.Call(hwnd); live != 0 {
 						t.Fatal("closed panel was not destroyed")
 					}
 					if v.closed != 1 {
 						t.Fatalf("teardown count = %d", v.closed)
-					}
-					if len(views) == 1 {
-						switch mode {
-						case "reopen":
-							a.ShowPanel()
-						case "reopen-launch":
-							activateRunningPanel()
-						case "quit-closed":
-							asyncDone = make(chan struct{})
-							go func() { defer close(asyncDone); a.Quit() }()
-						case "tray-exit-closed":
-							asyncDone = make(chan struct{})
-							go func() { defer close(asyncDone); a.trayStopped() }()
-						}
-					} else {
-						a.quitRequested.Store(true)
-						a.closePanel()
 					}
 				}
 				return v
@@ -146,22 +121,90 @@ func TestPanelLifecycle(t *testing.T) {
 			if !runPanelLifecycle(a, "about:blank", factory) {
 				t.Fatal("lifecycle failed")
 			}
-			if asyncDone != nil {
-				<-asyncDone
+			if len(views) != 1 {
+				t.Fatalf("created %d views, want 1", len(views))
 			}
-			want := 1
-			if strings.HasPrefix(mode, "reopen") {
-				want = 2
+			if views[0].closed != 1 {
+				t.Fatalf("teardown called %d times", views[0].closed)
 			}
-			if len(views) != want {
-				t.Fatalf("created %d views, want %d", len(views), want)
-			}
-			for _, v := range views {
-				if v.closed != 1 {
-					t.Fatalf("teardown called %d times", v.closed)
-				}
+			if a.entry != 0 && focusRunningPanel() {
+				t.Fatal("a closed panel still reports as focusable")
 			}
 		})
+	}
+}
+
+func TestQuitBeforeFactorySkipsWindow(t *testing.T) {
+	a := &panelSession{dataDir: t.TempDir()}
+	a.Quit()
+	called := false
+	if !runPanelLifecycle(a, "about:blank", func() panelView { called = true; return nil }) {
+		t.Fatal("quit before open fell back to the browser")
+	}
+	if called {
+		t.Fatal("window created after quit")
+	}
+}
+
+func TestWatchDaemonExitFiresWhenDaemonEnds(t *testing.T) {
+	cmd := exec.Command("cmd", "/c", "ping -n 30 127.0.0.1 >nul")
+	if err := cmd.Start(); err != nil {
+		t.Skipf("cmd unavailable: %v", err)
+	}
+	defer cmd.Process.Kill()
+	done := make(chan struct{})
+	go watchDaemonExit(cmd.Process.Pid, t.TempDir(), func() { close(done) })
+	select {
+	case <-done:
+		t.Fatal("watcher fired while the daemon was running")
+	case <-time.After(200 * time.Millisecond):
+	}
+	_ = cmd.Process.Kill()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("watcher did not report the daemon's exit")
+	}
+	_ = cmd.Wait()
+}
+
+func TestClaimPanel(t *testing.T) {
+	released := 0
+	owned := func() (bool, func(), error) { return true, func() { released++ }, nil }
+	held := func() (bool, func(), error) { return false, func() {}, nil }
+
+	owner, release, err := claimPanel(owned, func() bool { t.Fatal("focused while owner"); return false }, time.Second, time.Millisecond)
+	if err != nil || !owner {
+		t.Fatalf("owner = %v, err = %v", owner, err)
+	}
+	release()
+	if released != 1 {
+		t.Fatal("release not returned")
+	}
+
+	focused := 0
+	owner, _, _ = claimPanel(held, func() bool { focused++; return true }, time.Second, time.Millisecond)
+	if owner || focused != 1 {
+		t.Fatalf("open panel: owner = %v, focus calls = %d", owner, focused)
+	}
+
+	// The previous panel is closing: its mutex frees after a few tries.
+	tries := 0
+	closing := func() (bool, func(), error) {
+		tries++
+		if tries < 3 {
+			return false, func() {}, nil
+		}
+		return true, func() {}, nil
+	}
+	owner, _, _ = claimPanel(closing, func() bool { return false }, time.Second, time.Millisecond)
+	if !owner || tries != 3 {
+		t.Fatalf("handoff: owner = %v after %d tries", owner, tries)
+	}
+
+	owner, _, _ = claimPanel(held, func() bool { return false }, 20*time.Millisecond, time.Millisecond)
+	if owner {
+		t.Fatal("claimed a mutex that never freed")
 	}
 }
 
@@ -178,41 +221,5 @@ func TestChromiumFromView(t *testing.T) {
 	}
 	if _, ok := chromiumFromView(&struct{ browser string }{"wrong"}); ok {
 		t.Fatal("accepted incompatible browser")
-	}
-}
-
-func TestReopenDuringFactoryIsSatisfiedByNewView(t *testing.T) {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-	dir := t.TempDir()
-	a := &panelTrayActions{dataDir: dir, dashboardJSON: filepath.Join(dir, "missing-dashboard.json")}
-	a.initEntry()
-	defer procDestroyPanelWindow.Call(a.entry)
-	a.trayReady.Store(true)
-	var views int
-	factory := func() panelView {
-		views++
-		v := &fakePanelView{hwnd: testPanelHWND(t)}
-		if views == 1 {
-			// A second Yozora process launches while the WebView2 factory is
-			// pumping messages on this thread (before a.panel is published).
-			procPostPanelMessage.Call(a.entry, panelReopenMessage, 0, 0)
-			var msg panelMessage
-			procGetPanelMessage.Call(uintptr(unsafe.Pointer(&msg)), a.entry, panelReopenMessage, panelReopenMessage)
-			procDispatchPanelMessage.Call(uintptr(unsafe.Pointer(&msg)))
-		}
-		v.run = func() {
-			syscall.NewLazyDLL("user32.dll").NewProc("SendMessageW").Call(uintptr(v.hwnd), 0x0010, 0, 0)
-			if views >= 2 {
-				a.quitRequested.Store(true)
-				a.closePanel()
-			}
-		}
-		return v
-	}
-	go func() { time.Sleep(400 * time.Millisecond); a.Quit() }()
-	runPanelLifecycle(a, "about:blank", factory)
-	if views != 1 {
-		t.Fatalf("spurious reopen: views=%d want 1", views)
 	}
 }

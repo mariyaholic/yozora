@@ -4,8 +4,10 @@ package tray
 
 import (
 	"fmt"
+	"log"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"unsafe"
 )
@@ -34,6 +36,9 @@ var (
 	procTranslateMessage = modUser32.NewProc("TranslateMessage")
 	procDispatchMessageW = modUser32.NewProc("DispatchMessageW")
 )
+
+// The tray follows the Windows display language when [ui] language is "system".
+var procGetUserDefaultUILanguage = modKernel32.NewProc("GetUserDefaultUILanguage")
 
 const (
 	trayClassName = "YozoraTrayHost"
@@ -82,23 +87,88 @@ const (
 	cmdQuit      = 1002
 )
 
+// Actions is what the tray asks its owner (the serve daemon) to do. Both are
+// called on the tray thread, so they must return promptly.
 type Actions interface {
 	ShowPanel()
 
 	Quit()
 }
 
+// Languager is optionally implemented by Actions to give the [ui] language
+// setting ("system", "en" or "ja"). It is read each time the menu opens, so a
+// change in the panel applies without restarting.
+type Languager interface {
+	Language() string
+}
+
+// menuItem is one row of the tray's context menu. New entries only need a
+// row here: the popup is built from this table and WM_COMMAND is routed
+// through it. Labels holds each language's text; English is the fallback.
+type menuItem struct {
+	ID     uintptr
+	Labels map[string]string
+	run    func(*Panel)
+}
+
+var menuItems = []menuItem{
+	{cmdOpenPanel, map[string]string{"en": "Open control panel", "ja": "コントロールパネルを開く"}, func(p *Panel) { p.actions.ShowPanel() }},
+	{cmdQuit, map[string]string{"en": "Quit Yozora", "ja": "Yozora を終了"}, func(p *Panel) {
+		p.actions.Quit()
+		p.PostClose()
+	}},
+}
+
+// langJapanese is LANG_JAPANESE, the primary language of a Windows LANGID.
+const langJapanese = 0x11
+
+// menuLanguage resolves a [ui] language setting. "system" follows the Windows
+// display language (uiLang is a LANGID); anything unknown falls back to English.
+func menuLanguage(setting string, uiLang uint16) string {
+	switch setting {
+	case "en", "ja":
+		return setting
+	case "", "system":
+		if uiLang&0x3ff == langJapanese {
+			return "ja"
+		}
+	}
+	return "en"
+}
+
+// menuLabels returns the menu's labels, in menu order, for a resolved language.
+func menuLabels(lang string) []string {
+	out := make([]string, len(menuItems))
+	for i, item := range menuItems {
+		if out[i] = item.Labels[lang]; out[i] == "" {
+			out[i] = item.Labels["en"]
+		}
+	}
+	return out
+}
+
+func (p *Panel) language() string {
+	setting := "system"
+	if l, ok := p.actions.(Languager); ok {
+		setting = l.Language()
+	}
+	id, _, _ := procGetUserDefaultUILanguage.Call()
+	return menuLanguage(setting, uint16(id))
+}
+
 type Panel struct {
 	tooltip string
 	actions Actions
 
-	hostHwnd uintptr
+	// hostHwnd is written on the tray thread and read by PostClose from any
+	// goroutine.
+	hostHwnd atomic.Uintptr
 	icon     uintptr
+	// iconAdded is touched only on the tray thread.
+	iconAdded bool
+	closing   atomic.Bool
 
 	taskbarCreated uintptr
-
-	dashboardJSON string
-	daemonExe     string
 }
 
 type recipe struct {
@@ -133,30 +203,19 @@ func (p *Panel) Dispatch(msg, lp uintptr) bool {
 			return true
 		}
 	case wmCommand:
-		switch lp {
-		case cmdOpenPanel:
-			p.actions.ShowPanel()
-			return true
-		case cmdQuit:
-			p.actions.Quit()
-			p.PostClose()
-			return true
-		}
+		return p.runCommand(lp)
 	}
 	return false
 }
 
-func menuLabels() []struct {
-	ID    uintptr
-	Label string
-} {
-	return []struct {
-		ID    uintptr
-		Label string
-	}{
-		{cmdOpenPanel, "Open control panel"},
-		{cmdQuit, "Quit Yozora"},
+func (p *Panel) runCommand(id uintptr) bool {
+	for _, item := range menuItems {
+		if item.ID == id {
+			item.run(p)
+			return true
+		}
 	}
+	return false
 }
 
 func (p *Panel) popupMenu() {
@@ -165,20 +224,22 @@ func (p *Panel) popupMenu() {
 		return
 	}
 	defer procDestroyMenu.Call(menu)
-	for _, item := range menuLabels() {
-		appendMenuItem(menu, item.ID, item.Label)
+	labels := menuLabels(p.language())
+	for i, item := range menuItems {
+		appendMenuItem(menu, item.ID, labels[i])
 	}
 
-	procSetForeground.Call(p.hostHwnd)
+	host := p.HostHandle()
+	procSetForeground.Call(host)
 	var pt struct{ X, Y int32 }
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
 	chosen, _, _ := procTrackPopupMenuEx.Call(menu,
 		tpmRightAlign|tpmBottomAlign|tpmRightButton|tpmReturnCmd,
-		uintptr(pt.X), uintptr(pt.Y), p.hostHwnd, 0)
+		uintptr(pt.X), uintptr(pt.Y), host, 0)
 	if chosen != 0 {
 		p.dispatchMenuSelection(chosen)
 	}
-	procPostMessageW.Call(p.hostHwnd, wmNull, 0, 0)
+	procPostMessageW.Call(host, wmNull, 0, 0)
 }
 
 func (p *Panel) dispatchMenuSelection(command uintptr) bool {
@@ -196,40 +257,47 @@ func appendMenuItem(menu, id uintptr, label string) {
 	procAppendMenuW.Call(menu, mfString, id, uintptr(unsafe.Pointer(text)))
 }
 
+// Run creates the hidden host window and icon and pumps their messages until
+// PostClose or the Quit menu item. It blocks, so callers run it on its own
+// goroutine; the OS thread stays locked for the window's life.
 func (p *Panel) Run() error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 	name, _ := syscall.UTF16PtrFromString("TaskbarCreated")
 	p.taskbarCreated, _, _ = procRegisterWindowMessageW.Call(uintptr(unsafe.Pointer(name)))
-	p.hostHwnd = createHostWindow(p)
-	if p.hostHwnd == 0 {
+	hwnd := createHostWindow(p)
+	if hwnd == 0 {
 		return fmt.Errorf("tray: create host window failed")
 	}
+	p.hostHwnd.Store(hwnd)
 	icon := loadTrayIcon()
 	if icon == 0 {
-		procDestroyWindow.Call(p.hostHwnd)
-		p.hostHwnd = 0
+		p.destroyHost()
 		return fmt.Errorf("tray: no usable icon")
 	}
 	p.icon = icon
-	if !addTrayIcon(p.hostHwnd, icon) {
-		procDestroyWindow.Call(p.hostHwnd)
-		p.hostHwnd = 0
-		return fmt.Errorf("tray: Shell_NotifyIconW(NIM_ADD) failed")
-	}
 	defer func() {
 		p.removeIcon()
 		procDestroyIcon.Call(icon)
-		if p.hostHwnd != 0 {
-			procDestroyWindow.Call(p.hostHwnd)
-			p.hostHwnd = 0
-		}
+		p.destroyHost()
 	}()
-	if ready, ok := p.actions.(interface{ TrayReady() }); ok {
-		ready.TrayReady()
+	// A close requested before the window existed found no handle to post to.
+	if p.closing.Load() {
+		return nil
+	}
+	if !p.addIcon() {
+		// At sign-in the daemon can start before Explorer's taskbar. The
+		// TaskbarCreated broadcast adds the icon once the taskbar is up.
+		log.Println("tray: taskbar not ready; the icon will appear when it starts")
 	}
 	p.messageLoop()
 	return nil
+}
+
+func (p *Panel) destroyHost() {
+	if h := p.hostHwnd.Swap(0); h != 0 {
+		procDestroyWindow.Call(h)
+	}
 }
 
 func (p *Panel) messageLoop() {
@@ -252,19 +320,34 @@ func (p *Panel) messageLoop() {
 	}
 }
 
-func (p *Panel) HostHandle() uintptr { return p.hostHwnd }
+func (p *Panel) HostHandle() uintptr { return p.hostHwnd.Load() }
 
+// PostClose asks the tray thread to remove the icon and end Run. It is safe
+// from any goroutine, repeatable, and effective even before Run has created
+// its window.
 func (p *Panel) PostClose() {
+	p.closing.Store(true)
 	if h := p.HostHandle(); h != 0 {
 		procPostMessageW.Call(h, wmClose, 0, 0)
 	}
 }
 
+func (p *Panel) addIcon() bool {
+	h := p.HostHandle()
+	if h == 0 || p.icon == 0 {
+		return false
+	}
+	p.iconAdded = addTrayIcon(h, p.icon)
+	return p.iconAdded
+}
+
 func (p *Panel) removeIcon() {
-	if p.hostHwnd == 0 {
+	h := p.HostHandle()
+	if h == 0 || !p.iconAdded {
 		return
 	}
-	n := notifyData(p.hostHwnd, 0)
+	p.iconAdded = false
+	n := notifyData(h, 0)
 	procShellNotifyIconW.Call(nimDelete, uintptr(unsafe.Pointer(&n)))
 }
 
@@ -332,8 +415,10 @@ func createHostWindow(p *Panel) uintptr {
 
 func trayWndProc(hwnd, msg, wp, lp uintptr) uintptr {
 	p := panelOf(hwnd)
-	if p != nil && p.taskbarCreated != 0 && msg == p.taskbarCreated && p.icon != 0 {
-		addTrayIcon(hwnd, p.icon)
+	if p != nil && p.taskbarCreated != 0 && msg == p.taskbarCreated {
+		if !p.closing.Load() {
+			p.addIcon()
+		}
 		return 0
 	}
 	if p != nil {
@@ -355,8 +440,8 @@ func trayWndProc(hwnd, msg, wp, lp uintptr) uintptr {
 	case wmDestroy:
 		panels.Delete(hwnd)
 		procPostQuitMessage.Call(0)
-		if p != nil && p.hostHwnd == hwnd {
-			p.hostHwnd = 0
+		if p != nil {
+			p.hostHwnd.CompareAndSwap(hwnd, 0)
 		}
 		return 0
 	}
