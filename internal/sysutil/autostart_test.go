@@ -110,3 +110,11 @@ func TestReadRunValueLongPath(t *testing.T) {
 		t.Fatalf("long value read back ok=%v len=%d, want len=%d", ok, len(got), len(cmd))
 	}
 }
+
+// Turning autostart off when it was never on must not report an error.
+func TestDeleteMissingRunValue(t *testing.T) {
+	name := "YozoraAutostartMissingTest" + strconv.Itoa(os.Getpid())
+	if err := deleteRunValue(name); err != nil {
+		t.Fatalf("deleting an absent value: %v", err)
+	}
+}

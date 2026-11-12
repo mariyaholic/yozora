@@ -3,6 +3,7 @@
 package sysutil
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"syscall"
@@ -10,12 +11,13 @@ import (
 )
 
 var (
-	modAdvapi32  = syscall.NewLazyDLL("advapi32.dll")
-	procRegOpen  = modAdvapi32.NewProc("RegOpenKeyExW")
-	procRegSet   = modAdvapi32.NewProc("RegSetValueExW")
-	procRegQuery = modAdvapi32.NewProc("RegQueryValueExW")
-	procRegDel   = modAdvapi32.NewProc("RegDeleteValueW")
-	procRegClose = modAdvapi32.NewProc("RegCloseKey")
+	modAdvapi32   = syscall.NewLazyDLL("advapi32.dll")
+	procRegOpen   = modAdvapi32.NewProc("RegOpenKeyExW")
+	procRegCreate = modAdvapi32.NewProc("RegCreateKeyExW")
+	procRegSet    = modAdvapi32.NewProc("RegSetValueExW")
+	procRegQuery  = modAdvapi32.NewProc("RegQueryValueExW")
+	procRegDel    = modAdvapi32.NewProc("RegDeleteValueW")
+	procRegClose  = modAdvapi32.NewProc("RegCloseKey")
 
 	modKernel32     = syscall.NewLazyDLL("kernel32.dll")
 	procCreateMut   = modKernel32.NewProc("CreateMutexW")
@@ -110,8 +112,24 @@ func readRunValue(name string) (string, bool) {
 	return "", false
 }
 
+// createRunKey opens the Run key for writing, creating it first: a profile that
+// has never had a startup entry (a fresh account, CI runners) has no Run key, and
+// RegOpenKeyEx alone would make turning autostart on fail there.
+func createRunKey() (uintptr, error) {
+	var h uintptr
+	path, err := syscall.UTF16PtrFromString(runKeySubkey)
+	if err != nil {
+		return 0, err
+	}
+	r1, _, _ := procRegCreate.Call(hkeyCurrentUser, uintptr(unsafe.Pointer(path)), 0, 0, 0, keySetValue|keyQueryValue, 0, uintptr(unsafe.Pointer(&h)), 0)
+	if r1 != 0 {
+		return 0, fmt.Errorf("sysutil: create run key: %w", syscall.Errno(r1))
+	}
+	return h, nil
+}
+
 func writeRunValue(name, command string) error {
-	h, err := runKeyPath()
+	h, err := createRunKey()
 	if err != nil {
 		return err
 	}
@@ -131,8 +149,13 @@ func writeRunValue(name, command string) error {
 	return nil
 }
 
+// deleteRunValue succeeds when the key or value is already gone: turning
+// autostart off has then nothing left to do.
 func deleteRunValue(name string) error {
 	h, err := runKeyPath()
+	if errors.Is(err, syscall.ERROR_FILE_NOT_FOUND) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
@@ -142,6 +165,9 @@ func deleteRunValue(name string) error {
 		return err
 	}
 	r1, _, _ := procRegDel.Call(h, uintptr(unsafe.Pointer(vn)))
+	if syscall.Errno(r1) == syscall.ERROR_FILE_NOT_FOUND {
+		return nil
+	}
 	if r1 != 0 {
 		return fmt.Errorf("sysutil: delete run value: %w", syscall.Errno(r1))
 	}
