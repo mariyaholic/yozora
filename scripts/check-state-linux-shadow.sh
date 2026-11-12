@@ -17,13 +17,13 @@ func Enumerate() []Window { return nil }
 func ReadAddressBar(uintptr) (string,error) { return "",errors.New("stub") }
 func ReadTabNames(uintptr,int) ([]string,error) { return nil,errors.New("stub") }
 GO
+# The player table is portable, so it is tested as shipped; only the WinRT session reader is stubbed.
 rm -rf "$d/internal/smtc"; mkdir "$d/internal/smtc"
+cp "$repo/internal/smtc/players.go" "$repo/internal/smtc/players_test.go" "$d/internal/smtc/"
 cat > "$d/internal/smtc/stub.go" <<'GO'
 package smtc
 import "time"
 type Track struct { AppID,Title,Subtitle,Artist,AlbumTitle,AlbumArtist string; TrackNumber int32; Playing bool; PositionSec,DurationSec float64; LastUpdated time.Time; Thumb func()([]byte,error) }
-func Classify(s string) string { return s }
-func FriendlyName(s string) string { return s }
 GO
 mkdir "$d/internal/credman"
 cat > "$d/internal/credman/stub.go" <<'GO'
@@ -43,5 +43,5 @@ s=s[:a]+'func dialPipe(path string) (Transport, error) { return nil, errors.New(
 open(p,'w').write(s)
 PY
 cd "$d"
-go test ./internal/presence ./internal/spotifyapi ./internal/player ./internal/config ./internal/art ./internal/template -count=10
+go test ./internal/presence ./internal/spotifyapi ./internal/player ./internal/config ./internal/art ./internal/template ./internal/smtc -count=10
 go test -race ./internal/presence ./internal/spotifyapi  -count=100
