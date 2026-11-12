@@ -64,6 +64,9 @@ func Main(args []string) int {
 	switch cmd {
 	case "serve":
 		return serve()
+	case "panel":
+		// Not in usage: the daemon's tray runs this to open the control panel.
+		return trayPanel()
 	case "setup":
 		return setup()
 	case "status":
@@ -162,6 +165,7 @@ func serve() int {
 
 	eng := presence.New(holder, res, w.Out, spotifyCh, dataDir)
 
+	panelLive := false
 	if cfg.Server.Enabled {
 		tok, tokenErr := tokenOf()
 		if tokenErr != nil {
@@ -178,10 +182,18 @@ func serve() int {
 				defer os.Remove(endpointPath)
 			}
 			fmt.Printf("Dashboard URL (session token; do not share): %s?t=%s\n", base, tok)
+			panelLive = true
 		} else {
 			log.Printf("dashboard: %v", err)
 		}
 	}
+
+	// The tray comes up only after the dashboard is listening and its endpoint
+	// is written, so "Open control panel" never races the server's start.
+	// Deferred after the endpoint cleanup, so it runs first: the icon goes
+	// away before the endpoint file does.
+	closeTray := startDaemonTray(stop, dataDir, panelLive)
+	defer closeTray()
 
 	log.Printf("Yozora serving — config: %s", cfgPath)
 	eng.Run(ctx)
