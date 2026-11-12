@@ -92,6 +92,8 @@ type Log struct {
 type UI struct {
 	Theme  string `toml:"theme"`
 	Motion string `toml:"motion"`
+	// Language is the panel and tray language; one of Languages.
+	Language string `toml:"language"`
 	// Onboarded hides the panel's first-run checklist once its checks have passed.
 	Onboarded bool `toml:"onboarded"`
 }
@@ -104,6 +106,15 @@ var Motions = []string{DefaultMotion, "reduced", "full"}
 
 // ValidMotion reports whether id names a control panel motion mode.
 func ValidMotion(id string) bool { return slices.Contains(Motions, id) }
+
+// DefaultLanguage follows the Windows display language.
+const DefaultLanguage = "system"
+
+// Languages lists the panel and tray languages: follow Windows, English, or Japanese.
+var Languages = []string{DefaultLanguage, "en", "ja"}
+
+// ValidLanguage reports whether id names a panel language.
+func ValidLanguage(id string) bool { return slices.Contains(Languages, id) }
 
 // DefaultTheme is Yozora's own night palette.
 const DefaultTheme = "yozora"
@@ -168,6 +179,7 @@ func Defaults() *Config {
 	c.Log.Level = "info"
 	c.UI.Theme = DefaultTheme
 	c.UI.Motion = DefaultMotion
+	c.UI.Language = DefaultLanguage
 	return c
 }
 
@@ -344,6 +356,10 @@ func (c *Config) normalize() {
 	c.UI.Motion = strings.ToLower(strings.TrimSpace(c.UI.Motion))
 	if !ValidMotion(c.UI.Motion) {
 		c.UI.Motion = DefaultMotion
+	}
+	c.UI.Language = strings.ToLower(strings.TrimSpace(c.UI.Language))
+	if !ValidLanguage(c.UI.Language) {
+		c.UI.Language = DefaultLanguage
 	}
 	if c.Spotify.PollSecs < 5 {
 		c.Spotify.PollSecs = 12

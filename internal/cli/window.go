@@ -390,6 +390,7 @@ const asfwAny = uintptr(0xFFFFFFFF)
 // daemonTray is the serve daemon's side of the tray icon. The icon lives as
 // long as the daemon; the panel is a separate, short-lived process.
 type daemonTray struct {
+	cfg       *config.Holder
 	stop      func() // cancels serve's context
 	dataDir   string
 	panelLive bool // the dashboard server is listening and its endpoint written
@@ -428,6 +429,14 @@ func (d *daemonTray) explainPanelOff() {
 	launcherNotify("Yozora", "The control panel is not available in this session. Quit Yozora and open it again to use it.", notifyInfo)
 }
 
+// Language gives the tray menu the panel's language setting.
+func (d *daemonTray) Language() string {
+	if d.cfg == nil {
+		return config.DefaultLanguage
+	}
+	return d.cfg.Get().UI.Language
+}
+
 func (d *daemonTray) Quit() {
 	if !d.quitting.CompareAndSwap(false, true) {
 		return
@@ -439,8 +448,8 @@ func (d *daemonTray) Quit() {
 // startDaemonTray shows the tray icon for the life of the serve daemon. The
 // returned func removes the icon and waits briefly for the tray thread, so no
 // stale icon is left behind when the process exits.
-func startDaemonTray(stop func(), dataDir string, panelLive bool) func() {
-	t := tray.New(&daemonTray{stop: stop, dataDir: dataDir, panelLive: panelLive})
+func startDaemonTray(cfg *config.Holder, stop func(), dataDir string, panelLive bool) func() {
+	t := tray.New(&daemonTray{cfg: cfg, stop: stop, dataDir: dataDir, panelLive: panelLive})
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
