@@ -21,6 +21,7 @@ import (
 	"uika-resonance/internal/config"
 	"uika-resonance/internal/player"
 	"uika-resonance/internal/presence"
+	"uika-resonance/internal/spotifyapi"
 	"uika-resonance/internal/sysutil"
 )
 
@@ -38,6 +39,14 @@ type Deps struct {
 	CfgPath    string
 	Token      string
 	DiscordApp string
+
+	// Spotify connect from the panel. Without them the panel hides the connect controls.
+	Spotify           *spotifyapi.Manager
+	SpotifyLink       *spotifyapi.Link
+	ClearSpotifyToken func() error
+	OpenURL           func(string) error
+	// RedirectBase is the panel's own loopback origin; Start fills it in.
+	RedirectBase string
 }
 
 func validateSourceOrder(order, canonical []string) error {
@@ -133,7 +142,7 @@ func Handler(d Deps) http.Handler {
 	})
 	mux.HandleFunc("/api/state", auth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(d.Engine.Status())
+		_ = json.NewEncoder(w).Encode(stateResponse{Status: d.Engine.Status(), Spotify: d.spotifyState()})
 	}))
 	mux.HandleFunc("/api/config", auth(func(w http.ResponseWriter, r *http.Request) {
 		configMu.Lock()
@@ -323,6 +332,7 @@ func Handler(d Deps) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]bool{"enabled": sysutil.AutostartEnabled()})
 	}))
+	registerSetup(mux, d, &configMu, auth)
 	return mux
 }
 
@@ -332,7 +342,9 @@ func Start(d Deps, port int) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	base := "http://" + ln.Addr().String()
+	d.RedirectBase = base
 	srv := &http.Server{Handler: Handler(d), ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = srv.Serve(ln) }()
-	return "http://" + ln.Addr().String(), nil
+	return base, nil
 }
