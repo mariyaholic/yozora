@@ -183,6 +183,35 @@ Like the theme, it applies at once and is saved in `cadence.toml`; an unknown va
 | Sumimi | New track: the card fades in | A gold wash spreads from the press point | Paper-lift preview; rows ease 300ms |
 | Confluence | None | Oxblood underline | Oxblood drop rule; rows slide 200ms |
 
+## Discord card settings
+
+The panel's **Discord card** section, between Sources and Spotify, edits the settings that used to be TOML-only. **Apply changes** saves them all at once or not at all, **Discard changes** goes back to what is saved, and **Reset to defaults** fills in the defaults for you to Apply. Yozora picks the change up on its next update; no restart is needed.
+
+- Text lines: `template.details` (top line), `template.state` (second line), `template.large_text` (image tooltip), `template.small_text` (icon tooltip) and `template.paused_details` (top line while paused). Each is a Go template of at most 256 characters and must parse and run; the panel refuses to save one that does not. The rendered result is shown under each field, using the track you are playing now (a sample track when nothing is), through the same code that builds the card. **Placeholders** lists what a template can use.
+- Choices: `presence.paused_mode` (`show`, or `hide`; `clear` behaves like `hide`), `presence.type` (`listening`, `watching`, `playing`) and `presence.status_display` (`app`, `state`, `details`).
+- Buttons: `buttons.enabled`, `buttons.label` (at most 32 characters; empty or `Listen along` gives the service-specific label) and `buttons.spotify_search_fallback`.
+
+The panel saves through `/api/card`, which rejects unknown fields, out-of-range choices and bad templates without changing the file.
+
+## Hiding tracks
+
+Some tracks should never reach your profile. A hidden track is treated like a blocked source: it is never sent to Discord, nothing is looked up for it (no artwork request), and a card already showing for it is cleared at the next rate step. Unlike a blocked source, it still shows in the panel preview, marked **Hidden from Discord**.
+
+- **Hide this track** on the preview offers **Hide this song** (artist and title together) and **Hide this artist**. The **Hidden from Discord** list in the Discord card section removes a rule again.
+- Rules live in `cadence.toml`, one table each. A rule names an artist, a title or both; every named field must match:
+
+```toml
+[[sources.hidden]]
+  artist = "Some Artist"
+
+[[sources.hidden]]
+  artist = "Another Artist"
+  title = "Song * (Live)"
+```
+
+- A field matches the whole value, ignoring case and surrounding spaces. `*` stands for any run of characters (`Song *`, `* (Live)`); there is nothing else, so no regular expressions. A rule made only of `*`, or empty, is ignored so it can never hide everything. A title that really contains `*` also matches more than itself.
+- At most 200 rules, each field at most 128 characters. Hiding applies to the track Yozora has chosen: while a hidden track is the one playing from the highest-priority source, a lower-priority source is not used instead.
+
 ## Performance
 
 With media playing, Yozora checks Windows media sessions every `sources.poll_ms` (default 1000 ms) and updates its state every 250 ms. After a minute with no media session and nothing on your Discord profile, it slows to one session check every 5 seconds and one update every 2 seconds. It returns to full speed as soon as any session appears. A newly started track therefore shows in Yozora within about 5.25 seconds at worst, and on Discord after the usual `presence.track_debounce_ms` (default 500 ms) on top. While a card is still on your profile, Yozora stays at full speed so the `presence.idle_clear_secs` clear is not delayed. A `poll_ms` of 5000 or more is left as it is.

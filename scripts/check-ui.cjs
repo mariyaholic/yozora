@@ -40,6 +40,17 @@ const testCardPosts = [];
 let spotifyHTTP = 200;
 const spotifyPosts = [];
 const posts = [];
+// Discord card form and hidden rules. The preview mimics the server's template engine for the plain placeholders only.
+const cardDefaults = { paused_mode: 'show', type: 'listening', status_display: 'app', buttons_enabled: true, button_label: 'Listen along', spotify_search_fallback: true, details: '{{.Title}}', state: '{{.Artist}}', large_text: '{{.Album}}', small_text: '{{.Player}}', paused_details: '\u23f8 {{.Title}}' };
+let card = { ...cardDefaults };
+let hiddenRules = [];
+let cardGetHTTP = 200;
+const cardPosts = [];
+const hiddenPosts = [];
+const previewPosts = [];
+const foldRule = value => (value || '').trim().toLowerCase();
+const ruleHides = (rule, track) => (rule.artist || rule.title) && (!rule.artist || foldRule(rule.artist) === foldRule(track.artist)) && (!rule.title || foldRule(rule.title) === foldRule(track.title));
+const renderCard = (tpl, track) => tpl.replace(/\{\{\.(\w+)\}\}/g, (_, name) => ({ Title: track.title, Artist: track.artist, Album: track.album, Player: track.service }[name] ?? ''));
 const errors = [];
 const violations = [];
 const checks = [];
@@ -55,8 +66,37 @@ const server = http.createServer(async (req, res) => {
   } else if (url.pathname.startsWith('/test-')) {
     res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
     res.end('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160"><rect width="160" height="160" fill="#253348"/><circle cx="111" cy="48" r="26" fill="#e0b758"/><path d="M0 135 54 65 114 160H0M72 160l49-78 39 60v18" fill="#53647d"/></svg>');
-  } else if (url.pathname === '/api/state') json(state, stateHTTP);
-  else if (url.pathname === '/api/sources') {
+  } else if (url.pathname === '/api/state') json({ ...state, hidden: Boolean(state.title) && hiddenRules.some(rule => ruleHides(rule, state)) || undefined }, stateHTTP);
+  else if (url.pathname === '/api/card') {
+    if (req.method === 'POST') {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      cardPosts.push(JSON.parse(body));
+      if (saveDelay) await new Promise(resolve => setTimeout(resolve, saveDelay));
+      if (cardGetHTTP === 200) card = cardPosts.at(-1);
+    }
+    json({ card, defaults: cardDefaults, hidden: hiddenRules }, cardGetHTTP);
+  } else if (url.pathname === '/api/card/preview' && req.method === 'POST') {
+    let body = '';
+    for await (const chunk of req) body += chunk;
+    const posted = JSON.parse(body);
+    previewPosts.push(posted);
+    const broken = ['details', 'state', 'large_text', 'small_text', 'paused_details'].find(key => (posted[key].match(/\{\{/g) || []).length !== (posted[key].match(/\}\}/g) || []).length);
+    if (broken) { res.writeHead(400, { 'Content-Type': 'text/plain' }); res.end(`${broken} is not a valid template: unclosed action`); return; }
+    const sample = !state.title;
+    const track = sample ? { title: 'Night Walk', artist: 'Mira', album: 'After Hours', service: 'Spotify', playing: true } : state;
+    json({ details: renderCard(track.playing ? posted.details : posted.paused_details, track), state: renderCard(posted.state, track), large_text: renderCard(posted.large_text, track), small_text: renderCard(posted.small_text, track), playing: track.playing, sample, hidden: !sample && hiddenRules.some(rule => ruleHides(rule, track)) });
+  } else if (url.pathname === '/api/hidden') {
+    if (req.method === 'POST') {
+      let body = '';
+      for await (const chunk of req) body += chunk;
+      const posted = JSON.parse(body);
+      hiddenPosts.push(posted);
+      if (posted.add && !hiddenRules.some(rule => foldRule(rule.artist) === foldRule(posted.add.artist) && foldRule(rule.title) === foldRule(posted.add.title))) hiddenRules = [...hiddenRules, { artist: posted.add.artist || '', title: posted.add.title || '' }];
+      if (posted.remove) hiddenRules = hiddenRules.filter(rule => !(foldRule(rule.artist) === foldRule(posted.remove.artist) && foldRule(rule.title) === foldRule(posted.remove.title)));
+    }
+    json({ hidden: hiddenRules });
+  } else if (url.pathname === '/api/sources') {
     if (req.method === 'POST') {
       let body = '';
       for await (const chunk of req) body += chunk;
@@ -1154,6 +1194,137 @@ const server = http.createServer(async (req, res) => {
       version = 'dev';
       check('forced colours keep focus rings, checked rows and tiles, the chosen segment, checks and the drop line visible');
     }
+
+    // Discord card form, live preview, hidden rules and the hide button, in both languages.
+    const cardTrack = { playing:true, activity_type:'listening', title:'Night Walk', artist:'Mira', album:'After Hours', service:'Spotify', source:'spotify', elapsed_sec:82, duration_sec:243, discord_connected:true, art_url:'/test-art.svg', small_image:'/test-badge.svg' };
+    for (const lang of ['en', 'ja']) {
+      const ja = lang === 'ja';
+      const words = ja
+        ? { saved: '保存しました', unsaved: '未保存', hiddenMark: 'Discord には表示されません', hideSong: 'この曲を隠す', invalid: 'まだ適用できません', reset: '初期設定を入力しました', removeLabel: 'の非表示をやめる', sample: 'サンプルの曲' }
+        : { saved: 'Saved', unsaved: 'Unsaved', hiddenMark: 'Hidden from Discord', hideSong: 'Hide this song', invalid: 'Cannot apply yet', reset: 'Defaults filled in', removeLabel: 'Stop hiding', sample: 'sample track' };
+      language = lang;
+      card = { ...cardDefaults }; hiddenRules = []; state = { ...cardTrack };
+      cardPosts.length = 0; hiddenPosts.length = 0; previewPosts.length = 0;
+      const cc = await browser.newContext({ viewport: { width: 560, height: 760 }, reducedMotion: 'reduce' });
+      await cc.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+      await cc.addInitScript(() => { window.cspViolations = []; document.addEventListener('securitypolicyviolation', event => window.cspViolations.push(event.violatedDirective)); });
+      const c = await cc.newPage();
+      c.on('pageerror', error => errors.push(error.message));
+      await c.goto(`${origin}/?t=synthetic`);
+      await ready(c);
+      await c.waitForFunction(() => !document.getElementById('card-fields').disabled && document.getElementById('cf-r-details').textContent !== '');
+      const val = id => c.locator(`#cf-${id}`).inputValue();
+      const text = sel => c.locator(sel).textContent();
+      assert.equal(await val('details'), '{{.Title}}');
+      assert.equal(await text('#cf-r-details'), 'Night Walk');
+      assert.equal(await text('#cf-r-state'), 'Mira');
+      assert.equal(await c.locator('#card-save').isDisabled(), true);
+      assert.equal(await c.locator('#card-discard').isHidden(), true);
+      assert.equal(await c.locator('#card-status').textContent(), '', 'a clean card form says nothing');
+      assert.equal(await c.locator('#card-placeholders').evaluate(node => node.open), false, 'placeholders are on demand');
+      assert.equal(await c.locator('#card-hidden').isHidden(), true, 'no rules, no hidden list');
+      // Section order: Sources, then the Discord card, then Spotify / Startup.
+      assert.deepEqual(await c.evaluate(() => ['#sources-form', '#card-form', '.startup'].map(sel => document.querySelector(sel).getBoundingClientRect().top + scrollY)).then(tops => tops.every((top, i) => !i || top > tops[i - 1])), true);
+
+      // Editing: the preview follows, Apply and Discard appear, Discard restores.
+      await c.locator('#cf-details').fill('{{.Title}} by {{.Artist}}');
+      await c.waitForFunction(() => document.getElementById('cf-r-details').textContent === 'Night Walk by Mira');
+      assert.equal(await c.locator('#card-save').isEnabled(), true);
+      assert.equal(await c.locator('#card-discard').isVisible(), true);
+      assert.ok((await text('#card-status')).includes(words.unsaved));
+      await c.locator('#card-discard').click();
+      assert.equal(await val('details'), '{{.Title}}');
+      await c.waitForFunction(() => document.getElementById('cf-r-details').textContent === 'Night Walk');
+      assert.equal(await c.locator('#card-save').isDisabled(), true);
+
+      // A template that does not parse blocks Apply and says why; fixing it frees Apply.
+      await c.locator('#cf-state').fill('{{.Artist');
+      await c.waitForFunction(word => document.getElementById('card-status').textContent.includes(word), words.invalid);
+      assert.equal(await c.locator('#card-save').isDisabled(), true);
+      await c.locator('#cf-state').fill('{{.Artist}} / {{.Album}}');
+      await c.waitForFunction(() => document.getElementById('cf-r-state').textContent === 'Mira / After Hours');
+      assert.equal(await c.locator('#card-save').isEnabled(), true);
+
+      // Apply posts the whole form, and the saved state becomes the new baseline.
+      await c.locator('#cf-paused_mode').selectOption('hide');
+      await c.locator('#cf-type').selectOption('watching');
+      await c.locator('#cf-status_display').selectOption('details');
+      await c.locator('#cf-buttons_enabled').uncheck();
+      await c.locator('#cf-button_label').fill('Hear it');
+      await c.locator('#cf-spotify_search_fallback').uncheck();
+      await c.locator('#cf-small_text').fill('');
+      await c.locator('#card-save').click();
+      await c.waitForFunction(word => document.getElementById('card-status').textContent.includes(word), words.saved);
+      assert.deepEqual(cardPosts.at(-1), { paused_mode: 'hide', type: 'watching', status_display: 'details', buttons_enabled: false, button_label: 'Hear it', spotify_search_fallback: false, details: '{{.Title}}', state: '{{.Artist}} / {{.Album}}', large_text: '{{.Album}}', small_text: '', paused_details: '⏸ {{.Title}}' });
+      assert.equal(await c.locator('#card-save').isDisabled(), true);
+      assert.equal(await c.locator('#card-discard').isHidden(), true);
+      await shot(`card-${lang}-560`);
+
+      // Reset fills the defaults but only Apply saves them.
+      await c.locator('#card-reset').click();
+      assert.equal(await val('state'), '{{.Artist}}');
+      assert.equal(await c.locator('#cf-paused_mode').inputValue(), 'show');
+      assert.equal(await c.locator('#cf-buttons_enabled').isChecked(), true);
+      assert.ok((await text('#card-status')).includes(words.reset));
+      assert.equal(cardPosts.length, 1, 'reset alone saves nothing');
+      await c.locator('#card-save').click();
+      await c.waitForFunction(word => document.getElementById('card-status').textContent.includes(word), words.saved);
+      assert.deepEqual(cardPosts.at(-1), cardDefaults);
+
+      // A paused track and a hidden track are said in the card section.
+      await c.locator('#cf-paused_mode').selectOption('hide');
+      state = { ...state, playing: false };
+      await c.evaluate(() => refreshSoon());
+      await c.waitForFunction(() => document.getElementById('card-note').textContent !== '');
+      await c.locator('#cf-paused_mode').selectOption('show');
+      await c.waitForFunction(() => document.getElementById('card-note').textContent === '');
+      state = { ...state, playing: true };
+
+      // Hiding from the preview: song, then artist, then removal from the list.
+      assert.equal(await c.locator('#hide-menu').isHidden(), true);
+      await c.locator('#hide-open').click();
+      assert.equal(await c.locator('#hide-open').getAttribute('aria-expanded'), 'true');
+      assert.equal(await c.locator('#hide-song').textContent(), words.hideSong);
+      await c.keyboard.press('Escape');
+      assert.equal(await c.locator('#hide-menu').isHidden(), true, 'Escape closes the hide menu');
+      await c.locator('#hide-open').click();
+      await c.locator('#hide-song').click();
+      await c.waitForFunction(() => !document.getElementById('hidden-mark').hidden);
+      assert.deepEqual(hiddenPosts.at(-1), { add: { artist: 'Mira', title: 'Night Walk' } });
+      assert.equal(await text('#hidden-mark'), words.hiddenMark);
+      assert.equal(await c.locator('#hide-open').isHidden(), true);
+      assert.equal(await c.locator('#card-hidden').isVisible(), true);
+      assert.equal(await c.locator('#hidden-list li').count(), 1);
+      assert.ok((await c.locator('#hidden-list button').getAttribute('aria-label')).includes(words.removeLabel));
+      await c.waitForFunction(() => document.getElementById('card-note').textContent !== '');
+      await shot(`hidden-${lang}-560`);
+      await c.locator('#hidden-list button').click();
+      await c.waitForFunction(() => document.getElementById('hidden-mark').hidden && !document.getElementById('hide-open').hidden);
+      assert.deepEqual(hiddenPosts.at(-1), { remove: { artist: 'Mira', title: 'Night Walk' } });
+      assert.equal(await c.locator('#card-hidden').isHidden(), true);
+      await c.locator('#hide-open').click();
+      await c.locator('#hide-artist').click();
+      await c.waitForFunction(() => !document.getElementById('hidden-mark').hidden);
+      assert.deepEqual(hiddenPosts.at(-1), { add: { artist: 'Mira', title: '' } });
+      await c.locator('#hidden-list button').click();
+      await c.waitForFunction(() => document.getElementById('hidden-mark').hidden);
+      // Nothing playing: no hide button, and the preview says it is a sample.
+      state = { ...state, title: '', artist: '', album: '' };
+      await c.evaluate(() => refreshSoon());
+      await c.waitForFunction(() => document.getElementById('hide-row').hidden);
+      await c.locator('#cf-details').fill('{{.Title}}!');
+      await c.waitForFunction(() => document.getElementById('cf-r-details').textContent === 'Night Walk!');
+      assert.ok((await text('#card-note')).includes(words.sample) || ja, 'the sample note shows');
+      assert.equal(await c.locator('#card-note').textContent() !== '', true);
+      // 320px: no horizontal scroll with the card section.
+      await c.setViewportSize({ width: 320, height: 760 });
+      assert.equal(await c.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'card section fits 320px');
+      violations.push(...await c.evaluate(() => window.cspViolations));
+      await cc.close();
+      state = { ...cardTrack };
+      check(`${lang === 'ja' ? 'Japanese: ' : ''}Discord card form edits, previews, applies, discards and resets; tracks can be hidden and unhidden`);
+    }
+    language = 'system';
 
     violations.push(...await page.evaluate(() => window.cspViolations));
     assert.deepEqual(errors, [], 'no browser runtime exceptions');
