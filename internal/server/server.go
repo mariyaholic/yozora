@@ -135,32 +135,6 @@ func Handler(d Deps) http.Handler {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(d.Engine.Status())
 	}))
-	mux.HandleFunc("/api/config", auth(func(w http.ResponseWriter, r *http.Request) {
-		configMu.Lock()
-		defer configMu.Unlock()
-		switch r.Method {
-		case http.MethodGet:
-			w.Header().Set("Content-Type", "application/toml")
-			c := d.Cfg.Get()
-			_ = c
-			fmt.Fprint(w, "# Read the file at "+d.CfgPath+" — write via POST here.\n")
-		case http.MethodPost:
-			c := config.Defaults()
-			r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-			if err := json.NewDecoder(r.Body).Decode(c); err != nil {
-				http.Error(w, err.Error(), 400)
-				return
-			}
-			if err := config.Save(c, d.CfgPath); err != nil {
-				http.Error(w, err.Error(), 500)
-				return
-			}
-			_, _ = d.Cfg.Reload()
-			fmt.Fprint(w, "ok")
-		default:
-			http.Error(w, "method", 405)
-		}
-	}))
 	mux.HandleFunc("/api/sources", auth(func(w http.ResponseWriter, r *http.Request) {
 		configMu.Lock()
 		defer configMu.Unlock()
