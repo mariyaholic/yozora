@@ -88,6 +88,12 @@ type Log struct {
 	Level string `toml:"level"`
 }
 
+// Update controls the daily check for a newer release. It only looks; installing
+// is always the user's own action in the panel or tray.
+type Update struct {
+	Check bool `toml:"check"`
+}
+
 // UI holds control panel preferences. Theme must be one of Themes.
 type UI struct {
 	Theme  string `toml:"theme"`
@@ -143,6 +149,7 @@ type Config struct {
 	Server   Server   `toml:"server"`
 	Log      Log      `toml:"log"`
 	UI       UI       `toml:"ui"`
+	Update   Update   `toml:"update"`
 }
 
 func Defaults() *Config {
@@ -177,6 +184,7 @@ func Defaults() *Config {
 	c.Art.Prefer = "cdn"
 	c.Art.CacheMB = 10
 	c.Log.Level = "info"
+	c.Update.Check = true
 	c.UI.Theme = DefaultTheme
 	c.UI.Motion = DefaultMotion
 	c.UI.Language = DefaultLanguage
