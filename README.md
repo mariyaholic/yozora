@@ -16,6 +16,19 @@ Advanced: a portable [Yozora.exe](https://github.com/mariyaholic/yozora/releases
 
 Yozora keeps an icon in the notification area for as long as it runs, including after it starts on its own at sign-in. Closing the control panel ends the panel completely while Yozora keeps running in the tray. Use **Open control panel** from the tray (or click the icon) or launch Yozora again to reopen it; choose **Quit Yozora** to stop Yozora and close the panel if it is open.
 
+Installing a newer `Yozora-Setup.exe` over an existing install upgrades it in place: setup quits the running Yozora first (the same way **Quit Yozora** does) and keeps your settings. If autostart is on and Yozora now runs from a different folder than when you turned it on, Yozora points the sign-in entry at its current location the next time it starts.
+
+### Uninstalling
+
+Use **Settings > Apps > Installed apps > Yozora > Uninstall**. The uninstaller quits Yozora, removes the sign-in autostart entry and asks **Also remove my settings and cached data?** (default No). Choosing Yes also deletes:
+
+- `%APPDATA%\uika-resonance` (settings, `cadence.toml`)
+- `%LOCALAPPDATA%\uika-resonance` (artwork cache, logs, the control panel's WebView2 profile, status files)
+- `%TEMP%\uika-probe` (left by `doctor`)
+- the `uika-resonance:spotify-refresh` and `uika-resonance:spotify-secret` entries in Windows Credential Manager
+
+A silent uninstall (`unins000.exe /VERYSILENT`) keeps all of this unless you add `/PURGE=1`.
+
 ## Repository
 
 You are looking at it. The second Discord button is **Yozora**, linking here.
@@ -43,7 +56,7 @@ go build -ldflags=-H=windowsgui -o Yozora.exe ./cmd/yozora
 ./Yozora.exe serve
 ```
 
-Commands: `serve`, `status`, `doctor`, `setup`, `install`, `uninstall`. `install` opts into Windows login startup; building and serving do not install autostart.
+Commands: `serve`, `status`, `doctor`, `setup`, `install`, `uninstall`, `stop`, `version`. `install` opts into Windows login startup; building and serving do not install autostart. `stop` quits a running Yozora started from the same executable, as the tray's **Quit Yozora** does. `version` prints the version, which is `dev` unless the build sets it with `-ldflags "-X uika-resonance/internal/version.Version=0.1.N"` as the release workflow does.
 
 `Yozora.exe` with no arguments opens the control panel (below); with any argument it acts as the command line (`Yozora.exe status`, `Yozora.exe serve`, ...). It is the only executable: the control panel starts the background daemon by re-launching itself with `serve`. The daemon owns the tray icon; its **Open control panel** re-launches the executable with the internal `panel` command, which opens the panel the same way but never starts a daemon of its own. The panel window runs in its own short-lived process that exits when the window closes or when the daemon stops. The `-H=windowsgui` linker flag keeps double-click launches free of a console window; the executable's icon comes from `cmd/yozora/rsrc_windows_amd64.syso`, generated from `assets/yozora.ico` with `go-winres simply --arch amd64 --icon ../../assets/yozora.ico --manifest gui`.
 
@@ -170,7 +183,21 @@ To use an existing Chromium installation, set `CHROMIUM_PATH` to its executable 
 
 ## Release
 
-Every merge to `main` tests, builds and publishes a release automatically (`.github/workflows/release.yml`). The version is the latest `v0.1.N` tag plus one, so the download links above always point at the newest build. Use the "Run workflow" button on the release workflow to republish without a code change.
+A merge to `main` that changes what ships tests, builds and publishes a release automatically (`.github/workflows/release.yml`): Go sources (not `_test.go` files), `go.mod`/`go.sum`, the `.syso` icon resources, `installer/`, `assets/yozora.ico`, the embedded panel (`internal/server/ui.html` and `internal/server/fonts/`), the tray icon, or the workflow itself. Documentation, scripts and test-only merges do not cut a release. The version is the latest `v0.1.N` tag plus one, so the download links above always point at the newest build; it is stamped into the binary (`Yozora.exe version`) and the installer. Use the "Run workflow" button on the release workflow to republish without a code change.
+
+### Code signing
+
+The workflow has signing steps for [SignPath Foundation](https://signpath.org), which signs open-source projects for free. They stay skipped, and releases stay unsigned, until the owner sets them up:
+
+1. Apply at signpath.org for the open-source program (the project must be OSI-licensed, MIT qualifies, and built on GitHub-hosted runners, which it is).
+2. In SignPath, create a project (slug `yozora`), a signing policy (`release-signing`) and two artifact configurations: `exe`, a zip file containing a `<pe-file path="Yozora.exe">`, and `setup`, a zip file containing a `<pe-file path="Yozora-Setup.exe">`. Link the GitHub repository as a trusted build system.
+3. In this repository's Settings > Secrets and variables > Actions, add the secret `SIGNPATH_API_TOKEN` (a CI user's API token) and the variable `SIGNPATH_ORGANIZATION_ID`. Variables `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_POLICY_SLUG`, `SIGNPATH_EXE_CONFIG_SLUG` and `SIGNPATH_SETUP_CONFIG_SLUG` override the slugs above if you chose others.
+
+Once both exist, the next release signs `Yozora.exe` before it is packed into the installer, then signs `Yozora-Setup.exe`, and fails if either signature is not valid. The uninstaller inside the setup is not signed. SignPath was chosen over Azure Trusted Signing because it is free for open-source projects and accepts individual maintainers wherever they live; Azure Trusted Signing is a paid Azure subscription and, at the time of writing, only verifies individual developers in the US and Canada. With SignPath Foundation the certificate names SignPath Foundation as publisher, not the owner. Remove the SmartScreen note under Installing once releases are signed.
+
+### winget
+
+`packaging/winget/` holds manifest templates (package `Mariyaholic.Yozora`, Inno installer, per-user scope). Each release fills in the version, download URL and installer SHA256 and uploads them as the `winget-manifests-<version>` build artifact on the workflow run; nothing is sent to winget automatically. To publish the first version, download that artifact and open a pull request to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs) with the three files under `manifests/m/Mariyaholic/Yozora/<version>/` (validate locally first with `winget validate` and `winget install --manifest`). Later versions can be submitted the same way or with `wingetcreate update Mariyaholic.Yozora`. Submit after signing is set up if you can: unsigned installers are accepted but may be held for extra review.
 
 ## Notes
 

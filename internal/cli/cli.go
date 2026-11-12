@@ -32,6 +32,7 @@ import (
 	"uika-resonance/internal/smtc"
 	"uika-resonance/internal/spotifyapi"
 	"uika-resonance/internal/sysutil"
+	"uika-resonance/internal/version"
 )
 
 const logMaxBytes = 5 << 20
@@ -112,6 +113,17 @@ func Main(args []string) int {
 		}
 		fmt.Println("autostart removed")
 		return 0
+	case "stop":
+		_, dataDir, _ := config.Paths()
+		if err := sysutil.StopRunning(dashboardEndpointPath(dataDir), 5*time.Second); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		fmt.Println("Yozora stopped")
+		return 0
+	case "version", "--version":
+		fmt.Println("Yozora", version.Version)
+		return 0
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 		return 0
@@ -124,7 +136,7 @@ func Main(args []string) int {
 
 const usage = `Yozora — your music, live on your Discord profile.
 
-Usage: uika-resonance [serve|setup|status|doctor|install|uninstall]
+Usage: Yozora.exe [serve|setup|status|doctor|install|uninstall|stop|version]
 
   serve        run the daemon (default)
   setup        interactive first-run setup
@@ -132,6 +144,8 @@ Usage: uika-resonance [serve|setup|status|doctor|install|uninstall]
   doctor       diagnose pipes, media, art, config
   install      register autostart (HKCU Run)
   uninstall    remove autostart
+  stop         quit a running Yozora, as the tray's Quit does
+  version      print the version
 `
 
 func serve() int {
@@ -148,6 +162,11 @@ func serve() int {
 		return 1
 	}
 	defer done()
+	if rewrote, err := sysutil.RepairAutostart(); err != nil {
+		log.Printf("autostart: %v", err)
+	} else if rewrote {
+		log.Println("autostart: repointed at this executable")
+	}
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		log.Println(err)
 	}
@@ -259,6 +278,7 @@ func fmtSec(s float64) string {
 func doctor() int {
 	cfgPath, dataDir, cacheDir := config.Paths()
 	fmt.Println("== Yozora doctor ==")
+	fmt.Println("version:", version.Version)
 	fmt.Println("config:", cfgPath)
 	if _, err := os.Stat(cfgPath); err == nil {
 		if _, err := config.Load(cfgPath); err != nil {
@@ -271,7 +291,7 @@ func doctor() int {
 	}
 	cfg, _ := config.Load(cfgPath)
 	if cfg.Discord.ClientID == "" {
-		fmt.Println("discord client_id: MISSING (run `uika-resonance setup`)")
+		fmt.Println("discord client_id: MISSING (run `Yozora.exe setup`)")
 	} else {
 		fmt.Printf("discord client_id: %s…\n", cfg.Discord.ClientID[:min(6, len(cfg.Discord.ClientID))])
 	}
@@ -383,7 +403,7 @@ func setup() int {
 		return 1
 	}
 	fmt.Printf("saved %s\n", cfgPath)
-	fmt.Println("Start the daemon with: uika-resonance serve")
+	fmt.Println("Start the daemon with: Yozora.exe serve")
 	return 0
 }
 
