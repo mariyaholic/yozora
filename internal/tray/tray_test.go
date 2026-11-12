@@ -146,11 +146,37 @@ func TestMenuLabelsShape(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("menu has %d items, want 2", len(items))
 	}
-	if items[0].ID != cmdOpenPanel || items[0].Label != "Open control panel" {
-		t.Fatalf("first item = %+v", items[0])
+	if items[0].ID != cmdOpenPanel || items[1].ID != cmdQuit {
+		t.Fatalf("menu ids = %d, %d", items[0].ID, items[1].ID)
 	}
-	if items[1].ID != cmdQuit || items[1].Label != "Quit Yozora" {
-		t.Fatalf("second item = %+v", items[1])
+	if got := menuLabels("en"); got[0] != "Open control panel" || got[1] != "Quit Yozora" {
+		t.Fatalf("English labels = %q", got)
+	}
+	if got := menuLabels("ja"); got[0] != "コントロールパネルを開く" || got[1] != "Yozora を終了" {
+		t.Fatalf("Japanese labels = %q", got)
+	}
+	if got := menuLabels("fr"); got[0] != "Open control panel" {
+		t.Fatalf("unknown language labels = %q", got)
+	}
+}
+
+func TestMenuLanguageFollowsSettingThenWindows(t *testing.T) {
+	const japanese, english, englishUK = 0x0411, 0x0409, 0x0809
+	for _, c := range []struct {
+		setting string
+		ui      uint16
+		want    string
+	}{
+		{"ja", english, "ja"},
+		{"en", japanese, "en"},
+		{"system", japanese, "ja"},
+		{"system", englishUK, "en"},
+		{"", japanese, "ja"},
+		{"fr", japanese, "en"},
+	} {
+		if got := menuLanguage(c.setting, c.ui); got != c.want {
+			t.Errorf("menuLanguage(%q, %#x) = %q, want %q", c.setting, c.ui, got, c.want)
+		}
 	}
 }
 
@@ -170,7 +196,7 @@ func TestMenuItemIDsAreUnique(t *testing.T) {
 		if item.ID == 0 || seen[item.ID] {
 			t.Fatalf("menu id %d is zero or repeated", item.ID)
 		}
-		if item.Label == "" || item.run == nil {
+		if item.Labels["en"] == "" || item.Labels["ja"] == "" || item.run == nil {
 			t.Fatalf("menu item %d is incomplete", item.ID)
 		}
 		seen[item.ID] = true
