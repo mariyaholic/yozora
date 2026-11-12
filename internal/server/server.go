@@ -316,6 +316,7 @@ func Handler(d Deps) http.Handler {
 		_ = json.NewEncoder(w).Encode(map[string]bool{"enabled": sysutil.AutostartEnabled()})
 	}))
 	registerSetup(mux, d, &configMu, auth)
+	registerCard(mux, d, &configMu, auth)
 	return mux
 }
 
