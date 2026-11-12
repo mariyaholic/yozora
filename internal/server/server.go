@@ -23,6 +23,7 @@ import (
 	"uika-resonance/internal/presence"
 	"uika-resonance/internal/spotifyapi"
 	"uika-resonance/internal/sysutil"
+	"uika-resonance/internal/version"
 )
 
 //go:embed ui.html
@@ -138,11 +139,13 @@ func Handler(d Deps) http.Handler {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		_ = t.Execute(w, map[string]any{"Token": d.Token, "App": d.DiscordApp, "Nonce": nonce, "Theme": d.Cfg.Get().UI.Theme, "Motion": d.Cfg.Get().UI.Motion})
+		ui := d.Cfg.Get().UI
+		_ = t.Execute(w, map[string]any{"Token": d.Token, "App": d.DiscordApp, "Nonce": nonce, "Theme": ui.Theme, "Motion": ui.Motion,
+			"Language": ui.Language, "Lang": pageLang(ui.Language, r.Header.Get("Accept-Language")), "Version": version.Version})
 	})
 	mux.HandleFunc("/api/state", auth(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(stateResponse{Status: d.Engine.Status(), Spotify: d.spotifyState()})
+		_ = json.NewEncoder(w).Encode(stateResponse{Status: d.Engine.Status(), Spotify: d.spotifyState(), Restored: d.Cfg.Restored()})
 	}))
 	mux.HandleFunc("/api/sources", auth(func(w http.ResponseWriter, r *http.Request) {
 		configMu.Lock()
@@ -230,7 +233,7 @@ func Handler(d Deps) http.Handler {
 			http.Error(w, "method", 405)
 		}
 	}))
-	// Appearance is the panel's theme and motion mode. A POST may change either or both; an invalid
+	// Appearance is the panel's theme, motion mode and language. A POST may change any of them; an invalid
 	// field rejects the whole request, so a partly valid body never saves half of itself.
 	mux.HandleFunc("/api/appearance", auth(func(w http.ResponseWriter, r *http.Request) {
 		configMu.Lock()
@@ -239,13 +242,15 @@ func Handler(d Deps) http.Handler {
 		case http.MethodGet:
 		case http.MethodPost:
 			var payload struct {
-				Theme  *string `json:"theme"`
-				Motion *string `json:"motion"`
+				Theme    *string `json:"theme"`
+				Motion   *string `json:"motion"`
+				Language *string `json:"language"`
 			}
 			decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256))
 			decoder.DisallowUnknownFields()
-			if err := decoder.Decode(&payload); err != nil || (payload.Theme == nil && payload.Motion == nil) ||
-				(payload.Theme != nil && !config.ValidTheme(*payload.Theme)) || (payload.Motion != nil && !config.ValidMotion(*payload.Motion)) {
+			if err := decoder.Decode(&payload); err != nil || (payload.Theme == nil && payload.Motion == nil && payload.Language == nil) ||
+				(payload.Theme != nil && !config.ValidTheme(*payload.Theme)) || (payload.Motion != nil && !config.ValidMotion(*payload.Motion)) ||
+				(payload.Language != nil && !config.ValidLanguage(*payload.Language)) {
 				http.Error(w, "invalid appearance", 400)
 				return
 			}
@@ -264,6 +269,9 @@ func Handler(d Deps) http.Handler {
 			if payload.Motion != nil {
 				current.UI.Motion = *payload.Motion
 			}
+			if payload.Language != nil {
+				current.UI.Language = *payload.Language
+			}
 			if err := config.Save(current, d.CfgPath); err != nil {
 				http.Error(w, err.Error(), 500)
 				return
@@ -278,7 +286,8 @@ func Handler(d Deps) http.Handler {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		ui := d.Cfg.Get().UI
-		_ = json.NewEncoder(w).Encode(map[string]any{"theme": ui.Theme, "themes": config.Themes, "motion": ui.Motion, "motions": config.Motions})
+		_ = json.NewEncoder(w).Encode(map[string]any{"theme": ui.Theme, "themes": config.Themes, "motion": ui.Motion, "motions": config.Motions,
+			"language": ui.Language, "languages": config.Languages})
 	}))
 	mux.HandleFunc("/api/autostart", auth(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -308,6 +317,20 @@ func Handler(d Deps) http.Handler {
 	}))
 	registerSetup(mux, d, &configMu, auth)
 	return mux
+}
+
+// pageLang is the lang attribute the panel is first drawn with. "system" follows the
+// browser's own language, which the page script confirms from navigator.language.
+func pageLang(setting, acceptLanguage string) string {
+	if setting == "en" || setting == "ja" {
+		return setting
+	}
+	first, _, _ := strings.Cut(acceptLanguage, ",")
+	first, _, _ = strings.Cut(strings.TrimSpace(first), ";")
+	if tag := strings.ToLower(first); tag == "ja" || strings.HasPrefix(tag, "ja-") {
+		return "ja"
+	}
+	return "en"
 }
 
 func Start(d Deps, port int) (string, error) {

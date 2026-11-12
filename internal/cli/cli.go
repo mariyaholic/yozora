@@ -236,7 +236,7 @@ func serve() int {
 	// is written, so "Open control panel" never races the server's start.
 	// Deferred after the endpoint cleanup, so it runs first: the icon goes
 	// away before the endpoint file does.
-	closeTray := startDaemonTray(stop, dataDir, panelLive)
+	closeTray := startDaemonTray(holder, stop, dataDir, panelLive)
 	defer closeTray()
 
 	log.Printf("Yozora serving — config: %s", cfgPath)

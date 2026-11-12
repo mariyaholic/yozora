@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -228,5 +229,31 @@ func TestSpotifyConnectUnavailableWithoutManager(t *testing.T) {
 	}
 	if w := request(h, "GET", spotifyCallbackPath+"?state=x&code=y", "", false); w.Code != 404 {
 		t.Fatalf("callback without a manager = %d", w.Code)
+	}
+}
+
+// /api/state names the broken file only after a startup that fell back to the last-good copy.
+func TestStateReportsRestoredConfig(t *testing.T) {
+	f := newSetupFixture(t)
+	if _, ok := decodeBody(t, request(f.h, "GET", "/api/state", "", true))["config_restored"]; ok {
+		t.Fatal("a normal start reported a restored config")
+	}
+
+	path := f.cfg.Path()
+	if err := os.WriteFile(path, []byte("[ui\ntheme = "), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	holder, err := config.NewHolder(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := Handler(Deps{Engine: presence.New(holder, nil, nil, nil, ""), Cfg: holder, CfgPath: path, Token: "fixture-token"})
+	got, _ := decodeBody(t, request(h, "GET", "/api/state", "", true))["config_restored"].(map[string]any)
+	broken, _ := got["broken_path"].(string)
+	if !strings.HasPrefix(filepath.Base(broken), "setup.toml.broken-") || got["error"] == "" || got["at"] == "" {
+		t.Fatalf("config_restored = %v", got)
+	}
+	if _, err := os.Stat(broken); err != nil {
+		t.Fatalf("broken file not kept: %v", err)
 	}
 }

@@ -125,13 +125,24 @@ The Windows detector reads once at startup, then polls every second by default. 
 
 ## Appearance
 
-The **Appearance** button in the panel's header opens a dialog with 11 themes and the motion setting. Each theme tile previews its colours and title face. Choosing one applies it at once and saves it in `cadence.toml`:
+The **Appearance** button in the panel's header opens a dialog with 11 themes, the motion setting and the language. Each theme tile previews its colours and title face. Choosing one applies it at once and saves it in `cadence.toml`:
 
 ```toml
 [ui]
   theme = "yozora"
   motion = "system"
+  language = "system"
 ```
+
+The panel's footer and Diagnostics show the running version, or "dev build" for a local build.
+
+### Language
+
+The panel and the tray menu come in English and Japanese. **Follow Windows** (`system`, the default) uses the Windows display language, **English** (`en`) and **日本語** (`ja`) fix one. The panel applies a change at once; the tray menu picks it up the next time it opens. An unknown value loads as `system`. Product and service names (Yozora, Discord, Spotify, YouTube, Twitch, Apple Music) stay in Latin script, and the Discord card is not translated: its text comes from your own `[template]` settings. The bundled theme faces cover Latin only, so Japanese text uses Windows' own Yu Gothic UI or Meiryo; Mariyaholic-98 uses MS Gothic for the closest match to its bitmap look.
+
+### High contrast
+
+With a Windows contrast theme on, the panel uses the system colours: focus rings, chosen themes, segments and sources, the drop line, status lines and the checklist marks are drawn in the highlight colour or with a heavier edge, so nothing depends on the theme's own colours.
 
 | Theme id | Name | Mode | Palette source |
 | --- | --- | --- | --- |
@@ -189,13 +200,13 @@ level = "info"   # debug, info, warn, error or off
 
 ## Config file
 
-Settings live in `%APPDATA%\uika-resonance\cadence.toml`. Each time it loads or saves cleanly, Yozora keeps a copy beside it as `cadence.toml.last-good`. If a hand edit breaks the file while Yozora is running, the change is ignored, the previous settings stay in use, and the log says why. If the file is broken when Yozora starts, it starts with the last good copy instead, moves your edited file to `cadence.toml.broken-YYYYMMDD-HHMMSS` so you can fix it, and writes a `config: WARNING` line to the log naming both files. Without a usable last-good copy, startup fails with the parse error as before.
+Settings live in `%APPDATA%\uika-resonance\cadence.toml`. Each time it loads or saves cleanly, Yozora keeps a copy beside it as `cadence.toml.last-good`. If a hand edit breaks the file while Yozora is running, the change is ignored, the previous settings stay in use, and the log says why. If the file is broken when Yozora starts, it starts with the last good copy instead, moves your edited file to `cadence.toml.broken-YYYYMMDD-HHMMSS` so you can fix it, and writes a `config: WARNING` line to the log naming both files. The control panel also shows a line under the preview naming the file it set aside, until you dismiss it. Without a usable last-good copy, startup fails with the parse error as before.
 
 ## Verification
 
 Private Windows named-pipe regression tests exercise simultaneous read/write using a unique `yozora-test-*` pipe, not the live Discord client. Ordinary `go test ./...` never publishes experimental activity to a Discord profile. Tests also cover slow artwork, session gaps and out-of-order lookups, coherent track/art transitions, paused clear/resume and visibility-policy reloads under the send-rate gate, label-only Discord button readback, loopback-art filtering, source-toggle API validation and concurrency, launcher endpoint validation, service names, icon placement, platform-specific links, button ordering, display enums, config bounds, and newest-snapshot retention.
 
-The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, every theme (applied, saved, rolled back on failure, and checked for 4.5:1 text), motion (no animation at idle in any theme, cues fire once per change and never on reconnect, every drag, cancel and reorder ends with no leftover transform or running animation, busy cursors clear after failed saves, Windows reduced motion and the Reduced mode each disable everything, and Full overrides Windows), mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, the Appearance dialog, that each theme loads its own fonts, the Twitch card, the first-run checklist (test card states, the unconfirmed-card hint, application ID validation, completion, reopening) and the Spotify connect states, Discord-offline and panel-offline notes, responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
+The embedded control panel also has a browser regression check using synthetic media and settings. It exercises source toggles, every theme (applied, saved, rolled back on failure, and checked for 4.5:1 text), motion (no animation at idle in any theme, cues fire once per change and never on reconnect, every drag, cancel and reorder ends with no leftover transform or running animation, busy cursors clear after failed saves, Windows reduced motion and the Reduced mode each disable everything, and Full overrides Windows), mouse/touch/keyboard priority ordering (including cancellation and edge scrolling), save failures, the Appearance dialog, that each theme loads its own fonts, the Twitch card, the first-run checklist (test card states, the unconfirmed-card hint, application ID validation, completion, reopening) and the Spotify connect states, Discord-offline and panel-offline notes, the config-restored notice, the version line, Japanese (the saved payload, translated key regions, and no overflow at 320px), Windows High Contrast (visible focus rings, chosen tiles, segments, checks and drop line), responsive layouts, and the production content-security policy without running the daemon or contacting Discord. On Linux with Node.js:
 
 ```sh
 npm install --prefix /tmp/yozora-ui-tools --no-save --no-package-lock playwright@1.62.1

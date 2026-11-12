@@ -364,3 +364,30 @@ func TestLoadNormalizesPanelTheme(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadNormalizesPanelLanguage(t *testing.T) {
+	if Defaults().UI.Language != DefaultLanguage {
+		t.Fatalf("default language = %q, want %q", Defaults().UI.Language, DefaultLanguage)
+	}
+	for raw, want := range map[string]string{"": DefaultLanguage, "fr": DefaultLanguage, "ja-JP": DefaultLanguage, " JA ": "ja", "en": "en", "System": "system"} {
+		path := filepath.Join(t.TempDir(), "cadence.toml")
+		if err := os.WriteFile(path, []byte("[ui]\nlanguage = \""+raw+"\"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		cfg, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.UI.Language != want {
+			t.Errorf("language %q loaded as %q, want %q", raw, cfg.UI.Language, want)
+		}
+	}
+	// A config written before the setting existed follows Windows.
+	path := filepath.Join(t.TempDir(), "cadence.toml")
+	if err := os.WriteFile(path, []byte("[ui]\ntheme = \"pine\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err := Load(path); err != nil || cfg.UI.Language != DefaultLanguage {
+		t.Fatalf("missing language loaded as %v, %v", cfg, err)
+	}
+}
