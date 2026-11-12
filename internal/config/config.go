@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+
+	"uika-resonance/internal/player"
 )
 
 const defaultDiscordClientID = "1556599139436077056"
@@ -65,6 +67,57 @@ type Sources struct {
 	PollMS  int      `toml:"poll_ms"`
 	Order   []string `toml:"order"`
 	Blocked []string `toml:"blocked"`
+	// Hidden keeps matching tracks off Discord; see player.HiddenRule.
+	Hidden []player.HiddenRule `toml:"hidden"`
+}
+
+// Limits on what the panel accepts for the Discord card and the hidden list.
+const (
+	MaxHiddenRules = 200
+	MaxHiddenField = 128
+	MaxTemplate    = 256
+)
+
+var (
+	pausedModes    = []string{"show", "hide", "clear"}
+	activityTypes  = []string{"listening", "watching", "playing"}
+	statusDisplays = []string{"app", "name", "state", "details"}
+)
+
+// ValidPausedMode, ValidActivityType and ValidStatusDisplay report whether id is a value the
+// engine acts on. "name" is the same as "app" (Discord's own word for it); both are kept.
+func ValidPausedMode(id string) bool    { return slices.Contains(pausedModes, id) }
+func ValidActivityType(id string) bool  { return slices.Contains(activityTypes, id) }
+func ValidStatusDisplay(id string) bool { return slices.Contains(statusDisplays, id) }
+
+// ValidateHidden checks a hidden list the panel is about to save: a bounded count, bounded
+// fields, and rules that can match something.
+func ValidateHidden(rules []player.HiddenRule) error {
+	if len(rules) > MaxHiddenRules {
+		return fmt.Errorf("at most %d hidden rules", MaxHiddenRules)
+	}
+	for _, r := range rules {
+		if err := ValidateHiddenRule(r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ValidateHiddenRule checks one rule.
+func ValidateHiddenRule(r player.HiddenRule) error {
+	for _, f := range []string{r.Artist, r.Title} {
+		if len([]rune(f)) > MaxHiddenField {
+			return fmt.Errorf("a hidden rule field is at most %d characters", MaxHiddenField)
+		}
+		if strings.ContainsFunc(f, func(c rune) bool { return c < ' ' || c == 0x7f }) {
+			return errors.New("a hidden rule field has a control character")
+		}
+	}
+	if !r.Usable() {
+		return errors.New("a hidden rule needs an artist or a title")
+	}
+	return nil
 }
 
 type Spotify struct {
@@ -409,6 +462,15 @@ func (c *Config) normalize() {
 		}
 	}
 	c.Sources.Known = slices.Clone(ToggleKeys)
+	// Hand-edited rules: trim them, and drop any that could never match so they stay out of the panel.
+	var hidden []player.HiddenRule
+	for _, r := range c.Sources.Hidden {
+		r.Artist, r.Title = strings.TrimSpace(r.Artist), strings.TrimSpace(r.Title)
+		if r.Usable() {
+			hidden = append(hidden, r)
+		}
+	}
+	c.Sources.Hidden = hidden
 }
 
 type Holder struct {

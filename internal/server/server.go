@@ -328,6 +328,7 @@ func Handler(d Deps) http.Handler {
 	registerUpdate(mux, d, auth)
 	registerSetup(mux, d, &configMu, auth)
 	registerPause(mux, d, auth)
+	registerCard(mux, d, &configMu, auth)
 	return mux
 }
 
