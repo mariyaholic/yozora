@@ -35,6 +35,9 @@ type testCardState struct {
 func (e *Engine) SendTestCard() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	if paused, _ := e.pausedLocked(time.Now()); paused {
+		return ErrPaused
+	}
 	if e.test.requested || e.test.card.State == "sending" || e.test.card.State == "shown" {
 		return ErrTestCardBusy
 	}

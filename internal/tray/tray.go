@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -79,12 +81,22 @@ const (
 	tpmRightButton = 0x0002
 	tpmReturnCmd   = 0x0100
 
-	mfString = 0x00000000
+	mfString    = 0x00000000
+	mfGrayed    = 0x00000001
+	mfDisabled  = 0x00000002
+	mfChecked   = 0x00000008
+	mfSeparator = 0x00000800
 )
 
 const (
-	cmdOpenPanel = 1001
-	cmdQuit      = 1002
+	cmdOpenPanel  = 1001
+	cmdQuit       = 1002
+	cmdPauseHour  = 1003
+	cmdPauseOpen  = 1004
+	cmdResume     = 1005
+	cmdHeader     = 1010
+	cmdUpdate     = 1011
+	cmdSourceBase = 1100 // + index into sourceToggles
 )
 
 // Actions is what the tray asks its owner (the serve daemon) to do. Both are
@@ -102,7 +114,46 @@ type Languager interface {
 	Language() string
 }
 
-// menuItem is one row of the tray's context menu. New entries only need a
+// Controller is optionally implemented by Actions to feed the richer menu: the
+// current track, the pause state and the video-site switches. Without it the
+// menu keeps only its fixed rows. Calls come from the tray thread, so they must
+// return promptly; anything slow (saving the config) belongs on a goroutine.
+type Controller interface {
+	// MenuState is read each time the menu opens.
+	MenuState() State
+	PauseFor(d time.Duration)
+	PauseUntilResumed()
+	Resume()
+	SetSource(key string, on bool)
+}
+
+// State is what the menu shows, read when it opens.
+type State struct {
+	Title, Artist string
+	Paused        bool
+	// Sources maps a switch key (see sourceToggles) to whether it is on.
+	Sources map[string]bool
+}
+
+// sourceToggles are the video-site switches, in menu order. The keys are the
+// panel's source keys, so both save through the same config path.
+var sourceToggles = []struct {
+	Key    string
+	Labels map[string]string
+}{
+	{"youtube", map[string]string{"en": "YouTube", "ja": "YouTube"}},
+	{"twitch", map[string]string{"en": "Twitch", "ja": "Twitch"}},
+	{"youtube_tabs", map[string]string{"en": "Background Edge tabs", "ja": "バックグラウンドの Edge タブ"}},
+}
+
+// Updater is optionally implemented by Actions to offer an update. UpdateVersion
+// is "" when there is nothing to offer, and the row is then left out of the menu.
+type Updater interface {
+	UpdateVersion() string
+	InstallUpdate()
+}
+
+// menuItem is one fixed row of the tray's context menu. New entries only need a
 // row here: the popup is built from this table and WM_COMMAND is routed
 // through it. Labels holds each language's text; English is the fallback.
 type menuItem struct {
@@ -113,10 +164,109 @@ type menuItem struct {
 
 var menuItems = []menuItem{
 	{cmdOpenPanel, map[string]string{"en": "Open control panel", "ja": "コントロールパネルを開く"}, func(p *Panel) { p.actions.ShowPanel() }},
+	{cmdUpdate, map[string]string{"en": "Update to %s", "ja": "%s に更新"}, func(p *Panel) {
+		if u, ok := p.actions.(Updater); ok {
+			u.InstallUpdate()
+		}
+	}},
+	{cmdPauseHour, map[string]string{"en": "Pause sharing for 1 hour", "ja": "共有を 1 時間一時停止"}, func(p *Panel) {
+		if c := p.controller(); c != nil {
+			c.PauseFor(time.Hour)
+		}
+	}},
+	{cmdPauseOpen, map[string]string{"en": "Pause until I resume", "ja": "再開するまで一時停止"}, func(p *Panel) {
+		if c := p.controller(); c != nil {
+			c.PauseUntilResumed()
+		}
+	}},
+	{cmdResume, map[string]string{"en": "Resume sharing", "ja": "共有を再開"}, func(p *Panel) {
+		if c := p.controller(); c != nil {
+			c.Resume()
+		}
+	}},
 	{cmdQuit, map[string]string{"en": "Quit Yozora", "ja": "Yozora を終了"}, func(p *Panel) {
 		p.actions.Quit()
 		p.PostClose()
 	}},
+}
+
+// itemShown decides which state-dependent rows appear. A row not listed here is
+// always shown; one listed here needs a Controller, so it never shows without.
+var itemShown = map[uintptr]func(State) bool{
+	cmdPauseHour: func(s State) bool { return !s.Paused },
+	cmdPauseOpen: func(s State) bool { return !s.Paused },
+	cmdResume:    func(s State) bool { return s.Paused },
+}
+
+// nothingPlaying heads the menu when no track is detected.
+var nothingPlaying = map[string]string{"en": "Nothing playing", "ja": "再生中の曲はありません"}
+
+// maxHeaderRunes keeps the track row from stretching the whole menu.
+const maxHeaderRunes = 44
+
+func pick(labels map[string]string, lang string) string {
+	if l := labels[lang]; l != "" {
+		return l
+	}
+	return labels["en"]
+}
+
+// headerLabel is the current track as "Title – Artist", shortened with an ellipsis.
+func headerLabel(lang string, st State) string {
+	title, artist := strings.TrimSpace(st.Title), strings.TrimSpace(st.Artist)
+	if title == "" {
+		return pick(nothingPlaying, lang)
+	}
+	text := title
+	if artist != "" {
+		text += " \u2013 " + artist
+	}
+	text = strings.Join(strings.Fields(text), " ")
+	if r := []rune(text); len(r) > maxHeaderRunes {
+		text = strings.TrimRight(string(r[:maxHeaderRunes-1]), " ") + "\u2026"
+	}
+	return text
+}
+
+// menuRow is one line of the popup, ready to append.
+type menuRow struct {
+	ID        uintptr
+	Label     string
+	Disabled  bool
+	Checked   bool
+	Separator bool
+}
+
+// buildMenu lays the popup out for a language and state: the track header,
+// the table's rows that apply, and, ahead of Quit, the video-site switches.
+// A nil state (no Controller) gives only the table's unconditional rows. The
+// update row appears only when update names a version.
+func buildMenu(lang string, st *State, update string) []menuRow {
+	var rows []menuRow
+	if st != nil {
+		rows = append(rows, menuRow{ID: cmdHeader, Label: headerLabel(lang, *st), Disabled: true})
+	}
+	for _, item := range menuItems {
+		if show, conditional := itemShown[item.ID]; conditional && (st == nil || !show(*st)) {
+			continue
+		}
+		label := pick(item.Labels, lang)
+		if item.ID == cmdUpdate {
+			if update == "" {
+				continue
+			}
+			label = fmt.Sprintf(label, update)
+		}
+		if item.ID == cmdQuit && st != nil {
+			rows = append(rows, menuRow{Separator: true})
+			for i, toggle := range sourceToggles {
+				rows = append(rows, menuRow{ID: cmdSourceBase + uintptr(i), Label: pick(toggle.Labels, lang), Checked: st.Sources[toggle.Key]})
+			}
+			rows = append(rows, menuRow{Separator: true})
+		}
+		rows = append(rows, menuRow{ID: item.ID, Label: label})
+	}
+	return rows
 }
 
 // langJapanese is LANG_JAPANESE, the primary language of a Windows LANGID.
@@ -145,6 +295,19 @@ func menuLabels(lang string) []string {
 		}
 	}
 	return out
+}
+
+func (p *Panel) controller() Controller {
+	c, _ := p.actions.(Controller)
+	return c
+}
+
+// updateVersion is the version the update row offers, "" for no row.
+func (p *Panel) updateVersion() string {
+	if u, ok := p.actions.(Updater); ok {
+		return u.UpdateVersion()
+	}
+	return ""
 }
 
 func (p *Panel) language() string {
@@ -209,6 +372,16 @@ func (p *Panel) Dispatch(msg, lp uintptr) bool {
 }
 
 func (p *Panel) runCommand(id uintptr) bool {
+	if i := int(id) - cmdSourceBase; id >= cmdSourceBase && i < len(sourceToggles) {
+		c := p.controller()
+		if c == nil {
+			return false
+		}
+		key := sourceToggles[i].Key
+		// Flip what the menu showed, read afresh so a stale click cannot disagree with the config.
+		c.SetSource(key, !c.MenuState().Sources[key])
+		return true
+	}
 	for _, item := range menuItems {
 		if item.ID == id {
 			item.run(p)
@@ -224,9 +397,13 @@ func (p *Panel) popupMenu() {
 		return
 	}
 	defer procDestroyMenu.Call(menu)
-	labels := menuLabels(p.language())
-	for i, item := range menuItems {
-		appendMenuItem(menu, item.ID, labels[i])
+	var state *State
+	if c := p.controller(); c != nil {
+		st := c.MenuState()
+		state = &st
+	}
+	for _, row := range buildMenu(p.language(), state, p.updateVersion()) {
+		appendMenuRow(menu, row)
 	}
 
 	host := p.HostHandle()
@@ -249,12 +426,23 @@ func (p *Panel) dispatchMenuSelection(command uintptr) bool {
 	return p.Dispatch(wmCommand, command)
 }
 
-func appendMenuItem(menu, id uintptr, label string) {
-	text, err := syscall.UTF16PtrFromString(label)
+func appendMenuRow(menu uintptr, row menuRow) {
+	if row.Separator {
+		procAppendMenuW.Call(menu, mfSeparator, 0, 0)
+		return
+	}
+	text, err := syscall.UTF16PtrFromString(row.Label)
 	if err != nil {
 		return
 	}
-	procAppendMenuW.Call(menu, mfString, id, uintptr(unsafe.Pointer(text)))
+	flags := uintptr(mfString)
+	if row.Disabled {
+		flags |= mfGrayed | mfDisabled
+	}
+	if row.Checked {
+		flags |= mfChecked
+	}
+	procAppendMenuW.Call(menu, flags, row.ID, uintptr(unsafe.Pointer(text)))
 }
 
 // Run creates the hidden host window and icon and pumps their messages until

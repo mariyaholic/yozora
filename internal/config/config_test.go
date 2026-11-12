@@ -391,3 +391,52 @@ func TestLoadNormalizesPanelLanguage(t *testing.T) {
 		t.Fatalf("missing language loaded as %v, %v", cfg, err)
 	}
 }
+
+func TestOnChangeRunsOnlyWhenReloadChangesConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cadence.toml")
+	h, err := NewHolder(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var seen []string
+	h.OnChange(func(c *Config) { seen = append(seen, c.Log.Level) })
+	if _, err := h.Reload(); err != nil || len(seen) != 0 {
+		t.Fatalf("unchanged reload ran hooks: %v %v", seen, err)
+	}
+	c := Defaults()
+	c.Log.Level = "debug"
+	if err := Save(c, path); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := h.Reload(); err != nil || !changed {
+		t.Fatalf("reload: %v %v", changed, err)
+	}
+	if !slices.Equal(seen, []string{"debug"}) {
+		t.Fatalf("hook saw %v", seen)
+	}
+}
+
+func TestUpdateCheckDefaultsOnAndCanBeTurnedOff(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cadence.toml")
+	if err := os.WriteFile(path, []byte("[ui]\ntheme = \"pine\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, err := Load(path); err != nil || !cfg.Update.Check {
+		t.Fatalf("a config without [update] must check: %v, %v", cfg, err)
+	}
+	if err := os.WriteFile(path, []byte("[update]\ncheck = false\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil || cfg.Update.Check {
+		t.Fatalf("check = false not honoured: %v, %v", cfg, err)
+	}
+	// Saving keeps the choice rather than writing the default back.
+	if err := Save(cfg, path); err != nil {
+		t.Fatal(err)
+	}
+	if again, err := Load(path); err != nil || again.Update.Check {
+		t.Fatalf("saved config re-enabled the check: %v, %v", again, err)
+	}
+}

@@ -4,6 +4,7 @@ package template
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"text/template"
 	"time"
@@ -106,11 +107,8 @@ func New(details, state, large, small, paused string) *Engine {
 	return &Engine{details: details, state: state, large: large, small: small, paused: paused}
 }
 
-func render(tpl string, d Data) string {
-	if tpl == "" {
-		return ""
-	}
-	t, err := template.New("p").Funcs(template.FuncMap{
+func parse(tpl string, d Data) (*template.Template, error) {
+	return template.New("p").Funcs(template.FuncMap{
 		"bar":   d.Bar,
 		"t":     fmtTime,
 		"lower": strings.ToLower,
@@ -123,6 +121,28 @@ func render(tpl string, d Data) string {
 			return v
 		},
 	}).Parse(tpl)
+}
+
+// Validate reports why a template would not render: it must parse and run against a
+// typical track. Rendering itself is forgiving (a broken template shows its own text),
+// so this is for the panel, which should refuse to save one.
+func Validate(tpl string) error {
+	if tpl == "" {
+		return nil
+	}
+	d := Data{Title: "Title", Artist: "Artist", Album: "Album", Player: "Player", Source: "spotify", Elapsed: 61, Duration: 180, Playing: true, TrackNumber: 1}
+	t, err := parse(tpl, d)
+	if err != nil {
+		return err
+	}
+	return t.Execute(io.Discard, d)
+}
+
+func render(tpl string, d Data) string {
+	if tpl == "" {
+		return ""
+	}
+	t, err := parse(tpl, d)
 	if err != nil {
 		return Truncate(tpl, MaxTextField)
 	}
