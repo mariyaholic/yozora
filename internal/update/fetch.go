@@ -49,7 +49,7 @@ func newClient(allow func(*url.URL) bool, timeout time.Duration) *http.Client {
 }
 
 // fetchLatest asks GitHub for the latest release and returns its version as
-// "0.1.N". The request carries only the version in its User-Agent.
+// "0.2.N". The request carries only the version in its User-Agent.
 func fetchLatest(ctx context.Context, client *http.Client, apiURL, version string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()

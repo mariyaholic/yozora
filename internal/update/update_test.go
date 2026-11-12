@@ -25,6 +25,7 @@ func TestNewer(t *testing.T) {
 		{"0.1.10", "v0.1.9", false},
 		{"0.1.5", "v0.1.5", false},
 		{"0.1.5", "v0.2.0", true},
+		{"0.2.0", "v0.1.99", false}, // a new series is never undercut by the old one
 		{"0.1.5", "v1.0.0", true},
 		{"dev", "v0.1.5", false},
 		{"0.1.5", "latest", false},
