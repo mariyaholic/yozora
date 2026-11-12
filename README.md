@@ -14,7 +14,7 @@ Coming from v0.1.1? Its separate `yozora-daemon-...exe` and `yozora-panel-...exe
 
 Advanced: a portable [Yozora.exe](https://github.com/mariyaholic/yozora/releases/latest/download/Yozora.exe) is attached to the same release.
 
-Closing the control panel releases its WebView2 browser while Yozora keeps running in the tray. Use **Open control panel** from the tray or launch Yozora again to reopen it; choose **Quit Yozora** to stop it.
+Yozora keeps an icon in the notification area for as long as it runs, including after it starts on its own at sign-in. Closing the control panel ends the panel completely while Yozora keeps running in the tray. Use **Open control panel** from the tray (or click the icon) or launch Yozora again to reopen it; choose **Quit Yozora** to stop Yozora and close the panel if it is open.
 
 ## Repository
 
@@ -45,7 +45,7 @@ go build -ldflags=-H=windowsgui -o Yozora.exe ./cmd/yozora
 
 Commands: `serve`, `status`, `doctor`, `setup`, `install`, `uninstall`. `install` opts into Windows login startup; building and serving do not install autostart.
 
-`Yozora.exe` with no arguments opens the control panel (below); with any argument it acts as the command line (`Yozora.exe status`, `Yozora.exe serve`, ...). It is the only executable: the control panel starts the background daemon by re-launching itself with `serve`. The `-H=windowsgui` linker flag keeps double-click launches free of a console window; the executable's icon comes from `cmd/yozora/rsrc_windows_amd64.syso`, generated from `assets/yozora.ico` with `go-winres simply --arch amd64 --icon ../../assets/yozora.ico --manifest gui`.
+`Yozora.exe` with no arguments opens the control panel (below); with any argument it acts as the command line (`Yozora.exe status`, `Yozora.exe serve`, ...). It is the only executable: the control panel starts the background daemon by re-launching itself with `serve`. The daemon owns the tray icon; its **Open control panel** re-launches the executable with the internal `panel` command, which opens the panel the same way but never starts a daemon of its own. The panel window runs in its own short-lived process that exits when the window closes or when the daemon stops. The `-H=windowsgui` linker flag keeps double-click launches free of a console window; the executable's icon comes from `cmd/yozora/rsrc_windows_amd64.syso`, generated from `assets/yozora.ico` with `go-winres simply --arch amd64 --icon ../../assets/yozora.ico --manifest gui`.
 
 ## Source switches (Yozora.exe)
 
