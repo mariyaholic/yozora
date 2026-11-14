@@ -48,6 +48,10 @@ This is deliberate redaction for the report shape covered by source and unit che
 
 ## Evidence strength and limits
 
+The complete browser result contains 55 checks, with no page errors or CSP violations. Local extended shadow checks pass nine packages ten times, presence/Spotify race checks one hundred times, and config/server/update race checks ten times. All 17 Windows package test executables and the application cross-compile. The Windows-target vet result retains the same four native interop diagnostics as baseline; their output order differs.
+
+[GitHub verification run 43584211089](https://github.com/mariyaholic/yozora/actions/runs/43584211089) also passed on `d3de539`: native Windows package tests, selected race checks and the Windows app build, plus Linux logic verification. This is native unit execution on a hosted runner. It does not establish interactive WebView2 downloads, live media/accounts, installer behavior or process-tree memory parity. The receipt and selected execution lines are in `feature-evidence/`.
+
 The review combines source inspection, feature-specific server/unit checks, and the final synthetic browser run recorded in [feature evidence](feature-evidence/README.md). The browser fixture supplies local fake API responses and synthetic track/artwork/Discord data. It checks rendering and interactions, not the native service, real user files, real Discord or Spotify accounts, Windows credential storage, or an installed Windows build. Cross-compilation is not execution.
 
 The 64 KiB cap, accepted JSON shape, conflict guard, and redaction behavior can be stated from the implementation and its targeted tests. A successful import response means the config save and holder reload returned; it does not prove every coalesced configuration callback or Discord publication has finished. UI screenshots establish only the captured fixture state. Whole-process memory parity and runtime resource effects were not measured. The features are on-demand; no claim is made about quantitative performance improvement.
