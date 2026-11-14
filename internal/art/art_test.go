@@ -4,6 +4,7 @@ package art
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/png"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestBrowserSuppliedURLBypassesReaders(t *testing.T) {
@@ -92,5 +94,101 @@ func TestYouTubeMusicNeverSearchesCatalog(t *testing.T) {
 				t.Fatalf("fallback: %+v", got)
 			}
 		}
+	}
+}
+
+func TestCacheIncludesFilesFromEarlierRun(t *testing.T) {
+	dir := t.TempDir()
+	old := keyOf("old") + ".png"
+	newer := keyOf("newer") + ".jpg"
+	if err := os.WriteFile(filepath.Join(dir, old), []byte("123456"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, newer), []byte("123456"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	past := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(filepath.Join(dir, old), past, past); err != nil {
+		t.Fatal(err)
+	}
+	// Unrelated files and the default placeholder are never thumbnail victims.
+	for _, name := range []string{"default.png", "unrelated.png"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("keep"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := New(dir, 6)
+	r.initCache()
+	if _, err := os.Stat(filepath.Join(dir, old)); !os.IsNotExist(err) {
+		t.Fatalf("old thumbnail still exists: %v", err)
+	}
+	for _, name := range []string{newer, "default.png", "unrelated.png"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Fatalf("lost %s: %v", name, err)
+		}
+	}
+}
+
+func TestOversizedThumbnailDoesNotReturnBrokenURL(t *testing.T) {
+	r := New(t.TempDir(), 3)
+	r.baseURL = "http://127.0.0.1:43210"
+	got := r.localArt(Track{Thumb: func() ([]byte, error) { return []byte("1234"), nil }}, keyOf("oversized"))
+	if got.ImageURL != "" {
+		t.Fatalf("returned URL for oversized image: %+v", got)
+	}
+	entries, err := os.ReadDir(r.cacheDir)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("cache entries = %v, %v", entries, err)
+	}
+}
+
+func TestDefaultArtSurvivesThumbnailEviction(t *testing.T) {
+	r := New(t.TempDir(), 5)
+	r.baseURL = "http://127.0.0.1:43210"
+	if r.DefaultURL() == "" {
+		t.Fatal("missing default URL")
+	}
+	for _, title := range []string{"first", "second"} {
+		key := keyOf(title)
+		got := r.localArt(Track{Thumb: func() ([]byte, error) { return []byte("12345"), nil }}, key)
+		if got.ImageURL == "" {
+			t.Fatalf("missing local image for %s", title)
+		}
+		if title == "first" {
+			past := time.Now().Add(-time.Hour)
+			if err := os.Chtimes(filepath.Join(r.cacheDir, key+".png"), past, past); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if _, err := os.Stat(filepath.Join(r.cacheDir, "default.png")); err != nil {
+		t.Fatalf("default image evicted: %v", err)
+	}
+}
+
+func TestCacheIndexStaysBoundedWhenEvictionFails(t *testing.T) {
+	for _, budget := range []int64{2, 1000} {
+		t.Run(fmt.Sprintf("budget-%d", budget), func(t *testing.T) {
+			r := New(t.TempDir(), budget)
+			const limit = 2
+			for i := 0; i < 8; i++ {
+				name := keyOf(fmt.Sprint(i)) + ".png"
+				if err := os.WriteFile(filepath.Join(r.cacheDir, name), []byte("x"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				r.files[name] = 1
+				r.trimLockedLimit(limit, func(string) error { return os.ErrPermission })
+				if len(r.files) > limit {
+					t.Fatalf("index grew to %d entries", len(r.files))
+				}
+			}
+			if !r.cacheWarned {
+				t.Fatal("failed evictions did not report an unenforceable disk budget")
+			}
+			entries, err := os.ReadDir(r.cacheDir)
+			if err != nil || len(entries) != 8 {
+				t.Fatalf("failed evictions unexpectedly deleted files: %d, %v", len(entries), err)
+			}
+		})
 	}
 }

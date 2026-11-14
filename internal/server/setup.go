@@ -5,9 +5,11 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -183,22 +185,29 @@ func registerSetup(mux *http.ServeMux, d Deps, configMu *sync.Mutex, auth func(h
 					return
 				}
 				if d.OpenURL == nil || d.OpenURL(authURL) != nil {
-					d.SpotifyLink.Cancel()
+					if u, err := url.Parse(authURL); err == nil {
+						d.SpotifyLink.CancelState(u.Query().Get("state"))
+					}
 					http.Error(w, "could not open the browser", http.StatusBadGateway)
 					return
 				}
 			case "cancel":
 				d.SpotifyLink.Cancel()
 			case "disconnect":
-				d.SpotifyLink.Cancel()
-				d.Spotify.Stop()
-				clearToken := d.ClearSpotifyToken
-				if clearToken == nil {
-					clearToken = spotifyapi.ClearRefreshToken
-				}
-				// A token that was never stored is already gone; the config change still applies.
-				_ = clearToken()
-				if err := update(func(c *config.Config) { c.Spotify.Mode = "system" }); err != nil {
+				err := d.SpotifyLink.CancelWith(func() error {
+					d.Spotify.Stop()
+					clearToken := d.ClearSpotifyToken
+					if clearToken == nil {
+						clearToken = spotifyapi.ClearRefreshToken
+					}
+					clearErr := clearToken()
+					if clearErr != nil {
+						clearErr = fmt.Errorf("could not remove Spotify credentials: %w", clearErr)
+					}
+					// Stop the poller and switch modes even if credential removal failed.
+					return errors.Join(clearErr, update(func(c *config.Config) { c.Spotify.Mode = "system" }))
+				})
+				if err != nil {
 					http.Error(w, err.Error(), 500)
 					return
 				}
@@ -233,24 +242,33 @@ func registerSetup(mux *http.ServeMux, d Deps, configMu *sync.Mutex, auth func(h
 			return
 		}
 		q := r.URL.Query()
-		clientID, err := d.SpotifyLink.Complete(q.Get("state"), q.Get("code"), q.Get("error"))
+		saveFailed := false
+		_, err := d.SpotifyLink.CompleteWithPhases(q.Get("state"), q.Get("code"), q.Get("error"), func() error {
+			d.Spotify.Stop()
+			return nil
+		}, func(clientID string) error {
+			if err := update(func(c *config.Config) {
+				c.Spotify.Mode = "api"
+				c.Spotify.ClientID = clientID
+			}); err != nil {
+				saveFailed = true
+				return err
+			}
+			cfg := d.Cfg.Get()
+			d.Spotify.Start(clientID, cfg.Spotify.Market, time.Duration(cfg.Spotify.PollSecs)*time.Second)
+			return nil
+		})
 		switch {
-		case errors.Is(err, spotifyapi.ErrStateMismatch), errors.Is(err, spotifyapi.ErrNoPendingFlow):
+		case errors.Is(err, spotifyapi.ErrStateMismatch), errors.Is(err, spotifyapi.ErrNoPendingFlow), errors.Is(err, spotifyapi.ErrFlowSuperseded):
 			page(http.StatusBadRequest, "This sign-in link is not valid any more. Start again from Yozora.")
+			return
+		case saveFailed:
+			page(http.StatusInternalServerError, "Spotify signed in, but Yozora could not save the setting. Return to Yozora to try again.")
 			return
 		case err != nil:
 			page(http.StatusBadGateway, "Spotify was not connected. Return to Yozora to try again.")
 			return
 		}
-		if err := update(func(c *config.Config) {
-			c.Spotify.Mode = "api"
-			c.Spotify.ClientID = clientID
-		}); err != nil {
-			page(http.StatusInternalServerError, "Spotify signed in, but Yozora could not save the setting. Return to Yozora to try again.")
-			return
-		}
-		cfg := d.Cfg.Get()
-		d.Spotify.Start(clientID, cfg.Spotify.Market, time.Duration(cfg.Spotify.PollSecs)*time.Second)
 		page(http.StatusOK, "Spotify is connected. You can close this tab.")
 	})
 }

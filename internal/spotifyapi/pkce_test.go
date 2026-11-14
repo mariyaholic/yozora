@@ -269,3 +269,121 @@ func TestManagerStartStopReplacesPollerAndWithdrawsTrack(t *testing.T) {
 	}
 	m.Stop() // idempotent
 }
+
+func TestPKCEInFlightExchangeIsSuperseded(t *testing.T) {
+	for _, action := range []string{"cancel", "cancel state", "begin"} {
+		t.Run(action, func(t *testing.T) {
+			entered, release := make(chan struct{}), make(chan struct{})
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				close(entered)
+				<-release
+				_, _ = w.Write([]byte(`{"refresh_token":"old"}`))
+			}))
+			defer srv.Close()
+			stored, committed := false, false
+			link := &Link{TokenURL: srv.URL, HTTP: srv.Client(), Store: func(string) error { stored = true; return nil }}
+			raw, err := link.Begin(testClientID, testRedirect)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state := authorizeQuery(t, raw).Get("state")
+			done := make(chan error, 1)
+			go func() {
+				_, err := link.CompleteWith(state, "code", "", func(string) error { committed = true; return nil })
+				done <- err
+			}()
+			<-entered
+			if action == "cancel" {
+				link.Cancel()
+			} else if action == "cancel state" {
+				link.CancelState(state)
+			} else if _, err := link.Begin(testClientID, testRedirect); err != nil {
+				t.Fatal(err)
+			}
+			close(release)
+			if err := <-done; !errors.Is(err, ErrFlowSuperseded) {
+				t.Fatalf("completion error = %v", err)
+			}
+			if stored || committed {
+				t.Fatalf("stale result applied: stored=%v committed=%v", stored, committed)
+			}
+			status := link.Status()
+			if status.Error != "" || status.Waiting != (action == "begin") {
+				t.Fatalf("status = %+v", status)
+			}
+		})
+	}
+}
+
+func TestPKCECommitAndDisconnectAreOrdered(t *testing.T) {
+	link, _, _ := newTestLink(t, &fakeTokenEndpoint{reply: `{"refresh_token":"r"}`})
+	raw, _ := link.Begin(testClientID, testRedirect)
+	state := authorizeQuery(t, raw).Get("state")
+	entered, release, completed := make(chan struct{}), make(chan struct{}), make(chan error, 1)
+	go func() {
+		_, err := link.CompleteWith(state, "code", "", func(string) error {
+			close(entered)
+			<-release
+			return nil
+		})
+		completed <- err
+	}()
+	<-entered
+	cancelled := make(chan struct{})
+	go func() { _ = link.CancelWith(func() error { close(cancelled); return nil }) }()
+	select {
+	case <-cancelled:
+		t.Fatal("disconnect ran during authorization commit")
+	default:
+	}
+	close(release)
+	if err := <-completed; err != nil {
+		t.Fatal(err)
+	}
+	<-cancelled
+}
+
+func TestPKCECancelStateLeavesNewerFlow(t *testing.T) {
+	link, _, _ := newTestLink(t, &fakeTokenEndpoint{reply: `{"refresh_token":"r"}`})
+	first, _ := link.Begin(testClientID, testRedirect)
+	second, _ := link.Begin(testClientID, testRedirect)
+	link.CancelState(authorizeQuery(t, first).Get("state"))
+	if !link.Status().Waiting {
+		t.Fatal("old cancellation discarded the new flow")
+	}
+	if _, err := link.Complete(authorizeQuery(t, second).Get("state"), "code", ""); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPKCEStopsOldRefreshBeforeStoringNewToken(t *testing.T) {
+	endpoint := &fakeTokenEndpoint{reply: `{"refresh_token":"new-token"}`}
+	link, _, _ := newTestLink(t, endpoint)
+	credential := "original"
+	link.Store = func(token string) error { credential = token; return nil }
+	raw, _ := link.Begin(testClientID, testRedirect)
+	_, err := link.CompleteWithPhases(authorizeQuery(t, raw).Get("state"), "code", "", func() error {
+		// Stopping waits for an old poller whose final refresh can rotate its token.
+		credential = "old-rotated-token"
+		return nil
+	}, func(string) error {
+		if credential != "new-token" {
+			t.Errorf("commit sees credential %q", credential)
+		}
+		return nil
+	})
+	if err != nil || credential != "new-token" {
+		t.Fatalf("credential = %q, error = %v", credential, err)
+	}
+}
+
+func TestPKCEPreStoreFailureLeavesTokenUnchanged(t *testing.T) {
+	link, stored, _ := newTestLink(t, &fakeTokenEndpoint{reply: `{"refresh_token":"new"}`})
+	raw, _ := link.Begin(testClientID, testRedirect)
+	stopErr := errors.New("stop failed")
+	committed := false
+	_, err := link.CompleteWithPhases(authorizeQuery(t, raw).Get("state"), "code", "", func() error { return stopErr }, func(string) error { committed = true; return nil })
+	if !errors.Is(err, stopErr) || len(*stored) != 0 || committed {
+		t.Fatalf("err=%v, stored=%v, committed=%v", err, *stored, committed)
+	}
+}

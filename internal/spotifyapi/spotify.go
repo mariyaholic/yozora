@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"uika-resonance/internal/credman"
@@ -53,7 +54,18 @@ func HasRefreshToken() bool {
 
 func StoreRefreshToken(tok string) error { return credman.Set(credKey, tok) }
 
-func ClearRefreshToken() error { return credman.Delete(credKey) }
+// ClearRefreshToken treats a missing credential as already deleted, while
+// preserving other Windows Credential Manager failures for the caller.
+func ClearRefreshToken() error { return clearRefreshToken(credman.Delete) }
+
+func clearRefreshToken(deleteCredential func(string) error) error {
+	err := deleteCredential(credKey)
+	const errorNotFound syscall.Errno = 1168 // ERROR_NOT_FOUND
+	if errors.Is(err, errorNotFound) {
+		return nil
+	}
+	return err
+}
 
 type tokenResp struct {
 	AccessToken  string `json:"access_token"`
@@ -177,13 +189,12 @@ func (p *Provider) Poll() (*player.Track, error) {
 func firstImage(imgs []struct {
 	URL string `json:"url"`
 }) string {
-	best := ""
 	for _, im := range imgs {
-		if best == "" {
-			best = im.URL
+		if im.URL != "" {
+			return im.URL
 		}
 	}
-	return best
+	return ""
 }
 
 // publishLatest replaces a stale queued snapshot instead of blocking the

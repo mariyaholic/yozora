@@ -730,7 +730,7 @@ const strings = {
     "detect.p3":"Background Edge tabs reads tab names from up to 8 windows when no title matches. It finds YouTube only and shows the symbol, without a thumbnail or button. App filters such as msedge still block the YouTube Music PWA.",
     "sources.apply":"Apply changes", "sources.discard":"Discard changes", "sources.loading":"Loading saved sources…", "sources.retry":"Retry loading sources",
     "sources.unsaved":"Unsaved changes.", "sources.loadFailed":"Could not load sources: {error}. Retry to load your settings.", "sources.saving":"Saving changes…",
-    "sources.saved":"Saved. Discord catches up within a few seconds.", "sources.saveFailed":"Save failed: {error}. Your changes were not confirmed; try again.", "sources.discarded":"Changes discarded. Saved settings restored.",
+    "sources.saved":"Saved. Discord catches up within a few seconds.", "sources.saveFailed":"Save failed: {error}. Your changes were not confirmed; try again.", "sources.conflict":"Settings changed in the tray; review your changes", "sources.discarded":"Changes discarded. Saved settings restored.",
     "order.row":"Priority {rank}: {source}", "order.reorder":"Reorder {source}", "order.handle":"Drag to reorder, or use Up and Down arrow keys", "order.up":"Move {source} up", "order.down":"Move {source} down",
     "order.outside":"Outside list · release to cancel", "order.drop":"Drop at priority {rank}", "order.dragging":"{source}: {hint}. Escape cancels.",
     "order.moved":"{source} moved to priority {rank}. Apply to save.", "order.unchanged":"Source order unchanged.", "order.cancelled":"Move cancelled. Source order unchanged.",
@@ -800,7 +800,7 @@ const strings = {
     "detect.p3":"「バックグラウンドの Edge タブ」は、タイトルが一致しないとき最大 8 つのウィンドウのタブ名を読み取ります。対象は YouTube のみで、サムネイルやボタンなしでシンボルを表示します。msedge などのアプリフィルターは、引き続き YouTube Music の PWA もブロックします。",
     "sources.apply":"変更を適用", "sources.discard":"変更を破棄", "sources.loading":"保存済みのソースを読み込み中…", "sources.retry":"ソースを再読み込み",
     "sources.unsaved":"未保存の変更があります。", "sources.loadFailed":"ソースを読み込めませんでした: {error}。再読み込みしてください。", "sources.saving":"変更を保存中…",
-    "sources.saved":"保存しました。数秒で Discord に反映されます。", "sources.saveFailed":"保存できませんでした: {error}。変更は確定していません。もう一度お試しください。", "sources.discarded":"変更を破棄し、保存済みの設定に戻しました。",
+    "sources.saved":"保存しました。数秒で Discord に反映されます。", "sources.saveFailed":"保存できませんでした: {error}。変更は確定していません。もう一度お試しください。", "sources.conflict":"トレイで設定が変更されました。変更内容を確認してください", "sources.discarded":"変更を破棄し、保存済みの設定に戻しました。",
     "order.row":"優先順位 {rank}: {source}", "order.reorder":"{source} を並べ替え", "order.handle":"ドラッグするか、上下の矢印キーで並べ替え", "order.up":"{source} を上へ", "order.down":"{source} を下へ",
     "order.outside":"リストの外・離すとキャンセル", "order.drop":"優先順位 {rank} に移動", "order.dragging":"{source}: {hint}。Esc でキャンセルします。",
     "order.moved":"{source} を優先順位 {rank} に移動しました。適用すると保存されます。", "order.unchanged":"順序は変わっていません。", "order.cancelled":"移動を取り消しました。順序は変わっていません。",
@@ -877,6 +877,7 @@ const sourceSave = document.getElementById("source-save");
 const sourceReset = document.getElementById("source-reset");
 const sourceRetry = document.getElementById("source-retry");
 let savedSources = null;
+let sourceRevision = 0;
 function sourceMessage(message, tone = "") {
   setText(sourceStatus, message);
   sourceStatus.dataset.tone = tone;
@@ -909,6 +910,44 @@ function safeButtonURL(raw) {
 }
 function showSources(enabled) {
   for (const source of toggleKeys) document.getElementById(`source-${source}`).checked = enabled[source] === true;
+}
+// Merge daemon changes into untouched controls while keeping edits relative to the old baseline.
+function reconcileSources(data) {
+  const baseline = JSON.parse(savedSources);
+  const current = currentSources();
+  const enabled = Object.fromEntries(toggleKeys.map(key => [key,
+    current[key] === baseline.enabled[key] ? data.enabled[key] === true : current[key]]));
+  const order = data.order || [];
+  const keepOrder = JSON.stringify(savedOrder) !== JSON.stringify(baseline.order);
+  const nextOrder = keepOrder ? savedOrder : order;
+  const nextBaseline = JSON.stringify({enabled:Object.fromEntries(toggleKeys.map(key => [key, data.enabled[key] === true])), order});
+  if (nextBaseline === savedSources) return;
+  showSources(enabled);
+  if (JSON.stringify(nextOrder) !== JSON.stringify(savedOrder)) {
+    const active = document.activeElement;
+    const row = active.closest("#source-order li");
+    const source = row?.dataset.source;
+    const control = row && active !== row ? [...row.querySelectorAll("button")].indexOf(active) : -1;
+    showOrder(nextOrder);
+    const newRow = [...orderList.children].find(item => item.dataset.source === source);
+    if (active.isConnected) active.focus();
+    else if (newRow) {
+      const button = newRow.querySelectorAll("button")[control];
+      (button && !button.disabled ? button : newRow).focus();
+    }
+  }
+  savedSources = nextBaseline;
+  updateDirty();
+}
+async function refreshSources(signal) {
+  if (!savedSources || sourceFields.disabled || drag) return;
+  const revision = sourceRevision;
+  try {
+    const r = await fetch(sourceURL, {cache:"no-store", signal});
+    if (!r.ok) return;
+    const data = await r.json();
+    if (revision === sourceRevision && !sourceFields.disabled && !drag) reconcileSources(data);
+  } catch {} // Keep the form and any save error intact; the next tick retries.
 }
 async function loadSources() {
   const retrying = !sourceRetry.hidden;
@@ -1132,13 +1171,29 @@ document.getElementById("sources-form").addEventListener("submit", async event =
   event.preventDefault();
   if (sourceFields.disabled || sourceSave.disabled) return;
   finishDrag(false);
-  const enabled = currentSources();
   sourceFields.disabled = true;
+  sourceRevision++;
   setKey(sourceSave, "saving");
   sourceMessage(t("sources.saving"));
   sourceStatus.dataset.busy = "true";
   try {
-    const r = await fetch(sourceURL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled, order:savedOrder})});
+    // Reconcile immediately before saving so untouched controls do not overwrite a recent tray change.
+    const latest = await fetch(sourceURL, {cache:"no-store"});
+    if (!latest.ok) throw new Error(`HTTP ${latest.status}`);
+    reconcileSources(await latest.json());
+    sourceMessage(t("sources.saving"));
+    const headers = {"Content-Type":"application/json"};
+    const etag = latest.headers.get("ETag");
+    if (etag) headers["If-Match"] = etag;
+    const r = await fetch(sourceURL, {method:"POST", headers, body:JSON.stringify({enabled:currentSources(), order:savedOrder})});
+    if (r.status === 412) {
+      // Keep the user's edits, but fold in the concurrent tray change before retry.
+      try {
+        const current = await fetch(sourceURL, {cache:"no-store"});
+        if (current.ok) reconcileSources(await current.json());
+      } catch {}
+      throw new Error(t("sources.conflict"));
+    }
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     showSources(data.enabled);
@@ -1767,11 +1822,12 @@ async function hiddenCall(body) {
   return (await r.json()).hidden;
 }
 async function removeHidden(rule, item) {
-  const next = item.nextElementSibling || item.previousElementSibling;
+  const index = [...item.parentElement.children].indexOf(item);
   try {
     renderHidden(await hiddenCall({remove:rule}));
     cardMessage(t("hidden.removed"));
-    (next?.querySelector("button") || cardEl("details")).focus();
+    const list = document.getElementById("hidden-list");
+    (list.children[Math.min(index, list.children.length - 1)]?.querySelector("button") || cardEl("details")).focus();
     refreshSoon();
   } catch (e) { cardMessage(t("hidden.removeFailed", {error:e.message}), "error"); }
 }
@@ -1959,6 +2015,7 @@ async function tick() {
       error.textContent = t("meta.error", {error:s.last_error});
       meta.appendChild(error);
     }
+    await refreshSources(controller.signal);
   } catch (e) {
     preview.dataset.stale = "true";
     playbackState.dataset.live = "false";
