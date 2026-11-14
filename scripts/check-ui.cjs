@@ -65,6 +65,11 @@ const portable = () => ({format:'yozora-panel-settings', version:1, card:{...car
 let settingsGets = 0;
 let settingsGetHTTP = 200, settingsPreviewHTTP = 200, settingsImportHTTP = 200, settingsDelay = 0;
 const settingsPosts = [];
+let settingsPreviewHold = null;
+function holdSettingsPreview() {
+  let entered, release;
+  return {entered:new Promise(resolve => { entered = resolve; }), wait:new Promise(resolve => { release = resolve; }), mark:() => entered(), release:() => release()};
+}
 
 let hiddenRules = [];
 let hiddenHTTP = 200;
@@ -143,10 +148,12 @@ const server = http.createServer(async (req, res) => {
   } else if (url.pathname === '/api/settings' && req.method === 'GET') {
     settingsGets++; const value = portable(); res.setHeader('ETag', sourceTag(value)); json(value, settingsGetHTTP);
   } else if ((url.pathname === '/api/settings/preview' || url.pathname === '/api/settings/import') && req.method === 'POST') {
+    const delay = settingsDelay, hold = url.pathname.endsWith('/preview') ? settingsPreviewHold : null;
     let body = ''; for await (const chunk of req) body += chunk;
     const posted = JSON.parse(body), isImport = url.pathname.endsWith('/import');
     settingsPosts.push({isImport, body:posted, tag:req.headers['if-match']});
-    if (settingsDelay) await new Promise(resolve => setTimeout(resolve, settingsDelay));
+    if (hold) { hold.mark(); await hold.wait; }
+    if (delay) await new Promise(resolve => setTimeout(resolve, delay));
     const current = portable(), status = isImport ? settingsImportHTTP : settingsPreviewHTTP;
     if (status !== 200) { json({error:'synthetic failure'}, status); return; }
     if (posted.format !== 'yozora-panel-settings' || posted.version !== 1) { json({error:'invalid backup'}, 400); return; }
@@ -898,7 +905,10 @@ const server = http.createServer(async (req, res) => {
       await ready(touchPage);
       assert.equal(await touchPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       await touchShot(`phone-${width}`);
+      // Settle any initial source refresh before taking the pre-drag baseline.
+      await touchPage.evaluate(async () => { while (polling) await new Promise(resolve => setTimeout(resolve, 10)); await tick(); });
       const initialOrder = await touchOrder();
+      assert.deepEqual(initialOrder, sources.order, 'the touch baseline matches the saved source order');
       const initialToggles = await touchPage.evaluate(() => currentSources());
       await centerList();
       let grip = await touchPage.locator('#source-order .drag-handle').first().boundingBox();
@@ -1819,14 +1829,16 @@ const server = http.createServer(async (req, res) => {
       await b.waitForTimeout(50); assert.equal(settingsPosts.filter(p => !p.isImport).length, previewCount + 1);
       assert.ok((await b.locator('#backup-content').textContent()).includes('Imported title'));
       // Abort a request already in flight, both on cancel and when selecting another file.
-      settingsDelay = 1000;
+      let hold = settingsPreviewHold = holdSettingsPreview();
       let aborts = await b.evaluate(() => window.previewAborts);
-      await Promise.all([b.waitForRequest(r => r.url().includes('/api/settings/preview')), setFile('flight.json', JSON.stringify(candidate))]);
-      await b.locator('#backup-cancel').click(); await b.waitForFunction(n => window.previewAborts > n, aborts);
+      await setFile('flight.json', JSON.stringify(candidate)); await hold.entered;
+      settingsPreviewHold = null;
+      await b.locator('#backup-cancel').click(); await b.waitForFunction(n => window.previewAborts > n, aborts); hold.release();
+      hold = settingsPreviewHold = holdSettingsPreview();
       aborts = await b.evaluate(() => window.previewAborts);
-      await Promise.all([b.waitForRequest(r => r.url().includes('/api/settings/preview')), setFile('flight.json', JSON.stringify(candidate))]);
-      settingsDelay = 0; await setFile('replacement.json', JSON.stringify(candidate));
-      await b.waitForFunction(n => window.previewAborts > n, aborts); await b.waitForSelector('#backup-review:not([hidden])');
+      await setFile('flight.json', JSON.stringify(candidate)); await hold.entered;
+      settingsPreviewHold = null; await setFile('replacement.json', JSON.stringify(candidate));
+      await b.waitForFunction(n => window.previewAborts > n, aborts); hold.release(); await b.waitForSelector('#backup-review:not([hidden])');
       assert.ok((await b.locator('#backup-content').textContent()).includes('Imported title'));
       settingsPreviewHTTP = 500; await setFile('valid.json', JSON.stringify(candidate)); await b.waitForFunction(() => document.getElementById('backup-status').dataset.tone === 'error' && !document.getElementById('backup-preview').disabled);
       settingsPreviewHTTP = 200; await b.locator('#backup-preview').click(); await b.waitForSelector('#backup-review:not([hidden])');
