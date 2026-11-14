@@ -226,13 +226,13 @@ func TestDefaultAllowURL(t *testing.T) {
 		"https://github.com/mariyaholic/yozora/releases/download/v0.1.1/x": true,
 		"https://objects.githubusercontent.com/abc":                        true,
 		"https://release-assets.githubusercontent.com/abc":                 true,
-		"http://github.com/x":                                              false,
-		"https://github.com.evil.example/x":                                false,
-		"https://evilgithub.com/x":                                         false,
-		"https://github.com:8443/x":                                        false,
-		"https://user@github.com/x":                                        false,
-		"https://githubusercontent.com/x":                                  false,
-		"file:///c:/x":                                                     false,
+		"http://github.com/x":               false,
+		"https://github.com.evil.example/x": false,
+		"https://evilgithub.com/x":          false,
+		"https://github.com:8443/x":         false,
+		"https://user@github.com/x":         false,
+		"https://githubusercontent.com/x":   false,
+		"file:///c:/x":                      false,
 	} {
 		u, _ := url.Parse(raw)
 		if got := DefaultAllowURL(u); got != want {
@@ -460,4 +460,70 @@ func TestStartInstallReportsProgressInStatus(t *testing.T) {
 		t.Fatalf("second request: %v", err)
 	}
 	<-done
+}
+
+func TestFailedDownloadRemovesTemporaryDirectory(t *testing.T) {
+	for _, failed := range []string{installerName, sumsName} {
+		t.Run(failed, func(t *testing.T) {
+			tmp := t.TempDir()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/"+failed) {
+					http.Error(w, "unavailable", http.StatusServiceUnavailable)
+					return
+				}
+				_, _ = w.Write([]byte("installer"))
+			}))
+			defer srv.Close()
+			u, _ := url.Parse(srv.URL)
+			d := newDownloader(srv.URL, allowHost(u.Host), tmp)
+			if _, _, _, _, err := d.get(context.Background(), "0.1.9", func(string) {}); err == nil {
+				t.Fatal("download unexpectedly succeeded")
+			}
+			if entries, err := os.ReadDir(tmp); err != nil || len(entries) != 0 {
+				t.Fatalf("temporary files after failure: %v, %v", entries, err)
+			}
+		})
+	}
+}
+
+func TestInstallCancellationBeforeLaunchCleansUp(t *testing.T) {
+	r := serveRelease(t, "installer bytes", "")
+	r.sums = sumLine(r.setup, installerName)
+	s, launched := installService(t, r)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s.fileSig = func(string) Signature { cancel(); return Signature{} }
+	if err := s.Install(ctx); err != context.Canceled {
+		t.Fatalf("install error = %v, want context.Canceled", err)
+	}
+	if len(*launched) != 0 {
+		t.Fatal("launched after cancellation")
+	}
+	if st := s.Status().Install; st.State != PhaseError || st.Error == "" {
+		t.Fatalf("status = %+v", st)
+	}
+	if entries, err := os.ReadDir(r.tmp); err != nil || len(entries) != 0 {
+		t.Fatalf("temporary files after cancellation: %v, %v", entries, err)
+	}
+}
+
+func TestInstallRemainsBusyWhileLaunchIsPending(t *testing.T) {
+	r := serveRelease(t, "installer bytes", "")
+	r.sums = sumLine(r.setup, installerName)
+	s, _ := installService(t, r)
+	entered, release := make(chan struct{}), make(chan struct{})
+	s.launch = func(string, []string) error { close(entered); <-release; return nil }
+	finished := make(chan error, 1)
+	go func() { finished <- s.Install(context.Background()) }()
+	<-entered
+	if st := s.Status().Install.State; st != PhaseInstalling {
+		t.Errorf("status during launch = %q", st)
+	}
+	if err := s.StartInstall(); err != ErrBusy {
+		t.Errorf("second install during launch = %v", err)
+	}
+	close(release)
+	if err := <-finished; err != nil {
+		t.Fatal(err)
+	}
 }

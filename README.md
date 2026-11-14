@@ -282,6 +282,8 @@ To use an existing Chromium installation, set `CHROMIUM_PATH` to its executable 
 
 ## Release
 
+Pending release: [v0.2.1 release notes](docs/RELEASE-NOTES-v0.2.1.md) for PR #15.
+
 A merge to `main` that changes what ships tests, builds and publishes a release automatically (`.github/workflows/release.yml`): Go sources (not `_test.go` files), `go.mod`/`go.sum`, the `.syso` icon resources, `installer/`, `assets/yozora.ico`, the embedded panel (`internal/server/ui.html` and `internal/server/fonts/`), the tray icon, or the workflow itself. Documentation, scripts and test-only merges do not cut a release. The version is `<series>.N`: the latest `v<series>.N` tag plus one, starting at `.0` for a new series. The series (`0.2` now) is set by hand in the workflow and raised for a big change; fixes after that only bump N. Either way the download links above always point at the newest build; it is stamped into the binary (`Yozora.exe version`) and the installer. Use the "Run workflow" button on the release workflow to republish without a code change.
 
 ### Code signing

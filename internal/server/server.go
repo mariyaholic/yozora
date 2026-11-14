@@ -4,6 +4,7 @@ package server
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
 	"encoding/base64"
@@ -87,14 +88,22 @@ func constantTimeEqual(a, b string) bool {
 func Handler(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	sources := config.ToggleKeys
-	writeSources := func(w http.ResponseWriter) {
-		cfg := d.Cfg.Get()
+	sourceBody := func(cfg *config.Config) map[string]any {
 		enabled := make(map[string]bool, len(sources))
 		for _, source := range sources {
 			enabled[source] = !player.IsBlocked(player.Track{Source: source}, cfg.Sources.Blocked)
 		}
+		return map[string]any{"name": "Yozora", "enabled": enabled, "order": cfg.Sources.Order}
+	}
+	sourceTag := func(cfg *config.Config) string {
+		b, _ := json.Marshal(sourceBody(cfg))
+		return fmt.Sprintf("\"%x\"", sha256.Sum256(b))
+	}
+	writeSources := func(w http.ResponseWriter) {
+		cfg := d.Cfg.Get()
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{"name": "Yozora", "enabled": enabled, "order": cfg.Sources.Order})
+		w.Header().Set("ETag", sourceTag(cfg))
+		_ = json.NewEncoder(w).Encode(sourceBody(cfg))
 	}
 	auth := func(h http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -130,6 +139,14 @@ func Handler(d Deps) http.Handler {
 		}
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Method != http.MethodGet {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
 		if d.Token == "" || !constantTimeEqual(r.URL.Query().Get("t"), d.Token) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
@@ -152,6 +169,10 @@ func Handler(d Deps) http.Handler {
 			"Language": ui.Language, "Lang": pageLang(ui.Language, r.Header.Get("Accept-Language")), "Version": version.Version})
 	})
 	mux.HandleFunc("/api/state", auth(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(stateResponse{Status: d.Engine.Status(), Spotify: d.spotifyState(), Restored: d.Cfg.Restored()})
 	}))
@@ -190,6 +211,26 @@ func Handler(d Deps) http.Handler {
 		case http.MethodGet:
 			writeSources(w)
 		case http.MethodPost:
+			if condition := r.Header.Get("If-Match"); condition != "" {
+				current, err := config.Load(d.CfgPath)
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				tag := sourceTag(current)
+				matched := false
+				for _, part := range strings.Split(condition, ",") {
+					part = strings.TrimSpace(part)
+					if part == "*" || part == tag {
+						matched = true
+						break
+					}
+				}
+				if !matched {
+					http.Error(w, "sources changed; reload before saving", http.StatusPreconditionFailed)
+					return
+				}
+			}
 			var payload struct {
 				Enabled map[string]*bool `json:"enabled"`
 				Order   []string         `json:"order"`
@@ -304,14 +345,14 @@ func Handler(d Deps) http.Handler {
 		case http.MethodGet:
 		case http.MethodPost:
 			var payload struct {
-				Enabled bool `json:"enabled"`
+				Enabled *bool `json:"enabled"`
 			}
-			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 256)).Decode(&payload); err != nil {
+			if !decodeStrict(w, r, 256, &payload) || payload.Enabled == nil {
 				http.Error(w, "invalid autostart payload", 400)
 				return
 			}
 			apply := sysutil.RemoveAutostart
-			if payload.Enabled {
+			if *payload.Enabled {
 				apply = sysutil.InstallAutostart
 			}
 			if err := apply(); err != nil {
