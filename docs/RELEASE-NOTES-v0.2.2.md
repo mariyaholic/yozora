@@ -5,12 +5,18 @@ the candidate and do not publish it.
 
 ## Updates
 
-- Add **Check for updates** in Settings. It asks for the latest release on
+- Add **Check for updates** in the control panel’s Startup section. It asks for the latest release on
   demand and reports whether an update is available or the check failed. This
   control is available in `v0.2.2` and later; `v0.2.1` continues to discover
   releases on its existing schedule.
 - Keep **Update now** as an explicit action. Yozora does not install a release
   until the user chooses to update.
+
+## Panel features
+
+- Add Default, Compact, Album and Detailed card presets. Loading a preset fills the unsaved form; the existing preview, Apply and Discard actions control persistence.
+- Export supported saved card, source and appearance preferences to a bounded personal backup. Restore through validation, preview and an explicit conditional import while preserving deliberately edited fields and excluded settings.
+- Download the existing redacted diagnostic report as a text file on request. No new resident worker, periodic feature polling or runtime dependency is introduced.
 
 ## Rollout
 

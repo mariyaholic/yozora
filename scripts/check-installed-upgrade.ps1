@@ -91,8 +91,50 @@ details = "ci-upgrade-marker-731"
   $baseStatus = Invoke-RestMethod -Uri ($endpoint.base_url + '/api/update') -Headers @{ 'X-Uika-Token' = $endpoint.token } -TimeoutSec 5
   if ($baseStatus.version -ne '0.2.1') { throw 'Installed baseline did not report version 0.2.1' }
   # The setup's restart decision depends on the tray host existing, not merely the dashboard.
-  Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class TrayProbe { [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c, string n); }'
-  Wait-For { [TrayProbe]::FindWindow('YozoraTrayHost', $null) -ne [IntPtr]::Zero } 30 'Baseline tray host did not start'
+  Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class TrayProbe {
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c, string n);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] public static extern IntPtr GetThreadDesktop(uint tid);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+  [DllImport("user32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+  static extern bool GetUserObjectInformation(IntPtr h, int index, StringBuilder info, int length, out int needed);
+  public static string Desktop(uint tid) {
+    IntPtr desktop = GetThreadDesktop(tid);
+    var name = new StringBuilder(256); int needed;
+    return desktop != IntPtr.Zero && GetUserObjectInformation(desktop, 2, name, 512, out needed) ? name.ToString() : "unavailable";
+  }
+}
+'@
+  try {
+    Wait-For {
+      $hostWindow = [TrayProbe]::FindWindow('YozoraTrayHost', $null)
+      if ($hostWindow -eq [IntPtr]::Zero) { return $false }
+      [uint32]$owner = 0
+      [void][TrayProbe]::GetWindowThreadProcessId($hostWindow, [ref]$owner)
+      return $owner -eq $old.Id
+    } 30 'Baseline tray host did not start on the runner desktop'
+  } catch {
+    # Emit only fixed tray outcomes, never the app log or dashboard session token.
+    $log = Join-Path $env:LOCALAPPDATA 'uika-resonance\logs\uika-resonance.log'
+    if (Test-Path $log) {
+      $logText = [string](Get-Content $log -Raw)
+      foreach ($outcome in @('create host window failed', 'no usable icon', 'taskbar not ready')) {
+        Write-Host "Tray log contains '$outcome': $($logText.Contains($outcome))"
+      }
+    } else { Write-Host 'Tray log unavailable' }
+    $runner = Get-Process -Id $PID
+    $daemon = Get-Process -Id $old.Id -ErrorAction SilentlyContinue
+    Write-Host "Runner session: $($runner.SessionId); runner thread desktop: $([TrayProbe]::Desktop([TrayProbe]::GetCurrentThreadId()))"
+    if ($daemon) {
+      $desktops = @($daemon.Threads | ForEach-Object { [TrayProbe]::Desktop([uint32]$_.Id) } | Sort-Object -Unique)
+      Write-Host "Daemon session: $($daemon.SessionId); daemon thread desktops: $($desktops -join ', ')"
+    } else { Write-Host 'Daemon exited before tray probe completed' }
+    throw
+  }
   if ($LiveUpdate) {
     $uri = $endpoint.base_url + '/api/update'
     $headers = @{ 'X-Uika-Token' = $endpoint.token }

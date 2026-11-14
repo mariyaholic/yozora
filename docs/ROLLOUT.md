@@ -44,7 +44,7 @@ After `v0.2.2` is the latest published release:
 5. Confirm the reported version is `0.2.2` and the recorded setting is still
    selected. The update is an in-place Setup upgrade; user settings should
    remain in place.
-6. On `0.2.2`, open Settings and press **Check for updates** once to confirm
+6. On `0.2.2`, open the control panel's **Startup** section and press **Check for updates** once to confirm
    the new manual check reports that Yozora is up to date. This control did not
    exist on `0.2.1`.
 
