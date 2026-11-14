@@ -36,6 +36,7 @@ let motion = 'system';
 let language = 'system';
 let version = 'dev';
 let themeHTTP = 200;
+let appearanceDelay = 0;
 const themePosts = [];
 let saveDelay = 0;
 let setup = { onboarded: true, client_id: '1556599139436077056', default_client_id: true };
@@ -59,6 +60,12 @@ const posts = [];
 // Discord card form and hidden rules. The preview mimics the server's template engine for the plain placeholders only.
 const cardDefaults = { paused_mode: 'show', type: 'listening', status_display: 'app', buttons_enabled: true, button_label: 'Listen along', spotify_search_fallback: true, details: '{{.Title}}', state: '{{.Artist}}', large_text: '{{.Album}}', small_text: '{{.Player}}', paused_details: '\u23f8 {{.Title}}' };
 let card = { ...cardDefaults };
+const cardPresets = ['default', 'compact', 'album', 'detailed'].map(id => ({id, settings:{...cardDefaults, ...(id === 'compact' ? {large_text:'', small_text:''} : id === 'album' ? {details:'{{.Album}}'} : id === 'detailed' ? {state:'{{.Artist}} / {{.Album}}'} : {})}}));
+const portable = () => ({format:'yozora-panel-settings', version:1, card:{...card}, sources:JSON.parse(JSON.stringify(sources)), appearance:{theme,motion,language}});
+let settingsGets = 0;
+let settingsGetHTTP = 200, settingsPreviewHTTP = 200, settingsImportHTTP = 200, settingsDelay = 0;
+const settingsPosts = [];
+
 let hiddenRules = [];
 let hiddenHTTP = 200;
 let cardGetHTTP = 200;
@@ -92,7 +99,7 @@ const server = http.createServer(async (req, res) => {
       if (saveDelay) await new Promise(resolve => setTimeout(resolve, saveDelay));
       if (cardGetHTTP === 200) card = cardPosts.at(-1);
     }
-    json({ card, defaults: cardDefaults, hidden: hiddenRules }, cardGetHTTP);
+    json({ card, defaults: cardDefaults, hidden: hiddenRules, presets:cardPresets }, cardGetHTTP);
   } else if (url.pathname === '/api/card/preview' && req.method === 'POST') {
     let body = '';
     for await (const chunk of req) body += chunk;
@@ -133,12 +140,27 @@ const server = http.createServer(async (req, res) => {
       res.setHeader('ETag', sourceTag(snapshot));
       json(snapshot, sourceGetHTTP);
     }
+  } else if (url.pathname === '/api/settings' && req.method === 'GET') {
+    settingsGets++; const value = portable(); res.setHeader('ETag', sourceTag(value)); json(value, settingsGetHTTP);
+  } else if ((url.pathname === '/api/settings/preview' || url.pathname === '/api/settings/import') && req.method === 'POST') {
+    let body = ''; for await (const chunk of req) body += chunk;
+    const posted = JSON.parse(body), isImport = url.pathname.endsWith('/import');
+    settingsPosts.push({isImport, body:posted, tag:req.headers['if-match']});
+    if (settingsDelay) await new Promise(resolve => setTimeout(resolve, settingsDelay));
+    const current = portable(), status = isImport ? settingsImportHTTP : settingsPreviewHTTP;
+    if (status !== 200) { json({error:'synthetic failure'}, status); return; }
+    if (posted.format !== 'yozora-panel-settings' || posted.version !== 1) { json({error:'invalid backup'}, 400); return; }
+    if (isImport && req.headers['if-match'] !== sourceTag(current)) { json({error:'changed'}, 412); return; }
+    res.setHeader('ETag', sourceTag(current));
+    if (!isImport) json({candidate:posted, summary:{card_changed:JSON.stringify(posted.card)!==JSON.stringify(current.card), sources_changed:JSON.stringify(posted.sources)!==JSON.stringify(current.sources), appearance_changed:JSON.stringify(posted.appearance)!==JSON.stringify(current.appearance)}});
+    else { card = posted.card; sources = posted.sources; ({theme,motion,language} = posted.appearance); json(posted); }
   } else if (url.pathname === '/api/appearance') {
     if (req.method === 'POST') {
       let body = '';
       for await (const chunk of req) body += chunk;
       const posted = JSON.parse(body);
       themePosts.push(posted);
+      if (appearanceDelay) await new Promise(resolve => setTimeout(resolve, appearanceDelay));
       if (themeHTTP === 200) { theme = posted.theme ?? theme; motion = posted.motion ?? motion; language = posted.language ?? language; }
     }
     json({ theme, themes: [], motion, motions: [], language, languages: [] }, themeHTTP);
@@ -1731,6 +1753,122 @@ const server = http.createServer(async (req, res) => {
     }
     language = 'system';
 
+    // Presets and portable settings: selections are drafts; imports need review and a fresh snapshot.
+    for (const lang of ['en', 'ja']) {
+      language = lang; theme = 'yozora'; motion = 'system'; card = {...cardDefaults};
+      sources = {enabled:Object.fromEntries([...canonical, 'youtube', 'youtube_tabs', 'twitch'].map(key => [key, !['browser', 'generic', 'youtube', 'youtube_tabs', 'twitch'].includes(key)])), order:[...canonical]};
+      settingsPosts.length = 0; cardPosts.length = 0;
+      const bc = await browser.newContext({viewport:{width:320,height:760}, acceptDownloads:true});
+      await bc.addInitScript(() => {
+        window.cspViolations = []; document.addEventListener('securitypolicyviolation', e => window.cspViolations.push(e.violatedDirective));
+        const originalText = File.prototype.text; window.pauseFileReads = false; window.delayedFileReads = [];
+        File.prototype.text = async function() { if (window.pauseFileReads) await new Promise(resolve => window.delayedFileReads.push(resolve)); return originalText.call(this); };
+        const originalFetch = window.fetch; window.previewAborts = 0;
+        window.fetch = (url, options) => { if (String(url).includes('/api/settings/preview') && options?.signal) options.signal.addEventListener('abort', () => window.previewAborts++, {once:true}); return originalFetch(url, options); };
+        const create = URL.createObjectURL.bind(URL), revoke = URL.revokeObjectURL.bind(URL); window.activeDownloads = new Set(); window.peakDownloads = 0;
+        URL.createObjectURL = blob => { const url = create(blob); window.activeDownloads.add(url); window.peakDownloads = Math.max(window.peakDownloads, window.activeDownloads.size); return url; };
+        URL.revokeObjectURL = url => { window.activeDownloads.delete(url); revoke(url); };
+      });
+      const b = await bc.newPage(); b.on('pageerror', e => errors.push(e.message));
+      await b.goto(`${origin}/?t=synthetic`); await ready(b); await b.waitForFunction(() => !document.getElementById('card-fields').disabled && document.querySelectorAll('#card-preset option').length === 5);
+      await b.locator('#card-preset').selectOption('compact'); await b.locator('#preset-load').click();
+      assert.equal(await b.locator('#cf-large_text').inputValue(), ''); assert.equal(cardPosts.length, 0);
+      await b.locator('#card-form').screenshot({path:path.join(output, `preset-draft-${lang}-320.png`)});
+      await b.locator('#cf-details').fill('my unsaved edit');
+      b.once('dialog', d => d.dismiss()); await b.locator('#card-preset').selectOption('album'); await b.locator('#preset-load').click();
+      assert.equal(await b.locator('#cf-details').inputValue(), 'my unsaved edit');
+      b.once('dialog', d => d.accept()); await b.locator('#preset-load').click();
+      assert.equal(await b.locator('#cf-details').inputValue(), '{{.Album}}'); assert.equal(cardPosts.length, 0);
+      await b.locator('#card-discard').click(); assert.equal(await b.locator('#cf-details').inputValue(), '{{.Title}}');
+      await b.locator('#card-preset').selectOption('compact'); await b.locator('#preset-load').click(); await b.locator('#card-save').click();
+      await b.waitForFunction(() => document.getElementById('card-save').disabled); assert.equal(card.large_text, '');
+      const [download] = await Promise.all([b.waitForEvent('download'), b.locator('#backup-export').click()]);
+      assert.equal(download.suggestedFilename(), 'yozora-panel-settings.json');
+      const exported = JSON.parse(fs.readFileSync(await download.path(), 'utf8')); assert.equal(exported.card.large_text, '');
+      await b.locator('.diagnostics summary').click();
+      const [diag] = await Promise.all([b.waitForEvent('download'), b.locator('#diag-save').click()]);
+      assert.equal(diag.suggestedFilename(), 'yozora-diagnostics.txt'); assert.equal(fs.readFileSync(await diag.path(), 'utf8'), diagnosticsReport);
+      const [diagAgain] = await Promise.all([b.waitForEvent('download'), b.locator('#diag-save').click()]);
+      assert.equal(fs.readFileSync(await diagAgain.path(), 'utf8'), diagnosticsReport);
+      assert.deepEqual(await b.evaluate(() => [window.peakDownloads, window.activeDownloads.size]), [1, 1]);
+      await b.evaluate(() => dispatchEvent(new Event('pagehide'))); assert.equal(await b.evaluate(() => window.activeDownloads.size), 0);
+      const setFile = (name, content) => b.locator('#backup-file').setInputFiles({name, mimeType:'application/json', buffer:Buffer.from(content)});
+      await setFile('bad.json', '{'); await b.waitForFunction(() => document.getElementById('backup-status').dataset.tone === 'error'); assert.equal(await b.locator('#backup-review').isHidden(), true);
+      await setFile('big.json', 'x'.repeat(65537)); await b.waitForFunction(() => document.getElementById('backup-status').dataset.tone === 'error' && !document.getElementById('backup-preview').disabled);
+      await setFile('wrong.json', JSON.stringify({...exported, version:2})); await b.waitForFunction(() => document.getElementById('backup-status').dataset.tone === 'error' && !document.getElementById('backup-preview').disabled);
+      const candidate = {...exported, card:{...exported.card, details:'Imported title'}, appearance:{theme:'pine', motion:'reduced', language:lang}};
+      if (lang === 'en') {
+        settingsDelay = 6000; await setFile('hung.json', JSON.stringify(candidate));
+        await b.waitForFunction(() => document.getElementById('backup-status').dataset.tone === 'error' && !document.getElementById('backup-preview').disabled, null, {timeout:8000});
+        assert.equal(await b.locator('#backup-review').isHidden(), true); settingsDelay = 0;
+      }
+      // Cancel/reselect while local file.text() is delayed: obsolete files must never be uploaded.
+      let previewCount = settingsPosts.filter(p => !p.isImport).length;
+      await b.evaluate(() => { window.pauseFileReads = true; });
+      await setFile('delayed.json', JSON.stringify({...candidate, card:{...candidate.card, details:'obsolete'}}));
+      await b.waitForFunction(() => window.delayedFileReads.length === 1);
+      await b.locator('#backup-cancel').click();
+      await b.evaluate(() => { window.pauseFileReads = false; window.delayedFileReads.splice(0).forEach(resolve => resolve()); });
+      await b.waitForTimeout(50); assert.equal(settingsPosts.filter(p => !p.isImport).length, previewCount);
+      await b.evaluate(() => { window.pauseFileReads = true; });
+      await setFile('delayed.json', JSON.stringify({...candidate, card:{...candidate.card, details:'obsolete'}}));
+      await b.waitForFunction(() => window.delayedFileReads.length === 1);
+      await b.evaluate(() => { window.pauseFileReads = false; });
+      await setFile('replacement.json', JSON.stringify(candidate)); await b.waitForSelector('#backup-review:not([hidden])');
+      await b.evaluate(() => window.delayedFileReads.splice(0).forEach(resolve => resolve()));
+      await b.waitForTimeout(50); assert.equal(settingsPosts.filter(p => !p.isImport).length, previewCount + 1);
+      assert.ok((await b.locator('#backup-content').textContent()).includes('Imported title'));
+      // Abort a request already in flight, both on cancel and when selecting another file.
+      settingsDelay = 1000;
+      let aborts = await b.evaluate(() => window.previewAborts);
+      await Promise.all([b.waitForRequest(r => r.url().includes('/api/settings/preview')), setFile('flight.json', JSON.stringify(candidate))]);
+      await b.locator('#backup-cancel').click(); await b.waitForFunction(n => window.previewAborts > n, aborts);
+      aborts = await b.evaluate(() => window.previewAborts);
+      await Promise.all([b.waitForRequest(r => r.url().includes('/api/settings/preview')), setFile('flight.json', JSON.stringify(candidate))]);
+      settingsDelay = 0; await setFile('replacement.json', JSON.stringify(candidate));
+      await b.waitForFunction(n => window.previewAborts > n, aborts); await b.waitForSelector('#backup-review:not([hidden])');
+      assert.ok((await b.locator('#backup-content').textContent()).includes('Imported title'));
+      settingsPreviewHTTP = 500; await setFile('valid.json', JSON.stringify(candidate)); await b.waitForFunction(() => document.getElementById('backup-status').dataset.tone === 'error' && !document.getElementById('backup-preview').disabled);
+      settingsPreviewHTTP = 200; await b.locator('#backup-preview').click(); await b.waitForSelector('#backup-review:not([hidden])');
+      settingsDelay = 250; await setFile('valid.json', JSON.stringify(candidate)); await b.locator('#backup-cancel').click();
+      await b.waitForTimeout(400); assert.equal(await b.locator('#backup-review').isHidden(), true); assert.equal(settingsPosts.filter(p => p.isImport).length, 0); settingsDelay = 0;
+      settingsDelay = 250;
+      await setFile('old.json', JSON.stringify({...candidate, card:{...candidate.card, details:'Old preview'}}));
+      await setFile('valid.json', JSON.stringify(candidate)); await b.waitForSelector('#backup-review:not([hidden])');
+      settingsDelay = 0;
+      assert.ok((await b.locator('#backup-content').textContent()).includes('Imported title'));
+      await b.locator('#backup').screenshot({path:path.join(output, `backup-review-${lang}-320.png`)});
+      appearanceDelay = 250;
+      await b.locator('#appearance-open').click(); await b.locator('.theme-option:has(input[name=theme][value=pine])').click();
+      await b.locator('#appearance').evaluate(dialog => dialog.close());
+      await b.locator('#backup-apply').click();
+      assert.equal(settingsPosts.filter(p => p.isImport).length, 0, 'an appearance save in flight blocks import');
+      await b.waitForFunction(() => !document.getElementById('theme-fields').disabled); appearanceDelay = 0;
+      await b.locator('#backup-preview').click(); await b.waitForSelector('#backup-review:not([hidden])');
+      await b.locator('#cf-state').fill('keep my card edit'); await b.locator('#source-browser').check();
+      b.once('dialog', d => d.dismiss()); await b.locator('#backup-apply').click(); assert.equal(settingsPosts.filter(p => p.isImport).length, 0);
+      settingsImportHTTP = 412; b.once('dialog', d => d.accept()); await b.locator('#backup-apply').click();
+      await b.waitForFunction(() => document.getElementById('backup-status').dataset.tone === 'error'); assert.equal(await b.locator('#backup-review').isHidden(), true);
+      assert.equal(await b.locator('#cf-state').inputValue(), 'keep my card edit');
+      settingsImportHTTP = 500; await b.locator('#backup-preview').click(); await b.waitForSelector('#backup-review:not([hidden])'); b.once('dialog', d => d.accept()); await b.locator('#backup-apply').click();
+      await b.waitForFunction(() => document.getElementById('backup-status').dataset.tone === 'error'); assert.equal(await b.locator('#backup-review').isHidden(), true);
+      settingsImportHTTP = 200; await b.locator('#backup-preview').click(); await b.waitForSelector('#backup-review:not([hidden])');
+      const readsBeforeImport = settingsGets; settingsGetHTTP = 500; settingsDelay = 250; b.once('dialog', d => d.accept()); await b.locator('#backup-apply').click(); await b.locator('#backup-apply').dispatchEvent('click');
+      await b.waitForFunction(() => !document.getElementById('backup-preview').disabled && document.getElementById('backup-status').dataset.tone !== 'error'); settingsDelay = 0;
+      assert.equal(settingsPosts.filter(p => p.isImport).length, 3); assert.ok(settingsPosts.filter(p => p.isImport).every(p => p.tag));
+      assert.equal(card.details, 'Imported title'); assert.equal(await b.locator('#cf-state').inputValue(), 'keep my card edit'); assert.equal(await b.locator('#source-browser').isChecked(), true);
+      assert.equal(await b.locator('#cf-details').inputValue(), 'Imported title', 'untouched field adopts imported value');
+      assert.equal(await b.evaluate(() => document.documentElement.dataset.theme), 'pine');
+      assert.notEqual(await b.locator('#backup-status').getAttribute('data-tone'), 'error', 'confirmed import is shown as saved');
+      assert.equal(settingsGets, readsBeforeImport, 'confirmed import does not depend on a follow-up GET');
+      await b.locator('#card-save').click(); await b.waitForFunction(() => document.getElementById('card-save').disabled); assert.equal(card.details, 'Imported title'); assert.equal(card.state, 'keep my card edit');
+      await b.locator('#source-reset').click(); assert.equal(await b.locator('#source-browser').isChecked(), false);
+      settingsGetHTTP = 200;
+      assert.equal(await b.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+      violations.push(...await b.evaluate(() => window.cspViolations)); await bc.close();
+      check(`${lang}: preset drafts, portable backup review, guarded import, failure recovery and downloads`);
+    }
+    language = 'system';
     violations.push(...await page.evaluate(() => window.cspViolations));
     assert.deepEqual(errors, [], 'no browser runtime exceptions');
     assert.deepEqual(violations, [], 'no production CSP violations');
