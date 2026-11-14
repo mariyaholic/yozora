@@ -39,7 +39,7 @@ A silent uninstall (`unins000.exe /VERYSILENT`) keeps all of this unless you add
 
 ## Updating
 
-Yozora asks GitHub for the latest release at most once a day (and once about two minutes after it starts, if a day has passed since the last check). The request goes to `api.github.com` with the user agent `Yozora/<version>` and nothing else about you or your machine; the time and result are remembered in `update.json` beside the other status files, so restarting Yozora does not check again. A local `dev` build never checks. To turn it off:
+Yozora automatically asks GitHub for the latest release about once a day, starting about two minutes after launch plus up to 90 seconds of jitter when a check is due. Starting with `0.2.2`, **Check for updates** in the control panel's **Startup** section requests a check immediately and reports the result or a retryable error. A check does not install anything. The request goes to `api.github.com` with the user agent `Yozora/<version>` and nothing else about you or your machine; the time and result are remembered in `update.json` beside the other status files, so restarting Yozora does not force another check. A local `dev` build never checks. To disable automatic and manual checks:
 
 ```toml
 [update]
@@ -49,6 +49,8 @@ check = false
 When a newer `v0.2.N` exists, the control panel shows "Yozora 0.2.N is available" at the top with **Update now** and **What's new** (the release page). It stays until you dismiss it, and returns for the next version. The tray menu gains an **Update to 0.2.N** row. Nothing is ever installed unless you press one of these.
 
 **Update now** downloads `Yozora-Setup.exe` and `SHA256SUMS.txt` from that exact release, only over HTTPS and only from github.com and GitHub's release download hosts (any other redirect is refused), up to 50 MB, into a fresh temporary folder. It checks the installer's SHA-256 against `SHA256SUMS.txt`, then runs it silently (`/VERYSILENT /SUPPRESSMSGBOXES /NORESTART`). Setup quits Yozora, replaces it and starts it again; the panel closes with it, so open it again from the tray. The panel shows downloading, checking and installing, and says why if anything fails, leaving your install untouched.
+
+The verified in-place path starts with an installation made by `Yozora-Setup.exe`. An EXE outside that installation, including a portable copy or the earlier development review ZIPs, is not the installed-update test baseline. To test the rollout, install the pinned [v0.2.1 Setup](https://github.com/mariyaholic/yozora/releases/download/v0.2.1/Yozora-Setup.exe), let its existing scheduler discover the newer release, and press **Update now**. The old `0.2.1` build has no manual check button and can retain a prior check for 24 hours. See [the rollout guide](docs/ROLLOUT.md) for the fresh-profile procedure and verification boundaries.
 
 How the download is trusted depends on the running Yozora, and `/api/update` reports it as `"verification"`:
 
