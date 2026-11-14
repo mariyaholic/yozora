@@ -97,6 +97,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 public static class TrayProbe {
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string c, string n);
+  // Pass a genuine null window-name pointer, as Inno Setup does. PowerShell
+  // converts $null for a string parameter to an empty string.
+  public static IntPtr FindTray() { return FindWindow("YozoraTrayHost", null); }
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
   [DllImport("user32.dll")] public static extern IntPtr GetThreadDesktop(uint tid);
   [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
@@ -111,7 +114,7 @@ public static class TrayProbe {
 '@
   try {
     Wait-For {
-      $hostWindow = [TrayProbe]::FindWindow('YozoraTrayHost', $null)
+      $hostWindow = [TrayProbe]::FindTray()
       if ($hostWindow -eq [IntPtr]::Zero) { return $false }
       [uint32]$owner = 0
       [void][TrayProbe]::GetWindowThreadProcessId($hostWindow, [ref]$owner)
