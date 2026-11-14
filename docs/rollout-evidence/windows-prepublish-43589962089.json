@@ -1,0 +1,22 @@
+{
+  "run_id": 43589962089,
+  "url": "https://github.com/mariyaholic/yozora/actions/runs/43589962089",
+  "job_id": 132432384785,
+  "job_url": "https://github.com/mariyaholic/yozora/actions/runs/43589962089/job/132432384785",
+  "pr_merge_sha": "24b271eec78ad692f747f4abe5bb4f04e3c08d88",
+  "workflow": ".github/workflows/verify.yml",
+  "windows_job": "failure",
+  "linux_logic_job": "success",
+  "failure_at": "2026-11-14T19:28:19+08:00",
+  "timezone": "Asia/Manila (UTC+08:00)",
+  "completed_step": "Smoke test installed upgrade from v0.2.1",
+  "failed_assertion": "Baseline tray host did not start",
+  "failure_boundary": "The script reached the tray-host probe after downloading and checksum-checking the published v0.2.1 assets, installing the baseline Setup, verifying the installed executable, and confirming the local service reported version 0.2.1. It did not reach candidate replacement/restart assertions.",
+  "preceding_windows_steps": {
+    "native_package_tests": "success",
+    "race_stress": "success",
+    "candidate_versioned_build": "success (0.2.2)",
+    "candidate_installer_build": "success"
+  },
+  "source": "GitHub Actions workflow job log and step summary; see linked job."
+}

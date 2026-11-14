@@ -69,6 +69,26 @@ func cardFromConfig(c *config.Config) cardSettings {
 		c.Template.Details, c.Template.State, c.Template.LargeText, c.Template.SmallText, c.Template.Paused}
 }
 
+type cardPreset struct {
+	ID       string       `json:"id"`
+	Settings cardSettings `json:"settings"`
+}
+
+// Presets are complete forms, based on the same defaults used by Reset. Selecting
+// one is only a form edit; saving still goes through the normal card endpoint.
+func cardPresets() []cardPreset {
+	defaults := cardFromConfig(config.Defaults())
+	compact := defaults
+	compact.LargeText, compact.SmallText = "", ""
+	album := defaults
+	album.Details = "{{if .Album}}{{.Album}}{{else}}{{.Title}}{{end}}"
+	album.LargeText = "{{.Title}}"
+	detailed := defaults
+	detailed.State = "{{.Artist}}{{if .Album}} · {{.Album}}{{end}}"
+	detailed.LargeText = "{{if .TrackNumber}}#{{.TrackNumber}}{{if .Album}} · {{end}}{{end}}{{.Album}}"
+	return []cardPreset{{"default", defaults}, {"compact", compact}, {"album", album}, {"detailed", detailed}}
+}
+
 // decodeCard reads and validates a whole card form. The returned error is safe to show.
 func decodeCard(body io.Reader) (cardSettings, error) {
 	var p cardPayload
@@ -161,7 +181,7 @@ func registerCard(mux *http.ServeMux, d Deps, configMu *sync.Mutex, auth func(ht
 	}
 	cardState := func() map[string]any {
 		cfg := d.Cfg.Get()
-		return map[string]any{"card": cardFromConfig(cfg), "defaults": cardFromConfig(config.Defaults()), "hidden": hiddenList(cfg),
+		return map[string]any{"card": cardFromConfig(cfg), "defaults": cardFromConfig(config.Defaults()), "presets": cardPresets(), "hidden": hiddenList(cfg),
 			"limits": map[string]int{"template": config.MaxTemplate, "label": cardtemplate.MaxButtonLabel, "rules": config.MaxHiddenRules, "field": config.MaxHiddenField}}
 	}
 	// Saving replaces the whole card form or nothing; the engine reads the config on its next

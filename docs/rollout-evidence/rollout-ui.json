@@ -1,0 +1,37 @@
+{
+  "ui_suite": {
+    "result": "passed",
+    "passed_checks": 55,
+    "page_errors": [],
+    "csp_violations": [],
+    "revision": "12b766f",
+    "completed_at": "2026-11-14T19:26:36+08:00",
+    "timezone": "Asia/Manila (UTC+08:00)",
+    "runtime": {
+      "node": "v24.19.0",
+      "chromium": "154.0.8037.57",
+      "os": "Debian GNU/Linux 13"
+    },
+    "results": "browser-results.json",
+    "full_run_screenshots": "/tmp/yozora-rollout-final-ui (session workspace only)"
+  },
+  "manual_check_capture_only": {
+    "result": "captured",
+    "captured_at": "2026-11-14T19:29:24+08:00",
+    "timezone": "Asia/Manila (UTC+08:00)",
+    "synthetic_local_fixture": true,
+    "description": "Capture-only run of the existing Chromium fixture; it returned after rendering the two manual-check states. No live daemon, GitHub request, or Windows WebView2 was used.",
+    "files": [
+      {
+        "path": "dist/rollout-ui-evidence/manual-check-en.png",
+        "visible_status": "Yozora is up to date.",
+        "sha256": "dc649835dd44de6e828425fcfe126e858c3ba0df21c1f31810572b2263c2cde5"
+      },
+      {
+        "path": "dist/rollout-ui-evidence/manual-check-ja.png",
+        "visible_status": "Yozora は最新です。",
+        "sha256": "b1d838ec2bd186e09feeb8b93e28cacef5eaa0313cc923105963b4f5daed89c2"
+      }
+    ]
+  }
+}

@@ -177,6 +177,123 @@ func TestFailedCheckRetriesSoonerAndKeepsLastResult(t *testing.T) {
 	}
 }
 
+func TestManualCheckReschedulesExistingTimer(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s, calls := newTestService(t, "0.1.2", true)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go s.Run(ctx)
+		time.Sleep(StartupDelay + time.Second)
+		synctest.Wait()
+		time.Sleep(time.Hour)
+		if err := s.CheckNow(ctx); err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+		time.Sleep(Interval - time.Hour + time.Second)
+		synctest.Wait()
+		if calls.Load() != 2 {
+			t.Fatalf("old timer caused an extra check: %d", calls.Load())
+		}
+		time.Sleep(time.Hour)
+		synctest.Wait()
+		if calls.Load() != 3 {
+			t.Fatalf("timer did not follow manual check: %d", calls.Load())
+		}
+		cancel()
+		synctest.Wait()
+	})
+}
+
+func TestManualCheckFailureReschedulesRetry(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s, calls := newTestService(t, "0.1.2", true)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go s.Run(ctx)
+		time.Sleep(StartupDelay + time.Second)
+		synctest.Wait()
+		time.Sleep(time.Minute)
+		s.fetch = func(context.Context) (string, error) { calls.Add(1); return "", http.ErrHandlerTimeout }
+		if err := s.CheckNow(ctx); err == nil {
+			t.Fatal("expected failure")
+		}
+		synctest.Wait()
+		time.Sleep(RetryAfterFailure + time.Second)
+		synctest.Wait()
+		if calls.Load() != 3 {
+			t.Fatalf("retry calls = %d", calls.Load())
+		}
+		if v, ok := s.Available(); !ok || v != "0.1.9" {
+			t.Fatalf("last successful result lost: %q, %v", v, ok)
+		}
+		cancel()
+		synctest.Wait()
+	})
+}
+
+func TestCheckDisabledAndExclusive(t *testing.T) {
+	for _, c := range []struct {
+		version string
+		enabled bool
+	}{{"dev", true}, {"0.1.2", false}} {
+		s, calls := newTestService(t, c.version, c.enabled)
+		if err := s.CheckNow(context.Background()); err != ErrCheckDisabled || calls.Load() != 0 {
+			t.Fatalf("disabled: %v, %d calls", err, calls.Load())
+		}
+	}
+	s, _ := newTestService(t, "0.1.2", true)
+	entered, release := make(chan struct{}), make(chan struct{})
+	s.fetch = func(ctx context.Context) (string, error) {
+		close(entered)
+		select {
+		case <-release:
+			return "0.1.9", nil
+		case <-ctx.Done():
+			return "", ctx.Err()
+		}
+	}
+	done := make(chan error, 1)
+	go func() { done <- s.CheckNow(context.Background()) }()
+	<-entered
+	if !s.Status().Checking {
+		t.Fatal("check not reported as in progress")
+	}
+	if err := s.CheckNow(context.Background()); err != ErrBusy {
+		t.Fatalf("overlapping check: %v", err)
+	}
+	if err := s.StartInstall(); err != ErrBusy {
+		t.Fatalf("install during check: %v", err)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.phase = PhaseDownloading
+	s.mu.Unlock()
+	if err := s.CheckNow(context.Background()); err != ErrBusy {
+		t.Fatalf("check during install: %v", err)
+	}
+}
+
+func TestCheckHasDeadline(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		s, _ := newTestService(t, "0.1.2", true)
+		s.fetch = func(ctx context.Context) (string, error) { <-ctx.Done(); return "", ctx.Err() }
+		done := make(chan error, 1)
+		go func() { done <- s.CheckNow(context.Background()) }()
+		time.Sleep(checkTimeout + time.Second)
+		synctest.Wait()
+		if err := <-done; err != context.DeadlineExceeded {
+			t.Fatalf("check deadline: %v", err)
+		}
+		if s.Status().Checking {
+			t.Fatal("timed out check retained its slot")
+		}
+	})
+}
+
 func TestStateIgnoresGarbage(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "update.json")
 	os.WriteFile(p, []byte(`{"latest":"not a version","checked_at":"nope"`), 0o600)

@@ -1,0 +1,35 @@
+{
+  "run_id": 43590379422,
+  "url": "https://github.com/mariyaholic/yozora/actions/runs/43590379422",
+  "job_id": 132433640801,
+  "job_url": "https://github.com/mariyaholic/yozora/actions/runs/43590379422/job/132433640801",
+  "workflow": ".github/workflows/verify.yml",
+  "result": "failure",
+  "failure_at": "2026-11-14T19:33:29+08:00",
+  "timezone": "Asia/Manila (UTC+08:00)",
+  "failed_step": "Smoke test installed upgrade from v0.2.1",
+  "failure": "Baseline tray host did not start on the runner desktop",
+  "diagnostic_observations": {
+    "runner_session": 2,
+    "runner_desktop": "Default",
+    "daemon_session": 2,
+    "daemon_thread_desktops": [
+      "Default"
+    ],
+    "tray_log_indicators": {
+      "create host window failed": false,
+      "no usable icon": false,
+      "taskbar not ready": false
+    }
+  },
+  "earlier_steps": {
+    "native_package_tests": "success",
+    "race_stress": "success",
+    "candidate_versioned_build": "success (0.2.2)",
+    "candidate_installer_build": "success",
+    "linux_logic_job": "success",
+    "baseline_service_version": "0.2.1"
+  },
+  "boundary": "The run reached the baseline tray-host probe after the isolated 0.2.1 service reported its version. Candidate Setup replacement/restart assertions did not run.",
+  "source": "GitHub Actions step summary and Windows job log; see linked job."
+}

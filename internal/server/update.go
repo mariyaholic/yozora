@@ -4,6 +4,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"uika-resonance/internal/update"
@@ -25,6 +26,25 @@ func registerUpdate(mux *http.ServeMux, d Deps, auth func(http.HandlerFunc) http
 	mux.HandleFunc("/api/update", auth(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method", 405)
+			return
+		}
+		write(w, http.StatusOK)
+	}))
+	mux.HandleFunc("/api/update/check", auth(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
+		if d.Update == nil {
+			http.Error(w, "updates are not available in this build", http.StatusConflict)
+			return
+		}
+		if err := d.Update.CheckNow(r.Context()); err != nil {
+			code := http.StatusBadGateway
+			if errors.Is(err, update.ErrBusy) || errors.Is(err, update.ErrCheckDisabled) {
+				code = http.StatusConflict
+			}
+			http.Error(w, err.Error(), code)
 			return
 		}
 		write(w, http.StatusOK)

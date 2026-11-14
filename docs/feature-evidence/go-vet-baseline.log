@@ -1,0 +1,4 @@
+internal/credman/credman.go:75:19: possible misuse of unsafe.Pointer
+internal/credman/credman.go:79:30: possible misuse of unsafe.Pointer
+internal/smtc/thumbnail_test.go:29:54: possible misuse of unsafe.Pointer
+internal/wrt/wrt.go:78:32: possible misuse of unsafe.Pointer

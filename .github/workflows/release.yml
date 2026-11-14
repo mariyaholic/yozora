@@ -18,6 +18,7 @@ on:
       - 'internal/server/fonts/**'
       - 'internal/tray/*.ico'
       - '.github/workflows/release.yml'
+      - 'scripts/check-installed-upgrade.ps1'
   workflow_dispatch:
 
 permissions:
@@ -29,7 +30,11 @@ concurrency:
 
 jobs:
   windows:
+    if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
+    timeout-minutes: 90
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,15 +44,21 @@ jobs:
           go-version-file: go.mod
       - name: Version
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # $series is the major.minor line; raise it by hand for a big change. The next
           # release is the highest v<series>.N tag + 1, or v<series>.0 for a new series.
           # (Counting tags, not the run number, which collided with the hand-made v0.1.1.)
           $series = '0.2'
+          $drafts = gh release list --repo '${{ github.repository }}' --limit 1000 --json tagName,isDraft | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Could not inspect releases' }
+          if (@($drafts | Where-Object { $_.isDraft -and $_.tagName -match '^v0\.2\.\d+$' }).Count -gt 0) { throw 'An unfinished 0.2 release draft requires review before another release' }
           git fetch --tags --force
+          if ($LASTEXITCODE -ne 0) { throw 'Could not fetch tags' }
           $pattern = '^v' + [regex]::Escape($series) + '\.(\d+)$'
           $n = git tag --list "v$series.*" | ForEach-Object { if ($_ -match $pattern) { [int]$Matches[1] } } | Sort-Object | Select-Object -Last 1
-          if ($null -eq $n) { $n = -1 }
+          if ($null -eq $n -or $n -lt 1 -or -not (git tag --list 'v0.2.1')) { throw 'Published v0.2.1 baseline tag is missing' }
           $v = "$series.$($n + 1)"
           Write-Host "Next version: v$v"
           "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
@@ -55,7 +66,7 @@ jobs:
         run: go test ./...
       - name: Build
         run: go build -trimpath -ldflags "-s -w -H=windowsgui -X uika-resonance/internal/version.Version=${{ steps.version.outputs.version }}" -o Yozora.exe ./cmd/yozora
-      - name: Check GUI subsystem and version
+      - name: Check GUI subsystem
         run: |
           # A console-subsystem exe opens a terminal window on double-click (the v0.1.1 daemon did). Require GUI (2).
           $b = [IO.File]::ReadAllBytes("Yozora.exe")
@@ -63,9 +74,6 @@ jobs:
           $sub = [BitConverter]::ToUInt16($b, $pe + 24 + 68)
           if ($sub -ne 2) { throw "Yozora.exe PE subsystem is $sub, expected 2 (Windows GUI)" }
           Write-Host "Yozora.exe PE subsystem: $sub (Windows GUI)"
-          # The -X path must match internal/version, or the binary silently stays "dev".
-          $text = [Text.Encoding]::ASCII.GetString($b)
-          if (-not $text.Contains("${{ steps.version.outputs.version }}")) { throw "version ${{ steps.version.outputs.version }} not stamped into Yozora.exe" }
 
       # Code signing (SignPath Foundation). Inert until the owner adds the
       # SIGNPATH_API_TOKEN secret and the SIGNPATH_ORGANIZATION_ID variable;
@@ -145,6 +153,9 @@ jobs:
         run: |
           Copy-Item Yozora.exe dist\Yozora.exe
           Get-ChildItem dist -File | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Set-Content dist\SHA256SUMS.txt
+      - name: Smoke test installed upgrade and signing continuity
+        timeout-minutes: 10
+        run: ./scripts/check-installed-upgrade.ps1 -CandidateSetup dist/Yozora-Setup.exe -CandidateExe dist/Yozora.exe -Version '${{ steps.version.outputs.version }}' -RequireSigningContinuity
       - name: Winget manifests
         run: |
           # Fills packaging/winget templates for this release. Uploaded as a build
@@ -166,7 +177,41 @@ jobs:
           name: winget-manifests-${{ steps.version.outputs.version }}
           path: winget/
           if-no-files-found: error
-      - name: Publish
+      - name: Stage and verify release assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "v${{ steps.version.outputs.version }}" dist/Yozora-Setup.exe dist/Yozora.exe dist/SHA256SUMS.txt --target "${{ github.sha }}" --title "Yozora ${{ steps.version.outputs.version }}" --generate-notes --latest
+        run: |
+          $tag = "v${{ steps.version.outputs.version }}"
+          gh release create $tag dist/Yozora-Setup.exe dist/Yozora.exe dist/SHA256SUMS.txt --target "${{ github.sha }}" --title "Yozora ${{ steps.version.outputs.version }}" --generate-notes --draft
+          if ($LASTEXITCODE -ne 0) { throw 'Draft creation failed' }
+          New-Item -ItemType Directory -Force uploaded | Out-Null
+          gh release download $tag --dir uploaded
+          if ($LASTEXITCODE -ne 0) { throw 'Draft asset download failed' }
+          $names = @('Yozora-Setup.exe', 'Yozora.exe', 'SHA256SUMS.txt')
+          $actual = @(Get-ChildItem uploaded -File | Select-Object -ExpandProperty Name)
+          if ($actual.Count -ne $names.Count) { throw 'Unexpected draft asset count' }
+          foreach ($name in $names) {
+            if ($name -notin $actual -or (Get-FileHash "dist/$name").Hash -ne (Get-FileHash "uploaded/$name").Hash) { throw "Draft asset mismatch: $name" }
+          }
+      - name: Publish verified draft as latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit "v${{ steps.version.outputs.version }}" --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Publishing verified draft failed' }
+
+  live-update:
+    needs: windows
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download published assets
+        run: |
+          New-Item -ItemType Directory -Force published | Out-Null
+          foreach ($name in @('Yozora-Setup.exe', 'Yozora.exe', 'SHA256SUMS.txt')) {
+            Invoke-WebRequest -Uri "https://github.com/${{ github.repository }}/releases/download/v${{ needs.windows.outputs.version }}/$name" -OutFile "published/$name" -TimeoutSec 120
+          }
+      - name: Smoke test published one-click update from v0.2.1
+        timeout-minutes: 12
+        run: ./scripts/check-installed-upgrade.ps1 -CandidateSetup published/Yozora-Setup.exe -CandidateExe published/Yozora.exe -Version '${{ needs.windows.outputs.version }}' -RequireSigningContinuity -LiveUpdate
