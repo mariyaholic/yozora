@@ -1,0 +1,23 @@
+{
+  "tag": "v0.2.2",
+  "url": "https://github.com/mariyaholic/yozora/releases/tag/v0.2.2",
+  "commit": "1871ac6795d224f6af78c32268f0275cf5cd464a",
+  "published_at": "2026-11-14T19:42:04+08:00",
+  "independently_downloaded_at": "2026-11-14T19:42:52+08:00",
+  "timezone": "Asia/Manila (UTC+08:00)",
+  "public_latest": true,
+  "draft": false,
+  "release_run": "https://github.com/mariyaholic/yozora/actions/runs/43591163144",
+  "prepublication_job": 132435981787,
+  "installed_upgrade_result": "success (0.2.1 -> 0.2.2, live updater false)",
+  "signature_mode": "checksum (baseline and candidate unsigned; signing configuration absent)",
+  "exact_asset_count": 3,
+  "uploaded_asset_redownload_comparison": "passed before publication",
+  "independent_checksum_verification": "both assets passed sha256sum -c SHA256SUMS.txt",
+  "assets": [
+    {"name": "Yozora.exe", "bytes": 12539392, "sha256": "8d7b280f466eeaead729854124e413d056b88876e1bc2b489398978d2e0adf30"},
+    {"name": "Yozora-Setup.exe", "bytes": 6414968, "sha256": "d65d9c2d4a5de65a886c8215f8bb93f3103ee991b6c74f5c5f4d7c5450265df5"},
+    {"name": "SHA256SUMS.txt", "bytes": 162, "sha256": "fe180fc2f9e1ec56e660af9285d0d92ce6d270fcc53f7c3e04bbf79ee330b0c7"}
+  ],
+  "boundary": "Publication and byte verification. See the separate live-update record for actual public updater discovery/install."
+}

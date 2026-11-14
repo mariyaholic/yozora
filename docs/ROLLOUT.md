@@ -88,12 +88,22 @@ On 14 November 2026, the 55-check Chromium suite passed on revision `12b766f`
 at 19:26:36 Asia/Manila (UTC+08:00), with no page errors or CSP violations.
 English and Japanese manual-check states were captured separately at 19:29:24
 in the same synthetic fixture; the captures do not establish native WebView2 or
-live updater behavior. Hosted Windows runs [43589962089](https://github.com/mariyaholic/yozora/actions/runs/43589962089)
-and [43590379422](https://github.com/mariyaholic/yozora/actions/runs/43590379422)
-passed native package tests, race stress, candidate build/installer build and
-Linux logic. Both installed-upgrade smokes failed before candidate replacement:
-the first reported `Baseline tray host did not start` at 19:28:19; the follow-up
-reported `Baseline tray host did not start on the runner desktop` at 19:33:29.
-The follow-up saw runner and daemon in session 2 on the `Default` desktop and
-none of three tray startup error strings in the tray log. Post-publish and
-human update checks remain pending.
+live updater behavior.
+
+The final native implementation `a0f3451` passed [run 43590940646](https://github.com/mariyaholic/yozora/actions/runs/43590940646)
+at 19:39:48. It installed the real public `0.2.1` Setup, verified its tray
+ownership and API version, replaced it with `0.2.2`, verified the new PID,
+installed hash and API version, and retained the exact settings file. Windows
+package/race/build/installer and Linux checks passed. Two earlier failures
+remain recorded in the evidence index; their PowerShell tray-title conversion
+was corrected without weakening the restart assertion.
+
+PR #16 merged as `1871ac6`. [Release run 43591163144](https://github.com/mariyaholic/yozora/actions/runs/43591163144)
+repeated the installed-upgrade and applicable signing gates, verified staged
+assets, and published `v0.2.2` as latest at 19:42:04. Independent downloads
+matched both published checksums; the tag points to that merge commit.
+The separate public updater passed at 19:45:58: the authentic `0.2.1` app
+naturally discovered public `0.2.2` at 19:45:55, downloaded and verified the
+installer, installed it through the authenticated update action, restarted
+with the intended bytes/API version, and retained the exact configuration.
+The visible human WebView2 click remains a separate observation to record.

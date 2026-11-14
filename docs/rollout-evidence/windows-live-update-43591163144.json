@@ -1,0 +1,28 @@
+{
+  "run_id": 43591163144,
+  "url": "https://github.com/mariyaholic/yozora/actions/runs/43591163144",
+  "job_id": 132436306176,
+  "revision": "1871ac6795d224f6af78c32268f0275cf5cd464a",
+  "result": "success",
+  "baseline": "0.2.1",
+  "target": "0.2.2",
+  "live_updater": true,
+  "baseline_installed_at": "2026-11-14T19:42:24+08:00",
+  "naturally_discovered_at": "2026-11-14T19:45:55+08:00",
+  "completed_at": "2026-11-14T19:45:58+08:00",
+  "timezone": "Asia/Manila (UTC+08:00)",
+  "discovery": "Authentic published 0.2.1 executable; fresh isolated profile; natural scheduled check; production GitHub URLs; no seeded update state",
+  "install_trigger": "Authenticated POST /api/update/install after natural discovery; the same local action used by Update now",
+  "verified": [
+    "actual public baseline installation and checksums",
+    "baseline running API version and real tray ownership",
+    "automatic discovery of public latest 0.2.2",
+    "real updater HTTPS download and checksum validation",
+    "old process exit and installed executable equal to public 0.2.2 asset",
+    "new serve PID from same installation directory",
+    "authenticated restarted service reports 0.2.2",
+    "exact configuration hash and marker retained"
+  ],
+  "signature_mode": "checksum (unsigned baseline and target)",
+  "boundary": "Native updater/installer integration through its real HTTP action. Browser fixtures separately cover the button. A human Windows WebView2 click remains unobserved."
+}

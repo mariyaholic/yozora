@@ -1,6 +1,6 @@
 # Rollout learnings
 
-Status: static review accepted the rollout design. Native installed-upgrade verification is still pending; the current baseline tray-probe failure is being diagnosed. No successful live one-click rollout is claimed here.
+Status: Astra accepted the final rollout design and six transferable practices. Native installed-upgrade verification passed on final implementation `a0f3451` in [run 43590940646](https://github.com/mariyaholic/yozora/actions/runs/43590940646). PR #16 merged as `1871ac6`; `v0.2.2` was published, and authentic public `0.2.1 → 0.2.2` updater verification passed in [release run 43591163144](https://github.com/mariyaholic/yozora/actions/runs/43591163144).
 
 ## Reusable conclusions for future Uika work
 
@@ -14,14 +14,14 @@ Status: static review accepted the rollout design. Native installed-upgrade veri
 
 ## Yozora-specific application
 
-- Published `v0.2.1` remains the authentic baseline; PR16 targets the next patch, expected `v0.2.2`.
+- Published `v0.2.1` remains the authentic baseline; PR16 shipped `v0.2.2` without replacing the old tag or assets.
 - The smoke installs the actual public 0.2.1 Setup and validates it against public `SHA256SUMS.txt`; it checks installed bytes against public `Yozora.exe`.
 - The private `dashboard.json` identifies the running local endpoint and PID. `/api/update` supplies the effective version. The session token is sent in `X-Uika-Token` and must not appear in logs or uploaded artifacts.
 - Prepublication smoke invokes the candidate Setup locally and requires the old process to exit, a new installed process to start, the intended version and executable hash, and unchanged fixture configuration. Postpublication smoke uses fresh baseline state, waits for natural discovery, and sends the real `/api/update/install` POST.
-- Setup decides whether to restart using the `YozoraTrayHost` window. Its title is `Yozora tray host`. The failing PowerShell probe may have passed an empty title instead of NULL; the corrected C# wrapper uses a true null and retains the owning-PID assertion. This explanation awaits native confirmation.
+- Setup decides whether to restart using the `YozoraTrayHost` window. Its title is `Yozora tray host`. PowerShell's string conversion passed an empty title instead of NULL; the corrected C# wrapper uses a true null and retains the owning-PID assertion. The final native smoke passed with the actual host and independent restart checks.
 - PowerShell's `Start-Process -Wait` waits for the entire process tree, including a daemon intentionally restarted by Setup. The fixture waits for Setup's own process with a 180-second limit, checks its exit code, then independently verifies the restarted daemon. A bounded wait must target the operation's actual completion boundary.
 - Setup-installed users are the supported test path. Existing 0.2.1 may wait its remembered daily check interval; a fresh profile waits about two minutes plus jitter. A new manual-check button only helps after updating. Dev builds disable updates, and portable executables outside the install directory are not proven to upgrade in place.
 
-## Pending evidence
+## Completion limits
 
-Native Windows verification must confirm the corrected fixture, real installer handoff, version/hash and settings preservation on the final commit. Publication must then be followed by the live baseline-to-release update smoke before claiming completed operational rollout.
+Native Windows verification confirmed the corrected fixture, real installer handoff, version/hash and exact settings preservation on the final implementation. The postpublication smoke then proved natural public discovery and the real updater's download, verification, install and restart. A human WebView2 click, live music-provider behavior and Windows process-tree memory parity remain separate observations. The evidence index retains the original failures and final success records.

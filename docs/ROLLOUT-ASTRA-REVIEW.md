@@ -26,11 +26,11 @@ The prepublication test runs the real baseline executable installed by its publi
 - The manual-check route requires POST and authentication, preserves disabled/dev behavior, bounds checks by a deadline, and does not install. Service locking prevents concurrent checks/installs and avoids the former unlocked available-version selection. The scheduler is notified after a manual check so its next check follows the new success/failure timestamp.
 - The panel prevents duplicate check/install actions, ignores stale polls after a newer action, exposes check errors, and reveals a previously dismissed update after an explicit successful check. Old 0.2.1 binaries cannot gain this new button before upgrading.
 
-## Evidence still required
+## Execution evidence
 
-Before merge: successful native Windows verify run including real baseline install, candidate replacement/restart, running version and config preservation; passing relevant updater/API/browser tests on the final commit.
+Before merge, final implementation `a0f3451` passed [native verify run 43590940646](https://github.com/mariyaholic/yozora/actions/runs/43590940646), including real baseline install, candidate replacement/restart, running version, byte identity and exact config preservation. Relevant updater/API/race tests and the 55-check browser suite passed. Astra accepted the final bounded installer-wait helper and approved merging the verified head.
 
-Before claiming complete rollout: successful release job with signature/checksum gates, published tag targeting the intended merge commit, public latest and all three assets matching expected hashes, then successful separate live-update job from authentic 0.2.1.
+After merge, [release run 43591163144](https://github.com/mariyaholic/yozora/actions/runs/43591163144) passed the applicable signature/checksum gates, verified staged assets and published `v0.2.2` targeting `1871ac6` as latest. Independent public downloads matched all published hashes. Its separate live-update job passed authentic `0.2.1 → 0.2.2` natural discovery, real download/install/restart and exact settings preservation at 19:45:58 Asia/Manila on 14 November 2026.
 
 The CI smoke proves the native HTTP action and installer handoff. It is not a native WebView mouse/rendering test; browser UI checks provide separate button coverage. Native execution may reveal Windows runner or Inno environment assumptions and must be treated as authoritative.
 
