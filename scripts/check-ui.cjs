@@ -54,7 +54,11 @@ const diagnosticsReport = 'Yozora diagnostics\nVersion: 0.1.42\nWindows: 10.0.22
 const noUpdate = { version:'0.1.42', latest:'', available:false, url:'', verification:'checksum', check_enabled:true, install:{ state:'idle' } };
 let updateState = { ...noUpdate };
 let updateInstallHTTP = 202;
+let updateStatusHTTP = 200;
 const updatePosts = [];
+const updateCheckPosts = [];
+let updateCheckHTTP = 200;
+let updateCheckHold = null;
 const spotifyPosts = [];
 const posts = [];
 // Discord card form and hidden rules. The preview mimics the server's template engine for the plain placeholders only.
@@ -213,12 +217,17 @@ const server = http.createServer(async (req, res) => {
   } else if (url.pathname === '/api/diagnostics') {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end(diagnosticsReport);
+  } else if (url.pathname === '/api/update/check' && req.method === 'POST') {
+    updateCheckPosts.push(Date.now());
+    if (updateCheckHold) { updateCheckHold.mark(); await updateCheckHold.wait; }
+    if (updateCheckHTTP !== 200) { res.writeHead(updateCheckHTTP, { 'Content-Type': 'text/plain' }); res.end('offline\n'); return; }
+    json(updateState);
   } else if (url.pathname === '/api/update/install' && req.method === 'POST') {
     updatePosts.push(Date.now());
     if (updateInstallHTTP !== 202) { res.writeHead(updateInstallHTTP, { 'Content-Type': 'text/plain' }); res.end('an update is already in progress\n'); return; }
     updateState = { ...updateState, install:{ state:'downloading' } };
     json(updateState, 202);
-  } else if (url.pathname === '/api/update') json(updateState);
+  } else if (url.pathname === '/api/update') json(updateState, updateStatusHTTP);
   else if (url.pathname === '/api/autostart') {
     if (req.method === 'POST') {
       let body = '';
@@ -1305,8 +1314,39 @@ const server = http.createServer(async (req, res) => {
       const releasePage = 'https://github.com/mariyaholic/yozora/releases/tag/v0.1.43';
       await pollUpdate(l);
       assert.equal(await l.locator('#update-note').isHidden(), true, 'no update, no line');
+      updateStatusHTTP = 503;
+      await pollUpdate(l);
+      assert.equal(await text('#update-check-status'), 'Could not read update status: HTTP 503');
+      updateStatusHTTP = 200;
+      await pollUpdate(l);
+      assert.equal(await text('#update-check-status'), '', 'status recovers after a successful read');
+      await l.locator('#update-check').click();
+      await l.waitForFunction(() => document.getElementById('update-check-status').textContent === 'Yozora is up to date.');
+      assert.equal(updateCheckPosts.length, 1);
+      assert.equal(updatePosts.length, 0, 'checking never installs');
+      updateCheckHTTP = 502;
+      await l.locator('#update-check').click();
+      await l.waitForFunction(() => document.getElementById('update-check-status').textContent.includes('Could not check for updates: offline'));
+      assert.equal(await l.locator('#update-check').isEnabled(), true, 'a failed check can be retried');
+      updateCheckHTTP = 200;
+      updateCheckHold = holdSettingsPreview();
+      await l.locator('#update-check').click({noWaitAfter:true});
+      await updateCheckHold.entered;
+      assert.equal(await l.locator('#update-check').isDisabled(), true);
+      await l.evaluate(() => document.getElementById('update-check').click());
+      assert.equal(updateCheckPosts.length, 3, 'an in-flight check cannot be repeated');
+      updateCheckHold.release();
+      updateCheckHold = null;
+      await l.waitForFunction(() => document.getElementById('update-check-status').textContent === 'Yozora is up to date.');
+      updateState = { ...noUpdate, check_enabled:false };
+      await pollUpdate(l);
+      assert.equal(await l.locator('#update-check').isDisabled(), true);
+      assert.equal(await text('#update-check-status'), 'Update checks are disabled or unavailable in this build.');
+      updateState = { ...noUpdate };
+      await pollUpdate(l);
       updateState = { ...noUpdate, latest:'0.1.43', available:true, url:releasePage };
       await pollUpdate(l);
+      assert.equal(await text('#update-check-status'), '', 'a newer automatic result clears the old up-to-date message');
       assert.equal(await l.locator('#update-note').isVisible(), true, 'an available update earns a line');
       assert.equal(await text('#update-text'), 'Yozora 0.1.43 is available');
       assert.equal(await text('#update-now'), 'Update now');
@@ -1327,6 +1367,12 @@ const server = http.createServer(async (req, res) => {
       await ready(l);
       await pollUpdate(l);
       assert.equal(await l.locator('#update-note').isHidden(), true, 'a dismissed version stays away after a reload');
+      await l.locator('#update-check').click();
+      await l.waitForFunction(() => document.getElementById('update-check-status').textContent === 'An update is available above.');
+      assert.equal(await l.locator('#update-note').isVisible(), true, 'an explicit check reveals a previously dismissed release');
+      assert.equal(updatePosts.length, 0, 'an explicit check still does not install');
+      await l.locator('#update-dismiss').click();
+      assert.equal(await text('#update-check-status'), '', 'dismissal clears the reference to the update above');
       updateState = { ...updateState, latest:'0.1.44', url:releasePage.replace('0.1.43', '0.1.44') };
       await pollUpdate(l);
       assert.equal(await text('#update-text'), 'Yozora 0.1.44 is available', 'a newer release shows again');

@@ -3,7 +3,7 @@ package update
 import "time"
 
 const (
-	// Interval is the most often Yozora asks GitHub.
+	// Interval is the normal spacing between automatic checks.
 	Interval = 24 * time.Hour
 	// StartupDelay keeps the check out of the way of startup.
 	StartupDelay = 2 * time.Minute

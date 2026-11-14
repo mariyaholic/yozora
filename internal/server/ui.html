@@ -654,6 +654,8 @@
     <h2 class="section-title" data-i18n="startup.title">Startup</h2>
     <label class="source-option" for="autostart"><input type="checkbox" id="autostart" disabled><span data-i18n="startup.autostart">Start Yozora when I sign in to Windows</span></label>
     <p id="autostart-status" class="status" role="status" aria-live="polite"></p>
+    <button type="button" id="update-check" disabled data-i18n="update.check">Check for updates</button>
+    <p id="update-check-status" class="status" role="status" aria-live="polite"></p>
     <details class="diagnostics">
       <summary data-i18n="diagnostics">Diagnostics</summary>
       <div class="meta" id="meta" data-i18n="diagnostics.waiting">Waiting for status…</div>
@@ -780,7 +782,7 @@ const strings = {
     "motion.system.hint":"Uses the Windows Show animations setting", "motion.reduced.hint":"No animations or transitions", "motion.full.hint":"Animate even when Windows asks for less",
     "language.title":"Language", "language.system":"Follow Windows", "language.system.hint":"Uses the Windows display language",
     "appearance.describe":"{theme} with {motion} motion", "appearance.theme":"{name} theme", "appearance.motion":"{name} motion", "appearance.language":"Language ({name})",
-    "update.available":"Yozora {version} is available", "update.now":"Update now", "update.notes":"What’s new", "update.downloading":"Downloading Yozora {version}…", "update.verifying":"Checking the download…", "update.installing":"Installing Yozora {version}. Yozora restarts when it is done.", "update.failed":"Could not update: {error}", "update.retry":"Try again",
+    "update.available":"Yozora {version} is available", "update.now":"Update now", "update.notes":"What’s new", "update.downloading":"Downloading Yozora {version}…", "update.verifying":"Checking the download…", "update.installing":"Installing Yozora {version}. Yozora restarts when it is done.", "update.failed":"Could not update: {error}", "update.retry":"Try again", "update.check":"Check for updates", "update.checking":"Checking for updates…", "update.current":"Yozora is up to date.", "update.found":"An update is available above.", "update.checkFailed":"Could not check for updates: {error}", "update.statusFailed":"Could not read update status: {error}", "update.disabled":"Update checks are disabled or unavailable in this build.",
     "field.theme":"theme", "field.motion":"motion", "field.language":"language",
     "appearance.readFailed":"Could not confirm the saved appearance: {error}. Showing {appearance}.", "appearance.saving":"Saving {label}…", "appearance.saved":"{label} saved.",
     "appearance.saveFailed":"Could not save the {field}: {error}. Kept {appearance}.",
@@ -852,7 +854,7 @@ const strings = {
     "motion.system.hint":"Windows の「アニメーションを表示する」設定に従います", "motion.reduced.hint":"アニメーションと切り替え効果を止めます", "motion.full.hint":"Windows で減らす設定にしていてもアニメーションします",
     "language.title":"言語", "language.system":"Windows に従う", "language.system.hint":"Windows の表示言語に従います",
     "appearance.describe":"{theme}・アニメーション「{motion}」", "appearance.theme":"テーマ「{name}」", "appearance.motion":"アニメーション「{name}」", "appearance.language":"言語（{name}）",
-    "update.available":"Yozora {version} を利用できます", "update.now":"今すぐ更新", "update.notes":"更新内容", "update.downloading":"Yozora {version} をダウンロードしています…", "update.verifying":"ダウンロードを確認しています…", "update.installing":"Yozora {version} をインストールしています。完了すると Yozora は自動で起動し直します。", "update.failed":"更新できませんでした: {error}", "update.retry":"もう一度試す",
+    "update.available":"Yozora {version} を利用できます", "update.now":"今すぐ更新", "update.notes":"更新内容", "update.downloading":"Yozora {version} をダウンロードしています…", "update.verifying":"ダウンロードを確認しています…", "update.installing":"Yozora {version} をインストールしています。完了すると Yozora は自動で起動し直します。", "update.failed":"更新できませんでした: {error}", "update.retry":"もう一度試す", "update.check":"更新を確認", "update.checking":"更新を確認しています…", "update.current":"Yozora は最新です。", "update.found":"上に更新が表示されています。", "update.checkFailed":"更新を確認できませんでした: {error}", "update.statusFailed":"更新状況を読み込めませんでした: {error}", "update.disabled":"このビルドまたは設定では更新の確認を利用できません。",
     "field.theme":"テーマ", "field.motion":"アニメーション", "field.language":"言語",
     "appearance.readFailed":"保存済みの外観を確認できませんでした: {error}。{appearance}で表示しています。", "appearance.saving":"{label}を保存中…", "appearance.saved":"{label}を保存しました。",
     "appearance.saveFailed":"{field}を保存できませんでした: {error}。{appearance}のままです。",
@@ -1598,9 +1600,16 @@ const updateNote = document.getElementById("update-note");
 const updateText = document.getElementById("update-text");
 const updateNow = document.getElementById("update-now");
 const updateNotes = document.getElementById("update-notes");
+const updateCheck = document.getElementById("update-check");
+const updateCheckStatus = document.getElementById("update-check-status");
 let updateTicks = 60;
 let updateBusy = false;
 let updateInfo = null;
+let updateLoadError = "";
+let updateRequest = 0;
+let checkingUpdate = false;
+let installingUpdate = false;
+let checkResult = null;
 let dismissedUpdate = "";
 try { dismissedUpdate = localStorage.getItem("yozora.update-dismissed") || ""; } catch {}
 function renderUpdate() {
@@ -1608,6 +1617,9 @@ function renderUpdate() {
   const phase = u?.install?.state || "idle";
   const working = phase === "downloading" || phase === "verifying" || phase === "installing";
   const failed = phase === "error";
+  updateCheck.disabled = (u ? !u.check_enabled : !updateLoadError) || checkingUpdate || installingUpdate || u?.checking || working;
+  updateCheckStatus.dataset.tone = checkResult?.key === "update.checkFailed" || updateLoadError ? "error" : "";
+  updateStatus(updateCheckStatus, checkingUpdate || u?.checking ? t("update.checking") : checkResult?.key === "update.checkFailed" ? t(checkResult.key, {error:checkResult.error}) : updateLoadError ? t("update.statusFailed", {error:updateLoadError}) : u && !u.check_enabled ? t("update.disabled") : checkResult ? t(checkResult.key) : "");
   const show = Boolean(u?.available) && (working || failed || u.latest !== dismissedUpdate);
   updateNote.hidden = !show;
   if (!show) return;
@@ -1616,21 +1628,27 @@ function renderUpdate() {
   setText(updateText, failed ? t("update.failed", {error:u.install.error || ""}) : working ? t(keys[phase], {version:u.latest}) : t("update.available", {version:u.latest}));
   updateNow.hidden = working;
   setKey(updateNow, failed ? "update.retry" : "update.now");
-  updateNow.disabled = false;
+  updateNow.disabled = checkingUpdate || installingUpdate || Boolean(u?.checking);
   const href = /^https:\/\/github\.com\/mariyaholic\/yozora\//.test(u.url || "") ? u.url : "";
   updateNotes.hidden = !href || working;
   if (href) updateNotes.href = href;
   document.getElementById("update-dismiss").hidden = working;
 }
 async function pollUpdate() {
-  if (updateBusy) return;
+  if (updateBusy || checkingUpdate || installingUpdate) return;
   updateBusy = true;
+  const request = updateRequest;
   try {
     const r = await fetch(`/api/update?t=${encodeURIComponent(token)}`, {cache:"no-store"});
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    updateInfo = await r.json();
-    renderUpdate();
-  } catch {} finally { updateBusy = false; }
+    const info = await r.json();
+    if (request === updateRequest) {
+      if ((checkResult?.key === "update.current" && info.available) || (checkResult?.key === "update.found" && !info.available)) checkResult = null;
+      updateInfo = info; updateLoadError = ""; renderUpdate();
+    }
+  } catch (e) {
+    if (request === updateRequest) { updateLoadError = String(e.message || e); renderUpdate(); }
+  } finally { updateBusy = false; }
 }
 function updateTick() {
   // Once a minute is plenty for a daily check; an install in progress is followed every second.
@@ -1641,8 +1659,34 @@ function updateTick() {
   }
 }
 document.addEventListener("yozora-language", renderUpdate);
+updateCheck.addEventListener("click", async () => {
+  if (updateCheck.disabled) return;
+  ++updateRequest;
+  checkingUpdate = true;
+  checkResult = null;
+  renderUpdate();
+  try {
+    const r = await fetch(`/api/update/check?t=${encodeURIComponent(token)}`, {method:"POST"});
+    if (!r.ok) throw new Error((await r.text()).trim() || `HTTP ${r.status}`);
+    updateInfo = await r.json();
+    updateLoadError = "";
+    if (updateInfo.available) {
+      dismissedUpdate = "";
+      try { localStorage.removeItem("yozora.update-dismissed"); } catch {}
+    }
+    checkResult = {key:updateInfo.available ? "update.found" : "update.current"};
+  } catch (e) {
+    checkResult = {key:"update.checkFailed", error:String(e.message || e)};
+  } finally {
+    checkingUpdate = false;
+    renderUpdate();
+  }
+});
 updateNow.addEventListener("click", async () => {
-  updateNow.disabled = true;
+  if (updateNow.disabled) return;
+  ++updateRequest;
+  installingUpdate = true;
+  renderUpdate();
   try {
     const r = await fetch(`/api/update/install?t=${encodeURIComponent(token)}`, {method:"POST"});
     if (!r.ok) throw new Error((await r.text()).trim() || `HTTP ${r.status}`);
@@ -1650,10 +1694,12 @@ updateNow.addEventListener("click", async () => {
   } catch (e) {
     updateInfo = {...updateInfo, install:{state:"error", error:String(e.message || e)}};
   }
+  installingUpdate = false;
   renderUpdate();
 });
 document.getElementById("update-dismiss").addEventListener("click", () => {
   dismissedUpdate = updateInfo?.latest || "";
+  if (checkResult?.key === "update.found") checkResult = null;
   try { localStorage.setItem("yozora.update-dismissed", dismissedUpdate); } catch {}
   renderUpdate();
 });

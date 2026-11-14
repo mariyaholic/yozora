@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -17,9 +18,12 @@ type fakeUpdater struct {
 	st       update.Status
 	err      error
 	installs int
+	checks   int
+	checkErr error
 }
 
-func (f *fakeUpdater) Status() update.Status { return f.st }
+func (f *fakeUpdater) Status() update.Status          { return f.st }
+func (f *fakeUpdater) CheckNow(context.Context) error { f.checks++; return f.checkErr }
 func (f *fakeUpdater) StartInstall() error {
 	if f.err != nil {
 		return f.err
@@ -85,7 +89,7 @@ func TestUpdateAPIStates(t *testing.T) {
 func TestUpdateAPIRequiresTokenAndMethods(t *testing.T) {
 	f := &fakeUpdater{st: update.Status{Available: true}}
 	h := updateHandler(t, f)
-	for _, p := range []string{"/api/update", "/api/update/install"} {
+	for _, p := range []string{"/api/update", "/api/update/install", "/api/update/check"} {
 		if w := request(h, "POST", p, "", false); w.Code != 401 {
 			t.Errorf("%s without a token: %d", p, w.Code)
 		}
@@ -93,11 +97,40 @@ func TestUpdateAPIRequiresTokenAndMethods(t *testing.T) {
 	if w := request(h, "GET", "/api/update/install", "", true); w.Code != 405 {
 		t.Errorf("GET install: %d", w.Code)
 	}
+	if w := request(h, "GET", "/api/update/check", "", true); w.Code != 405 {
+		t.Errorf("GET check: %d", w.Code)
+	}
 	if w := request(h, "POST", "/api/update", "", true); w.Code != 405 {
 		t.Errorf("POST update: %d", w.Code)
 	}
-	if f.installs != 0 {
-		t.Fatal("an unauthenticated or wrong-method request started an install")
+	if f.installs != 0 || f.checks != 0 {
+		t.Fatal("an unauthenticated or wrong-method request started an operation")
+	}
+}
+
+func TestUpdateCheckIsExplicitAndReportsFailure(t *testing.T) {
+	f := &fakeUpdater{st: update.Status{CheckEnabled: true}}
+	h := updateHandler(t, f)
+	request(h, "GET", "/api/update", "", true)
+	if f.checks != 0 {
+		t.Fatal("reading status started a check")
+	}
+	if w := request(h, "POST", "/api/update/check", "", true); w.Code != http.StatusOK || f.checks != 1 || f.installs != 0 {
+		t.Fatalf("check: %d, checks %d, installs %d", w.Code, f.checks, f.installs)
+	}
+	for _, c := range []struct {
+		err  error
+		code int
+	}{
+		{update.ErrBusy, http.StatusConflict}, {update.ErrCheckDisabled, http.StatusConflict}, {errors.New("offline"), http.StatusBadGateway},
+	} {
+		f.checkErr = c.err
+		if w := request(h, "POST", "/api/update/check", "", true); w.Code != c.code {
+			t.Errorf("%v: %d", c.err, w.Code)
+		}
+	}
+	if w := request(updateHandler(t, nil), "POST", "/api/update/check", "", true); w.Code != http.StatusConflict {
+		t.Fatalf("no service: %d", w.Code)
 	}
 }
 
