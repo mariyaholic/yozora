@@ -924,6 +924,8 @@ const server = http.createServer(async (req, res) => {
       await touch('touchEnd');
       assert.deepEqual(await touchOrder(), [...initialOrder.slice(1), initialOrder[0]]);
       assert.deepEqual(await touchPage.evaluate(() => currentSources()), initialToggles);
+      // Give Chromium's touch gesture recognizer time to finish the drag before a separate tap.
+      await touchPage.waitForTimeout(500);
       await touchPage.locator('#source-save').tap();
       await touchPage.waitForFunction(() => document.querySelector('#source-status').textContent.includes('Saved. Discord'));
       assert.deepEqual(posts.at(-1), {enabled:initialToggles, order:[...initialOrder.slice(1), initialOrder[0]]});
