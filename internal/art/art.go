@@ -10,12 +10,14 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -37,13 +39,14 @@ type Resolver struct {
 	itunesURL string
 	deezerURL string
 
-	mu      sync.Mutex
-	country string
-	itu     map[string]ituEntry
-	files   map[string]int64
-	insrt   sync.Once
-	defOnce sync.Once
-	defURL  string
+	mu          sync.Mutex
+	country     string
+	itu         map[string]ituEntry
+	files       map[string]int64
+	cacheWarned bool
+	insrt       sync.Once
+	defOnce     sync.Once
+	defURL      string
 }
 
 type ituEntry struct {
@@ -68,45 +71,104 @@ func keyOf(parts ...string) string {
 	h := sha1.Sum([]byte(strings.Join(parts, "\x00")))
 	return hex.EncodeToString(h[:])
 }
-func (r *Resolver) trimLocked() {
-	var total int64
-	for _, sz := range r.files {
-		total += sz
-	}
-	if total <= r.cacheMax {
-		return
-	}
 
+// Cache bookkeeping is bounded even when the directory contains many tiny files.
+const maxCachedFiles = 4096
+
+// initCache accounts for thumbnails left by an earlier run. Read in batches and
+// trim as we go, so even a large pre-existing directory does not become a
+// permanent in-memory index. The generated default image is not a thumbnail.
+func (r *Resolver) initCache() {
+	r.insrt.Do(func() {
+		dir, err := os.Open(r.cacheDir)
+		if err != nil {
+			log.Printf("art: cannot inspect cache; disk budget may be exceeded: %v", err)
+			return
+		}
+		defer dir.Close()
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		for {
+			entries, err := dir.ReadDir(64)
+			for _, entry := range entries {
+				name := entry.Name()
+				ext := filepath.Ext(name)
+				stem := strings.TrimSuffix(name, ext)
+				if entry.IsDir() || (ext != ".png" && ext != ".jpg") || len(stem) != 40 {
+					continue
+				}
+				if _, err := hex.DecodeString(stem); err != nil {
+					continue
+				}
+				info, infoErr := entry.Info()
+				if infoErr != nil {
+					if !os.IsNotExist(infoErr) {
+						r.warnCacheLocked(infoErr)
+					}
+				} else if info.Mode().IsRegular() {
+					r.files[name] = info.Size()
+					r.trimLocked()
+				}
+			}
+			if err != nil {
+				if err != io.EOF {
+					r.warnCacheLocked(err)
+				}
+				break
+			}
+		}
+	})
+}
+
+func (r *Resolver) warnCacheLocked(err error) {
+	if !r.cacheWarned {
+		log.Printf("art: cannot enforce disk cache budget: %v", err)
+		r.cacheWarned = true
+	}
+}
+
+func (r *Resolver) trimLocked() { r.trimLockedLimit(maxCachedFiles, os.Remove) }
+
+// Failed eviction cannot be counted as freed disk space, but retaining every
+// failed victim would make the bookkeeping unbounded. Drop it from the index
+// after warning; the directory may therefore exceed the configured budget.
+func (r *Resolver) trimLockedLimit(limit int, remove func(string) error) {
 	type ent struct {
 		name string
 		mod  time.Time
 		sz   int64
 	}
+	var total int64
+	for _, sz := range r.files {
+		total += sz
+	}
+	if total <= r.cacheMax && len(r.files) <= limit {
+		return
+	}
 	ents := make([]ent, 0, len(r.files))
+	total = 0
 	for name := range r.files {
-		p := filepath.Join(r.cacheDir, name)
-		if st, err := os.Stat(p); err == nil {
+		if st, err := os.Stat(filepath.Join(r.cacheDir, name)); err == nil {
 			ents = append(ents, ent{name, st.ModTime(), st.Size()})
+			total += st.Size()
 		} else {
+			if !os.IsNotExist(err) {
+				r.warnCacheLocked(err)
+			}
 			delete(r.files, name)
 		}
 	}
-
-	for i := 0; i < len(ents); i++ {
-		for j := i + 1; j < len(ents); j++ {
-			if ents[j].mod.Before(ents[i].mod) {
-				ents[i], ents[j] = ents[j], ents[i]
-			}
-		}
-	}
+	sort.Slice(ents, func(i, j int) bool { return ents[i].mod.Before(ents[j].mod) })
 	for _, e := range ents {
-		if total <= r.cacheMax {
+		if total <= r.cacheMax && len(r.files) <= limit {
 			break
 		}
-		if err := os.Remove(filepath.Join(r.cacheDir, e.name)); err == nil {
-			total -= e.sz
-			delete(r.files, e.name)
+		if err := remove(filepath.Join(r.cacheDir, e.name)); err != nil && !os.IsNotExist(err) {
+			r.warnCacheLocked(err)
 		}
+		// total now describes tracked files, not bytes successfully removed.
+		total -= e.sz
+		delete(r.files, e.name)
 	}
 }
 
@@ -180,13 +242,19 @@ func (r *Resolver) localArt(t Track, key string) Lookup {
 		ext = ".jpg"
 	}
 	name := key + ext
-	if err := os.MkdirAll(r.cacheDir, 0o755); err == nil {
-		p := filepath.Join(r.cacheDir, name)
-		if err := os.WriteFile(p, data, 0o644); err == nil {
-			r.mu.Lock()
-			r.files[name] = int64(len(data))
-			r.trimLocked()
-			r.mu.Unlock()
+	if int64(len(data)) > r.cacheMax {
+		return Lookup{}
+	}
+	if err := os.MkdirAll(r.cacheDir, 0o755); err != nil {
+		return Lookup{}
+	}
+	r.initCache()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := os.WriteFile(filepath.Join(r.cacheDir, name), data, 0o644); err == nil {
+		r.files[name] = int64(len(data))
+		r.trimLocked()
+		if _, ok := r.files[name]; ok {
 			return Lookup{ImageURL: r.baseURL + "/art/" + name, Via: "smtc"}
 		}
 	}
@@ -260,6 +328,7 @@ func (r *Resolver) remember(key string, l Lookup) {
 
 func (r *Resolver) StartServer(port int) (string, error) {
 	_ = os.MkdirAll(r.cacheDir, 0o755)
+	r.initCache()
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -301,11 +370,7 @@ func (r *Resolver) DefaultURL() string {
 			}
 			f, err := os.Create(p)
 			if err == nil {
-				if err := png.Encode(f, img); err == nil {
-					r.mu.Lock()
-					r.files[name] = 0
-					r.mu.Unlock()
-				}
+				_ = png.Encode(f, img)
 				f.Close()
 			}
 		}

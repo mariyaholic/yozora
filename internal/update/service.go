@@ -245,9 +245,11 @@ func (s *Service) run(ctx context.Context, latest string) (err error) {
 	if err = CheckSignature(s.selfSignature(), s.fileSig(installer)); err != nil {
 		return err
 	}
-	s.setPhase(PhaseInstalling, "")
+	if err = ctx.Err(); err != nil {
+		return err
+	}
 	s.mu.Lock()
-	s.since = time.Now()
+	s.phase, s.err, s.since = PhaseInstalling, "", time.Now()
 	s.mu.Unlock()
 	if err = s.launch(installer, InstallerArgs); err != nil {
 		return err

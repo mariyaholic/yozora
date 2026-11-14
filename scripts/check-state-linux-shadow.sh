@@ -6,8 +6,20 @@ d=$(mktemp -d /tmp/yozora-linux-shadow.XXXXXX)
 trap 'rm -rf "$d"' EXIT
 mkdir -p "$d/internal"
 cp "$repo/go.mod" "$repo/go.sum" "$d/"
-for p in art browserwin config discordipc player presence smtc template spotifyapi; do cp -r "$repo/internal/$p" "$d/internal/"; done
+for p in art browserwin config discordipc player presence server smtc template spotifyapi update version; do cp -r "$repo/internal/$p" "$d/internal/"; done
+# Authenticode is Windows-only. Retain sig_other.go's !windows constraint and
+# use that shipped substitute; never compile the WinTrust implementation here.
+rm -f "$d/internal/update/sig_windows.go" "$d/internal/update/sig_windows_test.go"
 find "$d/internal" -name '*.go' -exec sed -i '1{/^\/\/go:build windows$/d;}' {} +
+# Preserve diagnostics/report logic while replacing only its Windows version probe.
+python3 - "$d/internal/server/diagnostics.go" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read().replace('\n\t"syscall"', '').replace('\n\t"unsafe"', '')
+a = s.index('// windowsBuild reads')
+s = s[:a] + 'var osBuild = func() string { return "" }\n'
+open(p, 'w').write(s)
+PY
 rm -f "$d/internal/browserwin/windows.go" "$d/internal/browserwin/uia_"*.go "$d/internal/browserwin/"*_test.go
 cat > "$d/internal/browserwin/os_linux.go" <<'GO'
 package browserwin
@@ -33,6 +45,15 @@ func Get(string)(string,error){return "",errors.New("stub")}
 func Set(string,string)error{return nil}
 func Delete(string)error{return nil}
 GO
+# The server uses these functions for Windows registry autostart integration.
+# HTTP routing and validation are tested, but registry operations are not.
+mkdir "$d/internal/sysutil"
+cat > "$d/internal/sysutil/stub.go" <<'GO'
+package sysutil
+func InstallAutostart() error { return nil }
+func RemoveAutostart() error { return nil }
+func AutostartEnabled() bool { return false }
+GO
 rm "$d/internal/discordipc/"*_test.go
 python3 - "$d/internal/discordipc/ipc.go" <<'PY'
 import sys
@@ -43,5 +64,6 @@ s=s[:a]+'func dialPipe(path string) (Transport, error) { return nil, errors.New(
 open(p,'w').write(s)
 PY
 cd "$d"
-go test ./internal/presence ./internal/spotifyapi ./internal/player ./internal/config ./internal/art ./internal/template ./internal/smtc -count=10
-go test -race ./internal/presence ./internal/spotifyapi  -count=100
+go test ./internal/presence ./internal/spotifyapi ./internal/player ./internal/config ./internal/art ./internal/template ./internal/smtc ./internal/server ./internal/update -count=10 -timeout=3m
+go test -race ./internal/presence ./internal/spotifyapi -count=100 -timeout=3m
+go test -race ./internal/config ./internal/server ./internal/update -count=10 -timeout=3m

@@ -1,6 +1,7 @@
 // Browser regression checks for the embedded panel. Uses synthetic data only.
 // Requires Playwright; see README.md. No daemon, Discord, or Windows APIs are used.
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
@@ -24,6 +25,10 @@ let state = { playing: true, activity_type: 'listening', title: 'Night Walk', ar
 let stateHTTP = 200;
 let sourceGetHTTP = 200;
 let sourcePostHTTP = 200;
+let sourceGetDelay = 0;
+let sourceGets = 0;
+let sourceChangeBeforePost = null;
+const sourceTag = value => `"${crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex')}"`;
 let autostartHTTP = 200;
 let autostart = false;
 let theme = 'yozora';
@@ -55,6 +60,7 @@ const posts = [];
 const cardDefaults = { paused_mode: 'show', type: 'listening', status_display: 'app', buttons_enabled: true, button_label: 'Listen along', spotify_search_fallback: true, details: '{{.Title}}', state: '{{.Artist}}', large_text: '{{.Album}}', small_text: '{{.Player}}', paused_details: '\u23f8 {{.Title}}' };
 let card = { ...cardDefaults };
 let hiddenRules = [];
+let hiddenHTTP = 200;
 let cardGetHTTP = 200;
 const cardPosts = [];
 const hiddenPosts = [];
@@ -103,6 +109,7 @@ const server = http.createServer(async (req, res) => {
       for await (const chunk of req) body += chunk;
       const posted = JSON.parse(body);
       hiddenPosts.push(posted);
+      if (hiddenHTTP !== 200) { json({ error: 'hidden rule failed' }, hiddenHTTP); return; }
       if (posted.add && !hiddenRules.some(rule => foldRule(rule.artist) === foldRule(posted.add.artist) && foldRule(rule.title) === foldRule(posted.add.title))) hiddenRules = [...hiddenRules, { artist: posted.add.artist || '', title: posted.add.title || '' }];
       if (posted.remove) hiddenRules = hiddenRules.filter(rule => !(foldRule(rule.artist) === foldRule(posted.remove.artist) && foldRule(rule.title) === foldRule(posted.remove.title)));
     }
@@ -114,9 +121,18 @@ const server = http.createServer(async (req, res) => {
       const posted = JSON.parse(body);
       posts.push(posted);
       if (saveDelay) await new Promise(resolve => setTimeout(resolve, saveDelay));
+      if (sourceChangeBeforePost) { sources = sourceChangeBeforePost(sources); sourceChangeBeforePost = null; }
+      if (req.headers['if-match'] && req.headers['if-match'] !== sourceTag(sources)) { json({ error:'changed' }, 412); return; }
       if (sourcePostHTTP === 200) sources = posted;
+      res.setHeader('ETag', sourceTag(sources));
       json(sources, sourcePostHTTP);
-    } else json(sources, sourceGetHTTP);
+    } else {
+      sourceGets++;
+      const snapshot = JSON.parse(JSON.stringify(sources));
+      if (sourceGetDelay) await new Promise(resolve => setTimeout(resolve, sourceGetDelay));
+      res.setHeader('ETag', sourceTag(snapshot));
+      json(snapshot, sourceGetHTTP);
+    }
   } else if (url.pathname === '/api/appearance') {
     if (req.method === 'POST') {
       let body = '';
@@ -356,6 +372,79 @@ const server = http.createServer(async (req, res) => {
     assert.equal(await page.locator('#source-save').isDisabled(), true);
     saveDelay = 0;
     check('failed-save retry, exact payload, and reorder lock during save');
+
+    // Tray changes update untouched controls; edits and the latest discard baseline survive refreshes.
+    const initialSources = JSON.parse(JSON.stringify(sources));
+    sources = { ...sources, enabled:{ ...sources.enabled, generic:true } };
+    await refresh();
+    assert.equal(await page.locator('#source-generic').isChecked(), true, 'a clean form follows the tray');
+    assert.equal(await page.locator('#source-save').isDisabled(), true);
+    await page.locator('#source-order li[data-source="spotify"] .drag-handle').focus();
+    sources = { ...sources, order:[...sources.order].reverse() };
+    await refresh();
+    assert.deepEqual(await page.locator('#source-order li').evaluateAll(rows => rows.map(row => row.dataset.source)), sources.order);
+    assert.equal(await page.evaluate(() => document.activeElement.closest('li').dataset.source), 'spotify', 'reordering from the tray preserves keyboard focus');
+    await page.locator('#source-order li').first().locator('.move button').last().click();
+    const editedOrder = await page.locator('#source-order li').evaluateAll(rows => rows.map(row => row.dataset.source));
+    sources = { ...sources, order:[...initialSources.order] };
+    await refresh();
+    assert.deepEqual(await page.locator('#source-order li').evaluateAll(rows => rows.map(row => row.dataset.source)), editedOrder, 'a refresh preserves a local reorder');
+    await page.locator('#source-reset').click();
+    assert.deepEqual(await page.locator('#source-order li').evaluateAll(rows => rows.map(row => row.dataset.source)), sources.order, 'discard restores the latest tray order');
+    await page.locator('#source-youtube').check();
+    sources = { ...sources, enabled:{ ...sources.enabled, twitch:true } };
+    await refresh();
+    assert.equal(await page.locator('#source-youtube').isChecked(), true, 'refresh preserves a user edit');
+    assert.equal(await page.locator('#source-twitch').isChecked(), true, 'refresh incorporates untouched tray changes');
+    await page.locator('#source-reset').click();
+    assert.equal(await page.locator('#source-youtube').isChecked(), false);
+    assert.equal(await page.locator('#source-twitch').isChecked(), true, 'discard uses the latest daemon baseline');
+    await page.locator('#source-youtube').check();
+    // A tray change just before Apply is merged by the pre-save read.
+    sources = { ...sources, enabled:{ ...sources.enabled, browser:true } };
+    await page.locator('#source-save').click();
+    await waitText('#source-status', 'Saved. Discord');
+    assert.equal(posts.at(-1).enabled.youtube, true);
+    assert.equal(posts.at(-1).enabled.browser, true, 'Apply retains an untouched tray change');
+    // A poll started before a save cannot restore its stale snapshot over the save.
+    sourceGetDelay = 300;
+    const getsBefore = sourceGets;
+    const inFlightRefresh = refresh();
+    while (sourceGets === getsBefore) await new Promise(resolve => setTimeout(resolve, 10));
+    await page.locator('#source-generic').uncheck();
+    await page.locator('#source-save').click();
+    await inFlightRefresh;
+    await waitText('#source-status', 'Saved. Discord');
+    sourceGetDelay = 0;
+    assert.equal(await page.locator('#source-generic').isChecked(), false);
+    assert.equal(sources.enabled.generic, false, 'a stale poll cannot undo a completed save');
+    // A failed pre-save read leaves edits retryable and cannot falsely report success.
+    await page.locator('#source-generic').check();
+    sourceGetHTTP = 500;
+    const postsBeforeFailure = posts.length;
+    await page.locator('#source-save').click();
+    await waitText('#source-status', 'Save failed');
+    assert.equal(posts.length, postsBeforeFailure);
+    assert.equal(await page.locator('#source-generic').isChecked(), true);
+    assert.equal(await page.locator('#source-save').isEnabled(), true);
+    sourceGetHTTP = 200;
+    await page.locator('#source-save').click();
+    await waitText('#source-status', 'Saved. Discord');
+    await page.locator('#source-youtube').uncheck();
+    sourceChangeBeforePost = previous => ({ ...previous, enabled:{ ...previous.enabled, twitch:false } });
+    await page.locator('#source-save').click();
+    await waitText('#source-status', 'Settings changed in the tray');
+    assert.equal(sources.enabled.youtube, true, 'a conflict does not write the pending edit');
+    assert.equal(await page.locator('#source-youtube').isChecked(), false, 'a conflict preserves the pending edit');
+    assert.equal(await page.locator('#source-twitch').isChecked(), false, 'a conflict incorporates the tray change');
+    assert.equal(await page.locator('#source-save').isEnabled(), true);
+    await page.locator('#source-save').click();
+    await waitText('#source-status', 'Saved. Discord');
+    assert.equal(sources.enabled.youtube, false);
+    assert.equal(sources.enabled.twitch, false, 'retry retains the concurrent tray change');
+    sources = initialSources;
+    await refresh();
+    check('tray changes reconcile with clean and dirty forms, Apply and Discard; stale polls and read failures recover');
 
     await page.locator('#source-browser').check();
     const togglesBeforeDrag = await page.evaluate(() => currentSources());
@@ -1576,6 +1665,25 @@ const server = http.createServer(async (req, res) => {
       await c.locator('#cf-paused_mode').selectOption('show');
       await c.waitForFunction(() => document.getElementById('card-note').textContent === '');
       state = { ...state, playing: true };
+
+      // Removing a rule focuses a live neighboring button, including after errors and at the list ends.
+      hiddenRules = [{artist:'First', title:''}, {artist:'Middle', title:''}, {artist:'Last', title:''}];
+      await c.evaluate(rules => renderHidden(rules), hiddenRules);
+      hiddenHTTP = 500;
+      await c.locator('#hidden-list button').nth(1).click();
+      await c.waitForFunction(() => document.getElementById('card-status').dataset.tone === 'error');
+      assert.equal(await c.locator('#hidden-list li').count(), 3);
+      assert.equal(await c.evaluate(() => document.activeElement.closest('li').querySelector('span').textContent.includes('Middle')), true);
+      hiddenHTTP = 200;
+      await c.locator('#hidden-list button').nth(1).click();
+      await c.waitForFunction(() => document.querySelectorAll('#hidden-list li').length === 2);
+      assert.equal(await c.evaluate(() => document.activeElement.closest('li').querySelector('span').textContent.includes('Last')), true);
+      await c.locator('#hidden-list button').last().click();
+      await c.waitForFunction(() => document.querySelectorAll('#hidden-list li').length === 1);
+      assert.equal(await c.evaluate(() => document.activeElement.closest('li').querySelector('span').textContent.includes('First')), true);
+      await c.locator('#hidden-list button').first().click();
+      await c.waitForFunction(() => document.getElementById('card-hidden').hidden);
+      assert.equal(await c.evaluate(() => document.activeElement.id), 'cf-details');
 
       // Hiding from the preview: song, then artist, then removal from the list.
       assert.equal(await c.locator('#hide-menu').isHidden(), true);

@@ -1,0 +1,82 @@
+{
+  "generated_date_utc": "2026-11-14",
+  "repository": {
+    "baseline": "1c4659fd",
+    "tested_commit": "d03089e",
+    "branch": "fix/assessment-state-machines"
+  },
+  "run": {
+    "command": "UI_EVIDENCE_DIR=/workspace/yozora/docs/evidence CHROMIUM_PATH=/usr/bin/chromium node scripts/check-ui.cjs",
+    "runner": "Linux x86_64, Debian GNU/Linux 13",
+    "node": "v24.19.0",
+    "chromium": "154.0.8037.57",
+    "playwright": "preinstalled at /opt/codex/runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.js",
+    "checks_passed": 53,
+    "uncaught_page_errors": 0,
+    "csp_violations": 0,
+    "synthetic_fixtures_only": true,
+    "contacted_external_services": false,
+    "windows_runtime_evidence": false
+  },
+  "source_sha256": {
+    "scripts/check-ui.cjs": "dd5a0bd5f11c51377434f18f64c9f415b82f59df4f817e132c9f09dec4b3dffe",
+    "internal/server/ui.html": "5617945b414c994ed54a61668d80c51b6236ac6e818f055940d6b6f50e707096",
+    "full_results_json": "0d7f2dcbcea3d99d5b4cba5ce140c3e34032e01dce752a323d3251badb3c0e05"
+  },
+  "complete_run_artifacts_workspace_only": {
+    "directory": "../../dist/ui-evidence/",
+    "results": "../../dist/ui-evidence/results.json",
+    "screenshot_count": 108
+  },
+  "tracked_screenshots": [
+    {
+      "file": "playing-560-viewport.png",
+      "description": "Synthetic playing dashboard and source priorities."
+    },
+    {
+      "file": "paused-560-viewport.png",
+      "description": "Synthetic paused playback and progress."
+    },
+    {
+      "file": "save-error-560-viewport.png",
+      "description": "Synthetic source save failure with retained edits and recovery controls."
+    },
+    {
+      "file": "phone-320-viewport.png",
+      "description": "Responsive rendering at 320 pixels wide."
+    },
+    {
+      "file": "appearance-dialog-560.png",
+      "description": "Theme, motion and language picker."
+    },
+    {
+      "file": "mouse-drag-560-viewport.png",
+      "description": "Synthetic source reorder preview and insertion line."
+    },
+    {
+      "file": "forced-colors-appearance-560.png",
+      "description": "Focus styling with browser forced-colors emulation."
+    },
+    {
+      "file": "card-en-560.png",
+      "description": "Full-page Discord card form and rendered synthetic examples."
+    },
+    {
+      "file": "hidden-en-560.png",
+      "description": "Hidden-track marker and card form for a synthetic track."
+    }
+  ],
+  "notes": [
+    "Every track, image, service response and status is fixture data served from a local test server.",
+    "The suite blocks requests to origins outside the local fixture server.",
+    "The source-save 412 conflict is asserted by the harness but has no separate selected PNG.",
+    "These browser captures do not establish Windows media, WebView2, Discord IPC, Spotify, Credential Manager, tray or installer behavior."
+  ],
+  "additional_verification_logs": {
+    "linux_logic_shadow": "logic.log",
+    "windows_target_compile": "windows-compile.log",
+    "baseline_updater_regressions": "updater-before.log",
+    "candidate_updater_regressions": "updater-after.log"
+  },
+  "tracked_full_results": "browser-results.json"
+}
