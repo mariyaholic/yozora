@@ -21,4 +21,6 @@ PR #16 starts from `d5c0a01`. The existing public `v0.2.1` release is the instal
 
 ## Completion boundaries
 
+Execution completed on 14 November 2026: PR #16 merged as `1871ac6`, `v0.2.2` published at 19:42:04 Asia/Manila, and live installed-updater smoke passed at 19:45:58. Final prepublication run: [43590940646](https://github.com/mariyaholic/yozora/actions/runs/43590940646). Release and public updater: [43591163144](https://github.com/mariyaholic/yozora/actions/runs/43591163144). Public assets were independently downloaded and checked. Detailed records and limits are in [rollout evidence](rollout-evidence/README.md).
+
 Native updater/installer HTTP-action smoke is distinct from manually clicking the update control in WebView2. Published checksums do not replace publisher identity. Unsigned baselines use the existing checksum mode; a signed baseline must retain valid same-publisher compatibility. No claim of interactive UI, live music/provider behavior, or Windows memory parity follows from release automation alone.
