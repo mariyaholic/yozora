@@ -344,6 +344,8 @@
   .spotify-line { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; font-size:12px; color:var(--muted); }
   #setup-status:empty, #app-id-status:empty, #spotify-status:empty { display:none; }
   #setup-reopen { margin:4px 2px 2px; }
+  .backup-review { max-height:24rem; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; padding:10px; background:var(--bg); border:1px solid var(--line); border-radius:var(--radius-sm); font-size:12px; }
+  .backup-file { max-width:100%; margin:8px 0; }
   .diagnostics { margin-top:4px; border-bottom:0; }
   .diagnostics summary { padding:2px; }
   .diag-tools { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; margin:6px 2px 2px; }
@@ -589,6 +591,9 @@
   <form id="card-form" class="panel cf">
     <fieldset id="card-fields" disabled>
       <legend class="section-title" data-i18n="card.title">Discord card</legend>
+      <label class="cf-label" for="card-preset" data-i18n="preset.label">Built-in card preset</label>
+      <div class="save-row"><select class="cf-select" id="card-preset"><option value="" data-i18n="preset.choose">Choose a preset</option></select><button type="button" id="preset-load" disabled data-i18n="preset.load">Load into form</button></div>
+      <p class="source-help" data-i18n="preset.help">Loading a preset changes the form only. Review and Apply to save.</p><p id="preset-description" class="source-help" aria-live="polite"></p>
       <p id="card-note" class="status" role="status" aria-live="polite"></p>
       <div class="card-texts">
         <div><label class="cf-label" for="cf-details" data-i18n="card.details">Top line</label><input class="cf-input" id="cf-details" maxlength="256" autocomplete="off" spellcheck="false" aria-describedby="cf-r-details"><p class="rendered" id="cf-r-details"></p></div>
@@ -624,6 +629,16 @@
     <p id="card-status" class="status" role="status" aria-live="polite" data-i18n="card.loading">Loading the card settings…</p>
     <button type="button" id="card-retry" hidden data-i18n="card.retry">Retry loading</button>
   </form>
+  <section class="panel" id="backup" aria-labelledby="backup-title">
+    <h2 class="section-title" id="backup-title" data-i18n="backup.title">Panel settings backup</h2>
+    <p class="source-help" data-i18n="backup.help">Export saved card, sources and appearance settings. Account connections, IDs, hidden rules, and startup or system settings are not backed up.</p>
+    <button type="button" id="backup-export" data-i18n="backup.export">Export saved settings</button>
+    <label class="cf-label" for="backup-file" data-i18n="backup.choose">Choose a JSON backup (up to 64 KiB)</label>
+    <input class="backup-file" type="file" id="backup-file" accept="application/json,.json">
+    <div class="save-row"><button type="button" id="backup-preview" disabled data-i18n="backup.preview">Preview selected file</button><button type="button" id="backup-cancel" data-i18n="cancel">Cancel</button></div>
+    <div id="backup-review" hidden><h3 class="source-subheading" data-i18n="backup.review">Review the settings to import</h3><p id="backup-summary" class="source-help"></p><pre class="backup-review" id="backup-content"></pre><button type="button" id="backup-apply" data-i18n="backup.apply">Apply import</button></div>
+    <p id="backup-status" class="status" role="status" aria-live="polite"></p>
+  </section>
   <section class="panel" id="spotify" aria-labelledby="spotify-title" hidden>
     <div class="row-head"><h2 class="section-title" id="spotify-title">Spotify Web API</h2><span class="row-state" id="spotify-state" data-i18n="spotify.off">Not connected</span></div>
     <form id="spotify-form">
@@ -643,7 +658,7 @@
       <summary data-i18n="diagnostics">Diagnostics</summary>
       <div class="meta" id="meta" data-i18n="diagnostics.waiting">Waiting for status…</div>
       <div class="meta" id="version-meta"></div>
-      <div class="diag-tools"><button type="button" id="diag-copy" data-i18n="diag.copy">Copy report</button><p id="diag-status" class="status" role="status" aria-live="polite"></p></div>
+      <div class="diag-tools"><button type="button" id="diag-copy" data-i18n="diag.copy">Copy report</button><button type="button" id="diag-save" data-i18n="diag.save">Save report</button><p id="diag-status" class="status" role="status" aria-live="polite"></p></div>
       <textarea id="diag-text" readonly hidden spellcheck="false" aria-label="Diagnostics report" data-i18n-attr="aria-label:diag.report"></textarea>
       <button type="button" id="setup-reopen" data-i18n="setup.reopen">Show setup checklist</button>
     </details>
@@ -699,6 +714,8 @@
 // product names and proper theme names live only in "en". {name} fills from t()'s vars.
 const strings = {
   en: {
+    "preset.label":"Built-in card preset", "preset.choose":"Choose a preset", "preset.load":"Load into form", "preset.help":"Loading a preset changes the form only. Review and Apply to save.", "preset.default":"Default", "preset.compact":"Compact", "preset.album":"Album", "preset.detailed":"Detailed", "preset.default.desc":"Standard card with album and player text.", "preset.compact.desc":"A simpler card without image or icon text.", "preset.album.desc":"Highlights the album, with the track title on the image.", "preset.detailed.desc":"Adds album and track number when available.", "preset.confirm":"Replace your unsaved card edits with this preset?", "preset.loaded":"Preset loaded into the form. Apply to save.",
+    "backup.title":"Panel settings backup", "backup.help":"Export saved card, sources and appearance settings. Account connections, IDs, hidden rules, and startup or system settings are not backed up.", "backup.export":"Export saved settings", "backup.choose":"Choose a JSON backup (up to 64 KiB)", "backup.preview":"Preview selected file", "backup.review":"Review the settings to import", "backup.apply":"Apply import", "backup.changed":"Changes: card {card}, sources {sources}, appearance {appearance}.", "backup.yes":"yes", "backup.no":"no", "backup.confirm":"You have unsaved card or source edits. Import saved settings while keeping those edits in the forms?", "backup.large":"File exceeds 64 KiB.", "backup.failed":"Could not process backup: {error}", "backup.ready":"Review the settings below before applying.", "backup.saved":"Import saved. Unsaved form edits were kept.", "backup.recheck":"Import may have been saved but could not be confirmed. Preview the file again before retrying: {error}", "backup.exported":"Saved settings download started.", "backup.wait":"Wait for card, source and appearance settings to finish loading or saving.", "diag.save":"Save report", "diag.saved":"Report download started.",
     "page.title":"Yozora — control panel", subtitle:"Discord Rich Presence", appearance:"Appearance", "appearance.close":"Close appearance",
     loading:"Loading…", save:"Save", saving:"Saving…", copy:"Copy", cancel:"Cancel", dismiss:"Dismiss",
     "setup.title":"Get started", "setup.done":"All set", "setup.hide":"Hide setup checklist", "setup.autostart":"Start with Windows", "setup.reopen":"Show setup checklist",
@@ -769,6 +786,8 @@ const strings = {
     "appearance.saveFailed":"Could not save the {field}: {error}. Kept {appearance}.",
   },
   ja: {
+    "preset.label":"カードのプリセット", "preset.choose":"プリセットを選択", "preset.load":"フォームに読み込む", "preset.help":"読み込みはフォームのみを変更します。確認して適用すると保存されます。", "preset.default":"標準", "preset.compact":"コンパクト", "preset.album":"アルバム", "preset.detailed":"詳細", "preset.default.desc":"アルバムとプレイヤーを表示する標準カード。", "preset.compact.desc":"画像とアイコンのテキストを省いたカード。", "preset.album.desc":"アルバムを強調し、画像に曲名を表示します。", "preset.detailed.desc":"アルバムとトラック番号があれば表示します。", "preset.confirm":"未保存のカード編集をプリセットで置き換えますか？", "preset.loaded":"プリセットを読み込みました。適用すると保存されます。",
+    "backup.title":"パネル設定のバックアップ", "backup.help":"保存済みのカード、ソース、外観をエクスポートします。アカウント接続、ID、非表示ルール、起動・システム設定は含まれません。", "backup.export":"保存済み設定をエクスポート", "backup.choose":"JSON バックアップを選択（最大 64 KiB）", "backup.preview":"選択したファイルを確認", "backup.review":"インポートする設定を確認", "backup.apply":"インポートを適用", "backup.changed":"変更: カード {card}、ソース {sources}、外観 {appearance}。", "backup.yes":"あり", "backup.no":"なし", "backup.confirm":"カードまたはソースに未保存の編集があります。編集をフォームに残したまま保存済み設定をインポートしますか？", "backup.large":"ファイルは 64 KiB を超えています。", "backup.failed":"バックアップを処理できません: {error}", "backup.ready":"適用する前に以下の設定を確認してください。", "backup.saved":"インポートを保存しました。未保存のフォーム編集は保持されています。", "backup.recheck":"インポートは保存された可能性がありますが、確認できませんでした。再試行前にファイルをもう一度確認してください: {error}", "backup.exported":"保存済み設定のダウンロードを開始しました。", "backup.wait":"カード、ソース、外観の読み込みまたは保存が終わるまでお待ちください。", "diag.save":"レポートを保存", "diag.saved":"レポートのダウンロードを開始しました。",
     "page.title":"Yozora コントロールパネル", subtitle:"Discord リッチプレゼンス", appearance:"外観", "appearance.close":"外観を閉じる",
     loading:"読み込み中…", save:"保存", saving:"保存中…", copy:"コピー", cancel:"キャンセル", dismiss:"閉じる",
     "setup.title":"はじめに", "setup.done":"準備完了", "setup.hide":"セットアップを閉じる", "setup.autostart":"Windows の起動時に開始", "setup.reopen":"セットアップを表示",
@@ -1286,6 +1305,8 @@ function relocalize() {
   renderHidden(hiddenRules);
   updateCardDirty();
   updateCardNote();
+  const preset = document.getElementById("card-preset");
+  document.getElementById("preset-description").textContent = preset.value ? t(`preset.${preset.value}.desc`) : "";
   refreshSoon();
 }
 // The server rendered the saved appearance into <html>, so it is the starting saved state.
@@ -1725,6 +1746,7 @@ const cardPreviewURL = `/api/card/preview?t=${encodeURIComponent(token)}`;
 const hiddenURL = `/api/hidden?t=${encodeURIComponent(token)}`;
 let savedCard = null;
 let cardDefaults = null;
+let cardPresets = [];
 let cardInvalid = false;
 let hiddenRules = [];
 let cardPreviewTimer = 0;
@@ -1840,6 +1862,13 @@ async function loadCard() {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const data = await r.json();
     cardDefaults = data.defaults;
+    cardPresets = data.presets || [];
+    const selector = document.getElementById("card-preset");
+    selector.replaceChildren(selector.firstElementChild);
+    for (const preset of cardPresets) {
+      const option = document.createElement("option"); option.value = preset.id; option.dataset.i18n = `preset.${preset.id}`; option.textContent = t(option.dataset.i18n); selector.append(option);
+    }
+    document.getElementById("preset-load").disabled = true;
     showCard(data.card);
     renderHidden(data.hidden);
     savedCard = JSON.stringify(currentCard());
@@ -1856,6 +1885,14 @@ async function loadCard() {
 cardFields.addEventListener("input", () => { updateCardDirty(); schedulePreview(); });
 cardFields.addEventListener("change", () => { updateCardDirty(); schedulePreview(); });
 cardRetry.addEventListener("click", loadCard);
+const presetSelect = document.getElementById("card-preset");
+const presetLoad = document.getElementById("preset-load");
+presetSelect.addEventListener("change", () => { presetLoad.disabled = !cardPresets.some(p => p.id === presetSelect.value); document.getElementById("preset-description").textContent = presetLoad.disabled ? "" : t(`preset.${presetSelect.value}.desc`); });
+presetLoad.addEventListener("click", () => {
+  const preset = cardPresets.find(p => p.id === presetSelect.value);
+  if (!preset || (syncCardButtons() && !confirm(t("preset.confirm")))) return;
+  showCard(preset.settings); cardInvalid = false; updateCardDirty(t("preset.loaded")); previewCard();
+});
 cardDiscard.addEventListener("click", () => {
   if (!savedCard) return;
   showCard(JSON.parse(savedCard));
@@ -2032,6 +2069,105 @@ async function tick() {
     polling = false;
   }
 }
+// Portable settings: retain the selected file on errors and require a fresh review after every failed import.
+const backupURL = `/api/settings?t=${encodeURIComponent(token)}`;
+const backupFile = document.getElementById("backup-file");
+const backupPreview = document.getElementById("backup-preview");
+const backupApply = document.getElementById("backup-apply");
+const backupReview = document.getElementById("backup-review");
+const backupStatus = document.getElementById("backup-status");
+let backupSeq = 0, backupBusy = false, backupPreviewPending = false, backupCandidate = null, backupTag = "", backupPreviewController = null;
+function backupMessage(message, tone = "") { updateStatus(backupStatus, message); backupStatus.dataset.tone = tone; }
+function invalidateBackup() { backupSeq++; if (backupPreviewController) backupPreviewController.abort(); backupPreviewController = null; backupPreviewPending = false; backupCandidate = null; backupTag = ""; backupReview.hidden = true; }
+function backupControls() { backupPreview.disabled = backupBusy || backupPreviewPending || !backupFile.files.length; backupApply.disabled = backupBusy; backupFile.disabled = backupBusy; document.getElementById("backup-cancel").disabled = backupBusy; document.getElementById("backup-export").disabled = backupBusy; }
+let downloadURL = "";
+function releaseDownload() { if (downloadURL) URL.revokeObjectURL(downloadURL); downloadURL = ""; }
+window.addEventListener("pagehide", releaseDownload);
+function boundedDownload(content, name, type) {
+  const blob = new Blob([content], {type});
+  if (blob.size > 65536) throw new Error(t("backup.large"));
+  releaseDownload(); downloadURL = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = downloadURL; link.download = name; document.body.append(link); link.click(); link.remove();
+}
+async function responseError(r) { return (await r.text()).trim() || `HTTP ${r.status}`; }
+// Bound both response headers and body reads; clear the timer on every outcome.
+async function withDownloadDeadline(operation, controller = new AbortController()) {
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try { return await operation(controller.signal); }
+  finally { clearTimeout(timer); }
+}
+document.getElementById("backup-export").addEventListener("click", async () => {
+  if (backupBusy) return;
+  backupBusy = true; backupControls();
+  try {
+    const content = await withDownloadDeadline(async signal => {
+      const r = await fetch(backupURL, {cache:"no-store", signal}); if (!r.ok) throw new Error(await responseError(r));
+      return r.text();
+    });
+    boundedDownload(content, "yozora-panel-settings.json", "application/json"); backupMessage(t("backup.exported"));
+  } catch (e) { backupMessage(t("backup.failed", {error:e.message}), "error"); }
+  finally { backupBusy = false; backupControls(); }
+});
+backupFile.addEventListener("change", () => { invalidateBackup(); backupMessage(""); backupControls(); if (backupFile.files.length) previewBackup(); });
+document.getElementById("backup-cancel").addEventListener("click", () => { invalidateBackup(); backupFile.value = ""; backupMessage(""); backupControls(); });
+backupPreview.addEventListener("click", previewBackup);
+async function previewBackup() {
+  if (backupBusy || !backupFile.files.length) return;
+  invalidateBackup(); const seq = backupSeq, file = backupFile.files[0], controller = new AbortController();
+  backupPreviewController = controller;
+  backupPreviewPending = true; backupControls(); backupMessage(t("loading"));
+  try {
+    if (file.size > 65536) throw new Error(t("backup.large"));
+    const body = await file.text();
+    if (seq !== backupSeq) return;
+    JSON.parse(body);
+    const {data, tag} = await withDownloadDeadline(async signal => {
+      const r = await fetch(`/api/settings/preview?t=${encodeURIComponent(token)}`, {method:"POST", headers:{"Content-Type":"application/json"}, body, signal});
+      if (!r.ok) throw new Error(await responseError(r));
+      return {data:await r.json(), tag:r.headers.get("ETag")};
+    }, controller);
+    if (seq !== backupSeq) return;
+    if (!tag || !data.candidate || !data.summary) throw new Error("Invalid preview response");
+    backupCandidate = data.candidate; backupTag = tag;
+    const yesNo = value => t(value ? "backup.yes" : "backup.no");
+    document.getElementById("backup-summary").textContent = t("backup.changed", {card:yesNo(data.summary.card_changed), sources:yesNo(data.summary.sources_changed), appearance:yesNo(data.summary.appearance_changed)});
+    document.getElementById("backup-content").textContent = JSON.stringify({card:data.candidate.card, sources:data.candidate.sources, appearance:data.candidate.appearance}, null, 2);
+    backupReview.hidden = false; backupMessage(t("backup.ready"));
+  } catch (e) { if (seq === backupSeq) backupMessage(t("backup.failed", {error:e.message}), "error"); }
+  finally { if (backupPreviewController === controller) backupPreviewController = null; if (seq === backupSeq) { backupPreviewPending = false; backupControls(); } }
+}
+backupApply.addEventListener("click", async () => {
+  if (backupBusy || !backupCandidate || !backupTag) return;
+  if (!savedSources || !savedCard || sourceFields.disabled || cardFields.disabled || themeFields.disabled) { backupMessage(t("backup.wait"), "error"); return; }
+  const dirty = (savedSources && JSON.stringify({enabled:currentSources(), order:savedOrder}) !== savedSources) || (savedCard && JSON.stringify(currentCard()) !== savedCard);
+  if (dirty && !confirm(t("backup.confirm"))) return;
+  const candidate = backupCandidate, tag = backupTag;
+  invalidateBackup(); backupBusy = true; backupControls();
+  const sourceWasDisabled = sourceFields.disabled, cardWasDisabled = cardFields.disabled, themeWasDisabled = themeFields.disabled;
+  sourceFields.disabled = cardFields.disabled = themeFields.disabled = true; sourceRevision++;
+  backupMessage(t("saving"));
+  try {
+    const imported = await withDownloadDeadline(async signal => {
+      const r = await fetch(`/api/settings/import?t=${encodeURIComponent(token)}`, {method:"POST", headers:{"Content-Type":"application/json", "If-Match":tag}, body:JSON.stringify(candidate), signal});
+      if (!r.ok) throw new Error(await responseError(r));
+      return r.json();
+    });
+    // The successful response is the server's reloaded portable state. Preserve drafts while rebasing.
+    function syncImported(data) {
+      reconcileSources(data.sources);
+      const previous = JSON.parse(savedCard), draft = currentCard();
+      const baseline = Object.fromEntries(cardFieldIds.map(id => [id, data.card[id]]));
+      showCard(Object.fromEntries(cardFieldIds.map(id => [id, draft[id] === previous[id] ? baseline[id] : draft[id]])));
+      savedCard = JSON.stringify(baseline);
+      updateCardDirty(); previewCard(); showSaved(data.appearance);
+    }
+    syncImported(imported);
+    backupMessage(t("backup.saved"));
+  } catch (e) { backupMessage(t("backup.recheck", {error:e.message}), "error"); }
+  finally { sourceFields.disabled = sourceWasDisabled; cardFields.disabled = cardWasDisabled; themeFields.disabled = themeWasDisabled; backupBusy = false; backupControls(); }
+});
+
 // Diagnostics: a copyable plain-text report built by the daemon, and the in-memory Recent list.
 const diagStatus = document.getElementById("diag-status");
 const diagText = document.getElementById("diag-text");
@@ -2056,6 +2192,18 @@ document.getElementById("diag-copy").addEventListener("click", async () => {
     diagText.select();
     updateStatus(diagStatus, t("diag.copyFailed"));
   }
+});
+document.getElementById("diag-save").addEventListener("click", async event => {
+  const button = event.currentTarget; if (button.disabled) return; button.disabled = true;
+  try {
+    const report = await withDownloadDeadline(async signal => {
+      const r = await fetch(`/api/diagnostics?t=${encodeURIComponent(token)}`, {cache:"no-store", signal});
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.text();
+    });
+    boundedDownload(report, "yozora-diagnostics.txt", "text/plain;charset=utf-8"); updateStatus(diagStatus, t("diag.saved"));
+  } catch (e) { updateStatus(diagStatus, t("diag.failed", {error:e.message})); }
+  finally { button.disabled = false; }
 });
 const recentBox = document.getElementById("recent");
 const recentList = document.getElementById("recent-list");
