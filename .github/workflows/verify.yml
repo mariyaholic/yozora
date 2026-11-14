@@ -2,7 +2,6 @@ name: verify
 
 on:
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
@@ -14,8 +13,11 @@ concurrency:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -23,8 +25,22 @@ jobs:
         run: go test ./... -count=1
       - name: Stress state transitions with race detection
         run: go test -race ./internal/presence ./internal/spotifyapi -count=20
-      - name: Build Windows app without publishing
-        run: go build -trimpath -ldflags "-s -w -H=windowsgui" -o Yozora.exe ./cmd/yozora
+      - name: Choose candidate version
+        id: version
+        run: |
+          $n = git tag --list 'v0.2.*' | ForEach-Object { if ($_ -match '^v0\.2\.(\d+)$') { [int]$Matches[1] } } | Sort-Object | Select-Object -Last 1
+          if ($null -eq $n -or $n -lt 1 -or -not (git tag --list 'v0.2.1')) { throw 'Published v0.2.1 baseline tag is missing' }
+          "version=0.2.$($n + 1)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+      - name: Build release-stamped Windows candidate
+        run: go build -trimpath -ldflags "-s -w -H=windowsgui -X uika-resonance/internal/version.Version=${{ steps.version.outputs.version }}" -o Yozora.exe ./cmd/yozora
+      - name: Build candidate installer
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.version.outputs.version }}" installer\yozora.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed: $LASTEXITCODE" }
+      - name: Smoke test installed upgrade from v0.2.1
+        timeout-minutes: 10
+        run: ./scripts/check-installed-upgrade.ps1 -CandidateSetup dist/Yozora-Setup.exe -CandidateExe Yozora.exe -Version '${{ steps.version.outputs.version }}'
   linux-logic:
     runs-on: ubuntu-latest
     steps:

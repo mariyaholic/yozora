@@ -2,6 +2,7 @@ package update
 
 import (
 	"context"
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -34,15 +35,17 @@ type Service struct {
 	fileSig func(path string) Signature
 	dl      *downloader
 	jitter  func() time.Duration
+	wake    chan struct{}
 
 	selfOnce sync.Once
 	self     Signature
 
-	mu    sync.Mutex
-	st    State
-	phase string
-	err   string
-	since time.Time // when the installer was launched
+	mu       sync.Mutex
+	st       State
+	phase    string
+	err      string
+	since    time.Time // when the installer was launched
+	checking bool
 }
 
 // New builds the service for a running version. enabled reports the
@@ -54,6 +57,7 @@ func New(version, statePath string, enabled func() bool) *Service {
 		launch: launch, selfSig: selfSignature, fileSig: FileSignature,
 		dl:    newDownloader(downloadBase, DefaultAllowURL, ""),
 		phase: PhaseIdle,
+		wake:  make(chan struct{}, 1),
 	}
 	s.fetch = func(ctx context.Context) (string, error) { return fetchLatest(ctx, client, latestURL, version) }
 	s.jitter = func() time.Duration { return time.Duration(randInt63n(int64(MaxJitter))) }
@@ -82,6 +86,9 @@ func (s *Service) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
+		case <-s.wake:
+			timer.Reset(NextDelay(s.state(), time.Now(), s.jitter()))
+			continue
 		}
 		d := Interval
 		if s.enabled() {
@@ -98,12 +105,27 @@ func (s *Service) state() State {
 	return s.st
 }
 
-// CheckNow asks GitHub once and remembers the answer.
+var ErrCheckDisabled = errors.New("update checks are disabled in this build or configuration")
+
+// CheckNow asks GitHub once and remembers the answer. Only one check or install
+// can run at a time, including checks started by the scheduler.
 func (s *Service) CheckNow(ctx context.Context) error {
+	if !s.Active() || !s.enabled() {
+		return ErrCheckDisabled
+	}
+	s.mu.Lock()
+	if s.checking || (s.phase != PhaseIdle && s.phase != PhaseError && !(s.phase == PhaseInstalling && time.Since(s.since) > installGrace)) {
+		s.mu.Unlock()
+		return ErrBusy
+	}
+	s.checking = true
+	s.mu.Unlock()
+	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
+	defer cancel()
 	now := time.Now()
 	latest, err := s.fetch(ctx)
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.checking = false
 	s.st.AttemptAt = now
 	if err == nil {
 		s.st.CheckedAt = now
@@ -111,6 +133,12 @@ func (s *Service) CheckNow(ctx context.Context) error {
 	}
 	if serr := saveState(s.statePath, s.st); serr != nil {
 		log.Printf("update: remember check: %v", serr)
+	}
+	s.mu.Unlock()
+	// Reuse the scheduler's timer for the new successful or failed attempt.
+	select {
+	case s.wake <- struct{}{}:
+	default:
 	}
 	if err != nil {
 		log.Printf("update: check failed: %v", err)
@@ -122,6 +150,10 @@ func (s *Service) CheckNow(ctx context.Context) error {
 func (s *Service) Available() (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.availableLocked()
+}
+
+func (s *Service) availableLocked() (string, bool) {
 	if s.st.Latest != "" && Newer(s.version, s.st.Latest) {
 		return s.st.Latest, true
 	}
@@ -142,19 +174,22 @@ type Status struct {
 	URL          string        `json:"url"`
 	Verification string        `json:"verification"`
 	CheckEnabled bool          `json:"check_enabled"`
+	Checking     bool          `json:"checking"`
 	Install      InstallStatus `json:"install"`
 }
 
 func (s *Service) Status() Status {
-	latest, ok := s.Available()
-	st := Status{Version: s.version, Available: ok, Verification: Mode(s.selfSignature()), CheckEnabled: s.Active() && s.enabled()}
+	st := Status{Version: s.version, Verification: Mode(s.selfSignature()), CheckEnabled: s.Active() && s.enabled()}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	latest, ok := s.availableLocked()
+	st.Available = ok
 	if ok {
 		st.Latest = latest
 		st.URL = ReleaseURL(latest)
 	}
 	st.Install = InstallStatus{State: s.phase, Error: s.err}
+	st.Checking = s.checking
 	// Setup normally ends this daemon within seconds. If it is still here long
 	// after the launch, the installer did not go through; allow another try.
 	if s.phase == PhaseInstalling && time.Since(s.since) > installGrace {
@@ -178,12 +213,15 @@ func (s *Service) setPhase(phase, msg string) {
 
 // begin claims the install slot for the version the last check found.
 func (s *Service) begin() (string, error) {
-	latest, ok := s.Available()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.checking {
+		return "", ErrBusy
+	}
+	latest, ok := s.availableLocked()
 	if !ok {
 		return "", ErrNoUpdate
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.phase == PhaseInstalling && time.Since(s.since) > installGrace {
 		s.phase = PhaseIdle
 	}

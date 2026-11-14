@@ -1,0 +1,27 @@
+Selected native Windows CI execution lines.
+Full run: https://github.com/mariyaholic/yozora/actions/runs/43584211089
+Commit: d3de539f997252700c6f2614e98d0f121b5c2a77
+
+2026-11-14T10:13:39.1577231Z ##[group]Run go test ./... -count=1
+2026-11-14T10:13:43.4949109Z ok  	uika-resonance/cmd/yozora	0.076s
+2026-11-14T10:13:43.6306630Z ok  	uika-resonance/internal/art	0.183s
+2026-11-14T10:13:43.6309963Z ok  	uika-resonance/internal/browserwin	0.042s
+2026-11-14T10:13:44.8154242Z ok  	uika-resonance/internal/cli	0.627s
+2026-11-14T10:13:44.8179043Z ok  	uika-resonance/internal/config	0.301s
+2026-11-14T10:13:44.8180744Z ok  	uika-resonance/internal/discordipc	0.095s
+2026-11-14T10:13:44.8181605Z ok  	uika-resonance/internal/logfile	0.051s
+2026-11-14T10:13:44.8182457Z ok  	uika-resonance/internal/player	0.030s
+2026-11-14T10:13:45.9770776Z ok  	uika-resonance/internal/presence	0.294s
+2026-11-14T10:13:47.7374537Z ok  	uika-resonance/internal/server	1.913s
+2026-11-14T10:13:47.7375522Z ok  	uika-resonance/internal/smtc	0.027s
+2026-11-14T10:13:47.7375941Z ok  	uika-resonance/internal/spotifyapi	0.069s
+2026-11-14T10:13:47.7376612Z ok  	uika-resonance/internal/sysutil	0.281s
+2026-11-14T10:13:47.7377013Z ok  	uika-resonance/internal/template	0.025s
+2026-11-14T10:13:47.7377390Z ok  	uika-resonance/internal/tray	0.681s
+2026-11-14T10:13:47.9285675Z ok  	uika-resonance/internal/update	0.241s
+2026-11-14T10:13:47.9286443Z ok  	uika-resonance/internal/wrt	0.029s
+2026-11-14T10:13:49.3666836Z ##[group]Run go test -race ./internal/presence ./internal/spotifyapi -count=20
+2026-11-14T10:14:23.3568179Z ok  	uika-resonance/internal/presence	8.321s
+2026-11-14T10:14:23.3568689Z ok  	uika-resonance/internal/spotifyapi	1.457s
+2026-11-14T10:14:23.6609399Z ##[group]Run go build -trimpath -ldflags "-s -w -H=windowsgui" -o Yozora.exe ./cmd/yozora
+

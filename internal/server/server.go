@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -57,6 +58,7 @@ type Deps struct {
 // Updater is the update service as the panel sees it.
 type Updater interface {
 	Status() update.Status
+	CheckNow(context.Context) error
 	StartInstall() error
 }
 
@@ -370,6 +372,7 @@ func Handler(d Deps) http.Handler {
 	registerSetup(mux, d, &configMu, auth)
 	registerPause(mux, d, auth)
 	registerCard(mux, d, &configMu, auth)
+	registerSettings(mux, d, &configMu, auth)
 	return mux
 }
 

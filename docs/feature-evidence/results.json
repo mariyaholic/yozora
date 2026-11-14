@@ -1,0 +1,724 @@
+{
+  "checks": [
+    "native-size playing layout and saved state",
+    "polling preserves link focus and paused progress",
+    "Pause sharing: choices, 1 hour and until-resumed, the paused line with Resume, a failed save, and 320px",
+    "unsaved changes, dependency hint for YouTube and Twitch, and discard",
+    "keyboard reorder, focus retention, and restoring saved order",
+    "failed-save retry, exact payload, and reorder lock during save",
+    "tray changes reconcile with clean and dirty forms, Apply and Discard; stale polls and read failures recover",
+    "mouse drag feedback and toggle-then-drag saved payload",
+    "Escape and outside-list mouse cancellation",
+    "startup save and failed-save rollback",
+    "appearance dialog opens from the masthead, starts on the saved theme, and closes by Escape, backdrop, or button",
+    "eleven design-system themes apply, save, roll back, keep 4.5:1 text, and load their own faces",
+    "Twitch stream preview with live thumbnail and watch button",
+    "320/390/560/960px layouts, full title access, and unsafe-link rejection",
+    "empty, Discord-offline, panel-offline, and recovered states",
+    "broken-art fallback and initial settings-load retry",
+    "every theme is still at idle; only the live dot loops, only while playing",
+    "track and play-state cues fire once per change and never on reconnect",
+    "drag parts rows, drops between them, cancels cleanly, and each theme slides or snaps as designed",
+    "PC-98 busy cursor exists only while a save is in flight, including failures",
+    "Sumimi press wash starts at the pointer and clears itself",
+    "Reduced motion mode stills the panel when Windows allows motion; a failed save keeps the previous mode",
+    "a failed theme read leaves the picker usable with the server-rendered theme",
+    "reduced motion: no animation or transition at all",
+    "Full motion mode overrides Windows reduced motion; Follow Windows returns to it",
+    "390px real-touch drag, saved payload, cancellation, and native row scrolling",
+    "390px touch edge scrolling reaches both ends without changing order until release",
+    "320px real-touch drag, saved payload, cancellation, and native row scrolling",
+    "320px touch edge scrolling reaches both ends without changing order until release",
+    "first-run checklist shows its three checks when setup is not complete",
+    "test card: sending, shown with countdown, unconfirmed hint, withdrawn, send failure and Discord failure",
+    "Discord application ID entry appears only on a refused handshake and validates before saving",
+    "the checklist’s startup switch saves and stays in step with the Startup section",
+    "all checks passing saves onboarded and collapses the checklist for good",
+    "Diagnostics reopens the checklist and its close button hides it again",
+    "Spotify connect: validation, browser failure, waiting, cancel, denial, connected, poller error and disconnect",
+    "checklist and Spotify section in a light theme and at 320px",
+    "the running version shows in the footer and Diagnostics, and a dev build says so",
+    "the config-restored notice names the file set aside, and dismisses for that restore",
+    "Recent lists the last tracks with a thumbnail, title, artist and relative time, and Copy report puts the plain-text report on the clipboard",
+    "the update line names the version, links the release, and dismisses per version",
+    "Update now posts once, shows downloading, checking and installing, and reports errors with Try again",
+    "Recent and Copy report read naturally in Japanese",
+    "Japanese: the picker saves only the language, and key regions, labels and live text are translated",
+    "Japanese: the update line, its buttons and every install state are translated",
+    "Japanese: the pause control, its choices, and the paused line with and without an end time",
+    "Japanese at 320px in a dark, a light and the PC-98 theme has no horizontal overflow",
+    "switching back to English and to Follow Windows posts each choice; a failed save keeps Japanese",
+    "Follow Windows picks Japanese from a Japanese browser",
+    "forced colours keep focus rings, checked rows and tiles, the chosen segment, checks and the drop line visible",
+    "Discord card form edits, previews, applies, discards and resets; tracks can be hidden and unhidden",
+    "Japanese: Discord card form edits, previews, applies, discards and resets; tracks can be hidden and unhidden",
+    "en: preset drafts, portable backup review, guarded import, failure recovery and downloads",
+    "ja: preset drafts, portable backup review, guarded import, failure recovery and downloads",
+    "production CSP and browser console"
+  ],
+  "errors": [],
+  "violations": [],
+  "screenshots": "/workspace/yozora-features/dist/feature-ui-evidence",
+  "metadata": {
+    "runDateUTC": "2026-11-14T10:15:28.965Z",
+    "branch": "feat/panel-presets-backup",
+    "revision": "d3de539f997252700c6f2614e98d0f121b5c2a77",
+    "featureBaseline": "819d6aa6626bf5ead081b8e7007d4a56d439cd71",
+    "command": "NODE_PATH=/opt/codex/runtimes/codex-primary-runtime/dependencies/node/node_modules CHROMIUM_PATH=/usr/bin/chromium UI_EVIDENCE_DIR=/workspace/yozora-features/dist/feature-ui-evidence node scripts/check-ui.cjs",
+    "environment": {
+      "os": "Linux 6.18.57 (linux/x64)",
+      "node": "v24.19.0",
+      "chromiumPath": "/usr/bin/chromium",
+      "chromium": "Chromium 154.0.8037.57 built on Debian GNU/Linux 13 (trixie)",
+      "playwrightModule": "/opt/codex/runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright/index.js"
+    },
+    "outputDirectory": "dist/feature-ui-evidence (ignored workspace output)",
+    "screenshotCount": 112,
+    "checkCount": 55,
+    "pageErrorCount": 0,
+    "cspViolationCount": 0,
+    "suiteResult": "passed",
+    "fullScreenshotManifest": [
+      {
+        "path": "dist/feature-ui-evidence/appearance-dialog-560.png",
+        "bytes": 57751,
+        "sha256": "cf2397420d4bf63c48f5483f508d4f25563052b1756944880917d4bc43b97d96"
+      },
+      {
+        "path": "dist/feature-ui-evidence/backup-review-en-320.png",
+        "bytes": 52499,
+        "sha256": "cce4dc669468f742572b81780beaddd8d1f2b57b6d2b470c45dc921817500a19"
+      },
+      {
+        "path": "dist/feature-ui-evidence/backup-review-ja-320.png",
+        "bytes": 55214,
+        "sha256": "00aa5cf4daac4a05ae6e1e2ddcf57dae59e63edb74ea9620e1e4b9fc2e2f4484"
+      },
+      {
+        "path": "dist/feature-ui-evidence/card-en-560-viewport.png",
+        "bytes": 52805,
+        "sha256": "f383faca68e214765e975c5b1c24832c0c7d29d0fe0e2192ad2cd9e5ff4afb41"
+      },
+      {
+        "path": "dist/feature-ui-evidence/card-en-560.png",
+        "bytes": 151648,
+        "sha256": "72cc784e29c331f8fadd6bdc34cefc4195dc2c9aca2c5a98792cbf34cc7f572b"
+      },
+      {
+        "path": "dist/feature-ui-evidence/card-ja-560-viewport.png",
+        "bytes": 52805,
+        "sha256": "f383faca68e214765e975c5b1c24832c0c7d29d0fe0e2192ad2cd9e5ff4afb41"
+      },
+      {
+        "path": "dist/feature-ui-evidence/card-ja-560.png",
+        "bytes": 151660,
+        "sha256": "1ffba6241d1dd24ad44a7869b7dbe18ea56ca4ec2aa3c73b83083302d11991c1"
+      },
+      {
+        "path": "dist/feature-ui-evidence/diagnostics-560.png",
+        "bytes": 184124,
+        "sha256": "fd1b1c01d1fc632e69453aa4e401c125af7109bbb4ee3b2272442109f5b3c5aa"
+      },
+      {
+        "path": "dist/feature-ui-evidence/discord-offline-560-viewport.png",
+        "bytes": 73204,
+        "sha256": "b0f306f1f934ce28812b7bfc7377d0009f9845a011d8d658e69503d77ea3f4aa"
+      },
+      {
+        "path": "dist/feature-ui-evidence/discord-offline-560.png",
+        "bytes": 183537,
+        "sha256": "91f4ffe4f2daaffc6ed8a8168cab9f4f516445bce60e27655530c7c640c50f1a"
+      },
+      {
+        "path": "dist/feature-ui-evidence/forced-colors-560.png",
+        "bytes": 146938,
+        "sha256": "9bc1c8e9f2aa0766680bef0afc763000fa67fb57a3e8658dac0d243504cfc611"
+      },
+      {
+        "path": "dist/feature-ui-evidence/forced-colors-appearance-560.png",
+        "bytes": 48724,
+        "sha256": "0543c39518868730bead3b9a71e5a2e57c7576de6fb211f0aaecad951e5ddb0b"
+      },
+      {
+        "path": "dist/feature-ui-evidence/forced-colors-drag-560.png",
+        "bytes": 54357,
+        "sha256": "cd8b89b01e69e4e5189b790652e4c6e04c2590acc17dc165c9d3f7479d73a758"
+      },
+      {
+        "path": "dist/feature-ui-evidence/forced-colors-update-560.png",
+        "bytes": 48122,
+        "sha256": "d3d2bdbba60557cfde88f62294c6191e2357b8fc2a3d3f50d003a26e3c8e542c"
+      },
+      {
+        "path": "dist/feature-ui-evidence/hidden-en-560-viewport.png",
+        "bytes": 52805,
+        "sha256": "f383faca68e214765e975c5b1c24832c0c7d29d0fe0e2192ad2cd9e5ff4afb41"
+      },
+      {
+        "path": "dist/feature-ui-evidence/hidden-en-560.png",
+        "bytes": 151858,
+        "sha256": "89525eb3e77ff7d3f6ff55f79dee4ba99d37aba4ad1046f0cd2bb61b163a93b2"
+      },
+      {
+        "path": "dist/feature-ui-evidence/hidden-ja-560-viewport.png",
+        "bytes": 53159,
+        "sha256": "e081e634f565e1f95acc120e69ee73d920035af7d1259f7e5ef6b2d1975cc17b"
+      },
+      {
+        "path": "dist/feature-ui-evidence/hidden-ja-560.png",
+        "bytes": 151859,
+        "sha256": "3974fa3c48484f8070651844439cbcfa09278fb585871472546217a0c3ad7c2e"
+      },
+      {
+        "path": "dist/feature-ui-evidence/idle-560-viewport.png",
+        "bytes": 72577,
+        "sha256": "1eeeaa81700f789843d0e370975ee107c34b48041ec6b9a926010af37bcd243e"
+      },
+      {
+        "path": "dist/feature-ui-evidence/idle-560.png",
+        "bytes": 180386,
+        "sha256": "0efafb828a0a56fd423dbb60030de1cec789a9cecea52ba28376537b5b82dc68"
+      },
+      {
+        "path": "dist/feature-ui-evidence/initial-offline-560-viewport.png",
+        "bytes": 67529,
+        "sha256": "8d95463cf1358be31c83ee4c80efe732881457b252b5554c3e385d82b1998274"
+      },
+      {
+        "path": "dist/feature-ui-evidence/initial-offline-560.png",
+        "bytes": 165853,
+        "sha256": "d4baa9b2c708e81d391926bb93e9453ce19c8a6d9b7df7ac0ae70afe8b9f44e0"
+      },
+      {
+        "path": "dist/feature-ui-evidence/ja-ledger-320.png",
+        "bytes": 208892,
+        "sha256": "f547aaad5047b6bfe9da9223196769ee99126edd14c38f4f254ff721de4f8e8d"
+      },
+      {
+        "path": "dist/feature-ui-evidence/ja-ledger-560.png",
+        "bytes": 213213,
+        "sha256": "a1658f172ea91922d9a15bc08697b66f865ecb2e4f3b03b3fa02d75bb96a373b"
+      },
+      {
+        "path": "dist/feature-ui-evidence/ja-ledger-appearance-320.png",
+        "bytes": 30251,
+        "sha256": "46cb0b69b13d8f5a9d3b536ac0c8bef76a142c126c06dd32af8da8d30718e849"
+      },
+      {
+        "path": "dist/feature-ui-evidence/ja-mariyaholic-98-320.png",
+        "bytes": 191362,
+        "sha256": "37ccd3b18af8a61cdf3d665320b3803338eaace96ac7b5bffbc38478c20dc8b8"
+      },
+      {
+        "path": "dist/feature-ui-evidence/ja-mariyaholic-98-560.png",
+        "bytes": 195043,
+        "sha256": "5958956a084e15450da957a13ccd674023992dabcd3942dc0d5cca8a3c691566"
+      },
+      {
+        "path": "dist/feature-ui-evidence/ja-mariyaholic-98-appearance-320.png",
+        "bytes": 29412,
+        "sha256": "b48edb9d20dd305477658ff9ccf2d859adc87b397b0cb6c5a30aacb09139132c"
+      },
+      {
+        "path": "dist/feature-ui-evidence/ja-paused-560.png",
+        "bytes": 238547,
+        "sha256": "33ce345c9edc2c6b6c0e16264a1dcf057406434529efcd738704afb3bc485263"
+      },
+      {
+        "path": "dist/feature-ui-evidence/ja-yozora-320.png",
+        "bytes": 225963,
+        "sha256": "fae866b390ae12bb4305446a29a2ff8de517e286b5cb0ed70c31f86d79f97196"
+      },
+      {
+        "path": "dist/feature-ui-evidence/ja-yozora-560.png",
+        "bytes": 236324,
+        "sha256": "be2a3d15baa034a493863b664eadb4aee1be04180298815f0925e3da82178642"
+      },
+      {
+        "path": "dist/feature-ui-evidence/ja-yozora-appearance-320.png",
+        "bytes": 34789,
+        "sha256": "2d2cee9738c44c31fb19bd572f07f9404d09a62c48ed88499dc1a5829dccbba6"
+      },
+      {
+        "path": "dist/feature-ui-evidence/long-title-320-viewport.png",
+        "bytes": 59684,
+        "sha256": "28935fb94aa7c4ab35c4e59b0b73ed7634879ba3e1b48ede9244fd87206f34a9"
+      },
+      {
+        "path": "dist/feature-ui-evidence/long-title-320.png",
+        "bytes": 169179,
+        "sha256": "818ef9df42e79170e9943fe99e260264b92ed07b7080929d5b5348d6ac1f3be8"
+      },
+      {
+        "path": "dist/feature-ui-evidence/long-title-390-viewport.png",
+        "bytes": 65538,
+        "sha256": "b404976b60c44bd5880d648c0764f215e5cc6f136d0d1fe80b7421d0fcef3f38"
+      },
+      {
+        "path": "dist/feature-ui-evidence/long-title-390.png",
+        "bytes": 171637,
+        "sha256": "7d8fc5bcc15b596625be01d3ef48639208fe810538a9ac844a6ae5f52e0a02e0"
+      },
+      {
+        "path": "dist/feature-ui-evidence/long-title-560-viewport.png",
+        "bytes": 76961,
+        "sha256": "7b61ee88e3a07c1b0ace00d03a2fed1b056829c5ccd39e14c3aa3e96965d8612"
+      },
+      {
+        "path": "dist/feature-ui-evidence/long-title-560.png",
+        "bytes": 189731,
+        "sha256": "0c949c4f1a978944abf44bc518724e6b830c03580caa33a2e3bcf7486e22c147"
+      },
+      {
+        "path": "dist/feature-ui-evidence/long-title-960-viewport.png",
+        "bytes": 89466,
+        "sha256": "42dc8eebcd1ae34afca202a626042ecf5106fba97c9c69fc5ed8c5ca572fb3b0"
+      },
+      {
+        "path": "dist/feature-ui-evidence/long-title-960.png",
+        "bytes": 219248,
+        "sha256": "ada97c477da1c82909e7b1140ac5e75919ae15301fc1e497802d9741816db931"
+      },
+      {
+        "path": "dist/feature-ui-evidence/motion-drag-astra-viewport.png",
+        "bytes": 47489,
+        "sha256": "e3cf40edefcdb86d2d5d91096849c2bedd43085959c6f8fb3f1a2ca801b75edf"
+      },
+      {
+        "path": "dist/feature-ui-evidence/motion-drag-ava-viewport.png",
+        "bytes": 57620,
+        "sha256": "219d5339cd3b782992fbf9c85399f885881cf2b7b5b453744d72513391b35859"
+      },
+      {
+        "path": "dist/feature-ui-evidence/motion-drag-confluence-viewport.png",
+        "bytes": 54496,
+        "sha256": "a3a99022ed463f898564d85aa42ee8a9895f835e40bf3174e53036e77df86890"
+      },
+      {
+        "path": "dist/feature-ui-evidence/motion-drag-ledger-viewport.png",
+        "bytes": 59105,
+        "sha256": "76bafbb8fdd56933611ce051769805fab5bda3c6f8a0a8e94e476ac828426d47"
+      },
+      {
+        "path": "dist/feature-ui-evidence/motion-drag-mariyaholic-98-viewport.png",
+        "bytes": 34099,
+        "sha256": "958aaf272ab42587826c57795babc18e276302745b9e48ee9a0c44cf816885d2"
+      },
+      {
+        "path": "dist/feature-ui-evidence/motion-drag-pine-viewport.png",
+        "bytes": 57362,
+        "sha256": "4347028683ef629dca2dfc74f51ea664834f4b827c5e6bd64e9484fb213a26a5"
+      },
+      {
+        "path": "dist/feature-ui-evidence/motion-drag-sumimi-viewport.png",
+        "bytes": 52896,
+        "sha256": "f470b472a58e0d96ea6e407f84dd9ccb97f6248b7bd1fd4f6804265f4f46a9e9"
+      },
+      {
+        "path": "dist/feature-ui-evidence/motion-drag-uika-viewport.png",
+        "bytes": 57951,
+        "sha256": "0e631c90688d4a1092f1fe209d7e9c42211fe2cafddb66557788e129aac7676a"
+      },
+      {
+        "path": "dist/feature-ui-evidence/motion-drag-yozora-viewport.png",
+        "bytes": 65661,
+        "sha256": "3006adf505825e14ef1201f9908fab48c0803a5ea326b8260251fd72581307d1"
+      },
+      {
+        "path": "dist/feature-ui-evidence/mouse-drag-560-viewport.png",
+        "bytes": 63235,
+        "sha256": "cd46be7a16f01bc00d23352977efb50741c4c55aad5ddd4061c95fd3d3675d0d"
+      },
+      {
+        "path": "dist/feature-ui-evidence/mouse-drag-560.png",
+        "bytes": 170159,
+        "sha256": "88e83cad2337690df7e4fb0206bc39988652c3591f4ec09f9beab65881d23a50"
+      },
+      {
+        "path": "dist/feature-ui-evidence/panel-offline-560-viewport.png",
+        "bytes": 75430,
+        "sha256": "f074b96e70e02a72d171a3572797ea1c24f1dd87640478738fdef07c083e91e9"
+      },
+      {
+        "path": "dist/feature-ui-evidence/panel-offline-560.png",
+        "bytes": 178683,
+        "sha256": "29f762bb0e39efe3434a9da04fa2f334a41ebe90699c448c8bbf38ba27be25b3"
+      },
+      {
+        "path": "dist/feature-ui-evidence/paused-320-viewport.png",
+        "bytes": 59130,
+        "sha256": "22442dfe98874f330b820fa619d12b30cd97b130ed43699ed69365f806ba4465"
+      },
+      {
+        "path": "dist/feature-ui-evidence/paused-320.png",
+        "bytes": 161834,
+        "sha256": "e3d13fe84909be517aa0cc8779e8e4f2e74307f5263c39d096b07c74bda0ff71"
+      },
+      {
+        "path": "dist/feature-ui-evidence/paused-560-viewport.png",
+        "bytes": 70366,
+        "sha256": "f2834b35b47a32a0f118dcf64d50375572a0489b7915b82001a5e67e680cb8db"
+      },
+      {
+        "path": "dist/feature-ui-evidence/paused-560.png",
+        "bytes": 170743,
+        "sha256": "fd2a1cae10b161bf25c8efdfa906e87d06558fd4d7abe1457591cba4788fe50b"
+      },
+      {
+        "path": "dist/feature-ui-evidence/phone-320-viewport.png",
+        "bytes": 58533,
+        "sha256": "81873092b84764202950b7dc31ff38526a0ab4af517a1d06daa3520a90ee9721"
+      },
+      {
+        "path": "dist/feature-ui-evidence/phone-320.png",
+        "bytes": 156977,
+        "sha256": "c84e1f0afe4a16ff79743dfd03b10bcc516b2ca7a4b14e602e492cb5b435a07d"
+      },
+      {
+        "path": "dist/feature-ui-evidence/phone-390-viewport.png",
+        "bytes": 63312,
+        "sha256": "b7b5f0401e8dad0218c22f70e22de78636dfe11f2b4e4a25531a2be6f9456145"
+      },
+      {
+        "path": "dist/feature-ui-evidence/phone-390.png",
+        "bytes": 159894,
+        "sha256": "ddb62ec76ea7703ed9623871a91df31fcd9a5f92ee71ee00f5fa4b265c22d2f4"
+      },
+      {
+        "path": "dist/feature-ui-evidence/playing-560-viewport.png",
+        "bytes": 69300,
+        "sha256": "d27c7c5044581c00e2eca64ef78faf0f56412a9126fefb33f315030f5025f33f"
+      },
+      {
+        "path": "dist/feature-ui-evidence/playing-560.png",
+        "bytes": 168480,
+        "sha256": "8512872fe4dbadc8a29b4e744b02ed7253945d404331280f7f5a3d999ccbcc7e"
+      },
+      {
+        "path": "dist/feature-ui-evidence/preset-draft-en-320.png",
+        "bytes": 52747,
+        "sha256": "4378522c359383cd6194b4e8c21204554f669c32f608e9fbc58983e2c7e952ad"
+      },
+      {
+        "path": "dist/feature-ui-evidence/preset-draft-ja-320.png",
+        "bytes": 62274,
+        "sha256": "4be2c50f5acb988013194b2405046516109f545b1d25978f466b6c6853c5e987"
+      },
+      {
+        "path": "dist/feature-ui-evidence/priority-560-viewport.png",
+        "bytes": 51681,
+        "sha256": "3aacb87cca2144e03ab2153186f498e01b67fefd69f823e00a456916ef432988"
+      },
+      {
+        "path": "dist/feature-ui-evidence/priority-560.png",
+        "bytes": 159667,
+        "sha256": "25fbf36cc43d4923e5ebcb1261de9a03d7f8a501dbd05837c0644e52eb436004"
+      },
+      {
+        "path": "dist/feature-ui-evidence/recent-320.png",
+        "bytes": 179201,
+        "sha256": "c89f96c54b50278538f20732bc35b34175110dfc0ac5a0c14aad588a76efa2fd"
+      },
+      {
+        "path": "dist/feature-ui-evidence/recent-ja-560.png",
+        "bytes": 230201,
+        "sha256": "291e7c2a8516e6f5b02d791f00a0686205d82bb54d48df66de082de35481c5e0"
+      },
+      {
+        "path": "dist/feature-ui-evidence/restored-notice-560.png",
+        "bytes": 75926,
+        "sha256": "f4161660e2b99e79a24cab1ec70125f5fa6fd071bf4634d6d366050fbf4f79dd"
+      },
+      {
+        "path": "dist/feature-ui-evidence/save-error-560-viewport.png",
+        "bytes": 58752,
+        "sha256": "bd0391ef9f9fc5148367d7caa3084d13463262a525643ed3e25b12c7b89f1f7e"
+      },
+      {
+        "path": "dist/feature-ui-evidence/save-error-560.png",
+        "bytes": 159735,
+        "sha256": "f0c148c1b97d92de1b061a6ec989714869b0b2ebe2589d7714a1d9851834bada"
+      },
+      {
+        "path": "dist/feature-ui-evidence/setup-and-spotify-ledger-320.png",
+        "bytes": 176609,
+        "sha256": "d2dad98943bc05351d8945a821e8847c924eea54578af9da555f1b79846fc255"
+      },
+      {
+        "path": "dist/feature-ui-evidence/setup-and-spotify-ledger-560.png",
+        "bytes": 174198,
+        "sha256": "88b4c1f23acd135a1c0d6e316f671c0a3a0cc86ea02874cd9585e3bbbd15ad29"
+      },
+      {
+        "path": "dist/feature-ui-evidence/setup-app-id-yozora-560.png",
+        "bytes": 204265,
+        "sha256": "28dbc7aaab774778f6651829d937e29be5f2a9cd3dac45b92d76a7d32b443ed8"
+      },
+      {
+        "path": "dist/feature-ui-evidence/setup-checklist-yozora-560.png",
+        "bytes": 191999,
+        "sha256": "8d1f421514a5be33073c0f43e25da6fed0d0821b6ea02f7490d9fb8cf301fe0f"
+      },
+      {
+        "path": "dist/feature-ui-evidence/setup-unconfirmed-yozora-560.png",
+        "bytes": 191438,
+        "sha256": "4deb318e59dfeadcaa56af1e656c3de6c2922bf9dc1ed487bcdff80a9b0cd9b4"
+      },
+      {
+        "path": "dist/feature-ui-evidence/spotify-connected-yozora-560.png",
+        "bytes": 57272,
+        "sha256": "5c5d1fd844633f287b1a7f10608b9569014f0c6dc1e1c562cac6a8dfdae81c90"
+      },
+      {
+        "path": "dist/feature-ui-evidence/spotify-waiting-yozora-560.png",
+        "bytes": 62598,
+        "sha256": "4f9956e0199b5e38186b6e0df026ad0c6148b7513f6d2304be3c65e38a254323"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-astra-560-viewport.png",
+        "bytes": 43220,
+        "sha256": "749b9c960d1fc2e5b4b26396654ca6ee38dfe00b54b7d42bad84acff8f0e76c4"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-astra-560.png",
+        "bytes": 133604,
+        "sha256": "acd205eafe3617fdcbf258866706f8d7f9ab74fe9596db2bcecdab84b9056b78"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-astra-light-560-viewport.png",
+        "bytes": 43078,
+        "sha256": "159e2d2d8634b68181296c71b47c1855b06f09b8fb556f9b7340408e475e043a"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-astra-light-560.png",
+        "bytes": 133733,
+        "sha256": "84bc09e2ba5274eb2ab06dabf10afe2b6010a2674da7d8bdbb0260debe74d83b"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-ava-560-viewport.png",
+        "bytes": 47721,
+        "sha256": "5a5b30eb6c022ef73b318dbefba9a20c254bdc12a05c057d2bc3ebf9c7e3d099"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-ava-560.png",
+        "bytes": 151523,
+        "sha256": "4045a0ea808c7d6b8621d0d2277f1094a0bfa26c3bcc629159081681c7a3f2e3"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-confluence-560-viewport.png",
+        "bytes": 44332,
+        "sha256": "4361948b49a0d9adfbce6be3e825a590711942b71d080899cc845af76a6e4bc8"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-confluence-560.png",
+        "bytes": 143894,
+        "sha256": "a4d57df95ca089771693a0a4d03f85e3f6f1461b93a99f9f35874f6e7051af4b"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-kurisu-560-viewport.png",
+        "bytes": 48161,
+        "sha256": "c5711e8bb78488f36014b1c7561a3f900c54e5b5f5d2069848bc1ff62407161c"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-kurisu-560.png",
+        "bytes": 152246,
+        "sha256": "6f12a503a93ecf08cba018a11c18492e0b8352a302cbf2ab4c89532b32c1c34f"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-ledger-560-viewport.png",
+        "bytes": 48390,
+        "sha256": "d84a480904bbeb0627c3850b5b496208399aeda3b62ba7213ff0f6907039f413"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-ledger-560.png",
+        "bytes": 152900,
+        "sha256": "6ca324dfdc7882049668800df92cd8ce3d1a6cd601b708f8c376d28e2908cf5a"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-mariyaholic-98-560-viewport.png",
+        "bytes": 35120,
+        "sha256": "c33873952633b7a41aff862c3bf96579c221db2536957eb115659cd9a920da98"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-mariyaholic-98-560.png",
+        "bytes": 113661,
+        "sha256": "7d270ee66c6ffc2267234431333e9d86c397341d0836084a042fefa361aad050"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-pine-560-viewport.png",
+        "bytes": 48228,
+        "sha256": "45c05c89c4ecc938124d4ec0684e0c5e90a689f5ec2fdd6c22a52f64de2608b6"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-pine-560.png",
+        "bytes": 152335,
+        "sha256": "127e4c4ec85b9a16509df4d7fcd235903f18102e3ffaf1f20dc25eaaaae45b0b"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-sumimi-560-viewport.png",
+        "bytes": 45286,
+        "sha256": "f6c2d12ada7aba57797abf33901f9421be3d21899fee65d6a29ca88490310677"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-sumimi-560.png",
+        "bytes": 137835,
+        "sha256": "fb8cc432a87f0514d682bfed419bf9784e0ffbe24f00c2195467723ab5b7bff3"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-uika-560-viewport.png",
+        "bytes": 63629,
+        "sha256": "2847c5af7ca4913a3f2ebfff64d5e432ff98e5527b39e6a285bcc86f7a4c299d"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-uika-560.png",
+        "bytes": 155789,
+        "sha256": "7d82c5f4058006986022832f41a23204b88fcead4e77d893ef32cbd903843ac9"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-yozora-560-viewport.png",
+        "bytes": 69877,
+        "sha256": "c2119b8e9ee4484693fdbcdb6b2ce31e37361e3e0c840cefb5efbf4ef6337b52"
+      },
+      {
+        "path": "dist/feature-ui-evidence/theme-yozora-560.png",
+        "bytes": 175494,
+        "sha256": "c29e94951ae8494966e07fe5f51259fb356c41a9e3fe28054cf4fd017ceb16f6"
+      },
+      {
+        "path": "dist/feature-ui-evidence/touch-drag-320-viewport.png",
+        "bytes": 53963,
+        "sha256": "a0a6b5de4e5c1a439824141bfd69942b9bd985a4293d58ddb5b7749a199e78c8"
+      },
+      {
+        "path": "dist/feature-ui-evidence/touch-drag-320.png",
+        "bytes": 53963,
+        "sha256": "a0a6b5de4e5c1a439824141bfd69942b9bd985a4293d58ddb5b7749a199e78c8"
+      },
+      {
+        "path": "dist/feature-ui-evidence/touch-drag-390-viewport.png",
+        "bytes": 59772,
+        "sha256": "a2674a1de4c3e43f40f8932776d853c9b947d8140b18735be2a42b60631b2235"
+      },
+      {
+        "path": "dist/feature-ui-evidence/touch-drag-390.png",
+        "bytes": 59772,
+        "sha256": "a2674a1de4c3e43f40f8932776d853c9b947d8140b18735be2a42b60631b2235"
+      },
+      {
+        "path": "dist/feature-ui-evidence/twitch-560-viewport.png",
+        "bytes": 69752,
+        "sha256": "a420460868e681066e12b79b0b27158e0818604efe1149063b25528382b0ccd0"
+      },
+      {
+        "path": "dist/feature-ui-evidence/twitch-560.png",
+        "bytes": 174764,
+        "sha256": "12f56ccf40fcd17cd786d4862220a1aed5380bd345233425106d6f1715944195"
+      },
+      {
+        "path": "dist/feature-ui-evidence/update-available-320.png",
+        "bytes": 195194,
+        "sha256": "370bf71597d09455aa36a65e132ec82d6a2beb9bd4fa7b072c28c9cb958bf07c"
+      },
+      {
+        "path": "dist/feature-ui-evidence/update-available-560.png",
+        "bytes": 204595,
+        "sha256": "21de27e82b5d14674f881fb1aa14bb27888502fdf26e6ac1bf745cef6461fece"
+      },
+      {
+        "path": "dist/feature-ui-evidence/update-downloading-560.png",
+        "bytes": 177969,
+        "sha256": "cb5817628113bfdc283fe582473554f402587f5a8b77dbaae3f1f2b595f3856f"
+      },
+      {
+        "path": "dist/feature-ui-evidence/update-error-560.png",
+        "bytes": 182487,
+        "sha256": "696e1e3c27cbb35bbed0601b07882e7789ba8aa345556ec0e0083847d3408b19"
+      },
+      {
+        "path": "dist/feature-ui-evidence/update-error-ja-560.png",
+        "bytes": 243032,
+        "sha256": "071bdb18b7f83d84243cb81835cde2224a9997b22b3860293e5624d9aad551d6"
+      }
+    ],
+    "selectedFeatureScreenshots": [
+      {
+        "path": "docs/feature-evidence/preset-draft-en-320.png",
+        "description": "Compact preset loaded into the English card form; the status says Apply is required to save.",
+        "sourcePath": "dist/feature-ui-evidence/preset-draft-en-320.png",
+        "bytes": 52747,
+        "sha256": "4378522c359383cd6194b4e8c21204554f669c32f608e9fbc58983e2c7e952ad"
+      },
+      {
+        "path": "docs/feature-evidence/preset-draft-ja-320.png",
+        "description": "Same unsaved Compact preset state with Japanese labels.",
+        "sourcePath": "dist/feature-ui-evidence/preset-draft-ja-320.png",
+        "bytes": 62274,
+        "sha256": "4be2c50f5acb988013194b2405046516109f545b1d25978f466b6c6853c5e987"
+      },
+      {
+        "path": "docs/feature-evidence/backup-review-en-320.png",
+        "description": "English import review with changed summary and candidate JSON before Apply.",
+        "sourcePath": "dist/feature-ui-evidence/backup-review-en-320.png",
+        "bytes": 52499,
+        "sha256": "cce4dc669468f742572b81780beaddd8d1f2b57b6d2b470c45dc921817500a19"
+      },
+      {
+        "path": "docs/feature-evidence/backup-review-ja-320.png",
+        "description": "Same import review state with Japanese labels.",
+        "sourcePath": "dist/feature-ui-evidence/backup-review-ja-320.png",
+        "bytes": 55214,
+        "sha256": "00aa5cf4daac4a05ae6e1e2ddcf57dae59e63edb74ea9620e1e4b9fc2e2f4484"
+      }
+    ],
+    "supportingFiles": [
+      {
+        "path": "docs/feature-evidence/go-logic.log",
+        "bytes": 613,
+        "sha256": "10d0ded70dafa5b96659354c66c3f43c436493ec64af7be7f9bff7c685b5124f"
+      },
+      {
+        "path": "docs/feature-evidence/go-vet-candidate.log",
+        "bytes": 272,
+        "sha256": "69b5ce674f9dbb4c0c918fd0edca18012487a0cdff411403dba7db022ff7a5cc"
+      },
+      {
+        "path": "docs/feature-evidence/go-vet-baseline.log",
+        "bytes": 272,
+        "sha256": "ee11004b4b7a77163f5145561759458670f4614243022464fcdbcd5f20f90e4c"
+      },
+      {
+        "path": "docs/feature-evidence/windows-compile.log",
+        "bytes": 142,
+        "sha256": "8bfcc596d755994abe0243d2befcac15eba4b3871f995ca3ea6d27bc74c123c7"
+      }
+    ],
+    "sourceFiles": [
+      {
+        "path": "scripts/check-ui.cjs",
+        "bytes": 140746,
+        "sha256": "e932584e9e4676584225c7c80580fa7058c4f68121821444a6b2d462d2e93e0a"
+      },
+      {
+        "path": "internal/server/ui.html",
+        "bytes": 176810,
+        "sha256": "cbbba3b1d8c6793a6c965a6404779fd06ca134dfce2d599525aa1e81cc7c6ca0"
+      },
+      {
+        "path": "internal/server/card.go",
+        "bytes": 10912,
+        "sha256": "72262bb684cd0c8b0616c2c34fec20537424ad9248cc76fcaf71622a9f2e814f"
+      },
+      {
+        "path": "internal/server/settings.go",
+        "bytes": 11973,
+        "sha256": "d4291be4764822ffd09ac396596989e3c57de61437dcbfde9050280cf9234923"
+      },
+      {
+        "path": "internal/server/diagnostics.go",
+        "bytes": 3633,
+        "sha256": "23fb1d5abbfce2613e9524a681077c026e2be21a3ad477e8485968be8b81899f"
+      }
+    ],
+    "note": "Browser responses, artwork, tracks, Discord status, and diagnostics in the fixture are synthetic. Hashes cover the full ignored PNG set, four curated tracked PNGs, supporting logs, and primary source files."
+  }
+}
