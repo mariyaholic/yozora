@@ -1,0 +1,12 @@
+--- FAIL: TestFailedDownloadRemovesTemporaryDirectory (0.00s)
+    --- FAIL: TestFailedDownloadRemovesTemporaryDirectory/Yozora-Setup.exe (0.00s)
+        update_test.go:483: temporary files after failure: [d yozora-update-1247594702/], <nil>
+    --- FAIL: TestFailedDownloadRemovesTemporaryDirectory/SHA256SUMS.txt (0.00s)
+        update_test.go:483: temporary files after failure: [d yozora-update-2026735103/], <nil>
+2026/11/14 09:04:51 update: installer for 0.1.9 started
+--- FAIL: TestInstallCancellationBeforeLaunchCleansUp (0.00s)
+    update_test.go:497: install error = <nil>, want context.Canceled
+2026/11/14 09:04:51 update: installer for 0.1.9 started
+FAIL
+FAIL	uika-resonance/internal/update	0.007s
+FAIL

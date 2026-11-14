@@ -1,5 +1,12 @@
 # State-machine audit and verification
 
+The 14 November 2026 assessment extends this historical audit. See
+[the current interaction inventory](INTERACTION-STATES.md),
+[the build assessment](BUILD-ASSESSMENT.md) and [the reviewed learnings](LEARNINGS.md)
+for the candidate's OAuth, updater, configuration, cache and panel fixes and
+their verification boundaries. The branch-scope statements below describe the
+earlier review.
+
 The November 2026 review covers daemon/panel lifecycle, media watcher reconnects,
 source arbitration, Discord publication/rate gating, Discord IPC connections,
 Spotify token/poll/snapshot delivery, asynchronous artwork/classification, and
