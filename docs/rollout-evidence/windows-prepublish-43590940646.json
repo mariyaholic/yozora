@@ -1,0 +1,26 @@
+{
+  "run_id": 43590940646,
+  "url": "https://github.com/mariyaholic/yozora/actions/runs/43590940646",
+  "job_id": 132435331566,
+  "revision": "a0f34512f95f4332da7ce764c2ed3627e52240ee",
+  "result": "success",
+  "completed_at": "2026-11-14T19:39:48+08:00",
+  "timezone": "Asia/Manila (UTC+08:00)",
+  "baseline": "0.2.1",
+  "candidate": "0.2.2",
+  "live_updater": false,
+  "verified": [
+    "public baseline Setup and executable checksums",
+    "installed baseline executable equals public asset",
+    "authenticated baseline service reports 0.2.1",
+    "real tray host belongs to baseline PID",
+    "candidate Setup exits successfully",
+    "old PID exits",
+    "installed executable equals stamped candidate",
+    "new serve PID runs at same installation path",
+    "authenticated restarted service reports 0.2.2",
+    "configuration marker and exact configuration hash retained"
+  ],
+  "other_jobs": "Native Windows packages/race stress/build/installer and Linux logic passed",
+  "boundary": "Prepublication actual Setup replacement; public updater discovery/download/install and human WebView2 click are separate checks."
+}
