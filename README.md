@@ -86,6 +86,18 @@ Commands: `serve`, `status`, `doctor`, `setup`, `install`, `uninstall`, `stop`, 
 
 `Yozora.exe` with no arguments opens the control panel (below); with any argument it acts as the command line (`Yozora.exe status`, `Yozora.exe serve`, ...). It is the only executable: the control panel starts the background daemon by re-launching itself with `serve`. The daemon owns the tray icon; its **Open control panel** re-launches the executable with the internal `panel` command, which opens the panel the same way but never starts a daemon of its own. The panel window runs in its own short-lived process that exits when the window closes or when the daemon stops. The `-H=windowsgui` linker flag keeps double-click launches free of a console window; the executable's icon comes from `cmd/yozora/rsrc_windows_amd64.syso`, generated from `assets/yozora.ico` with `go-winres simply --arch amd64 --icon ../../assets/yozora.ico --manifest gui`.
 
+## Card presets, settings backup and report downloads
+
+The **Discord card** section offers Default, Compact, Album and Detailed presets. Choose one and press **Load into form** to preview it. Loading does not save; use **Apply** to keep it, or **Discard** to return to saved settings. Replacing unsaved card edits asks first.
+
+**Panel settings backup** exports saved card fields, source switches/priority and appearance as `yozora-panel-settings.json`. Unsaved form edits are excluded. Account connections, client IDs, hidden-track rules, startup and system settings are outside this backup. Card text you wrote is included, so keep the file as a personal settings backup.
+
+To restore, choose a JSON backup of up to 64 KiB, review its values and changed sections, then press **Apply import**. Validation and preview do not save. If another panel or the tray changes supported settings after preview, import requires a fresh preview. Existing unsaved source/card edits are retained per field while untouched controls adopt the imported values. **Discard** then restores the imported saved baseline. A timeout can occur after the server saved; preview again before retrying. Invalid hand-edited saved settings return an export error, but a valid backup can still restore supported values.
+
+Under **Diagnostics**, **Save report** starts a download of the same redacted report used by **Copy report**, named `yozora-diagnostics.txt`. These actions run on request. Native WebView2 download handling still needs a Windows smoke test for this build.
+
+The feature plan, reviewed limitations and interaction evidence are in [docs/FEATURE-PLAN.md](docs/FEATURE-PLAN.md), [docs/FEATURE-ASSESSMENT.md](docs/FEATURE-ASSESSMENT.md) and [docs/FEATURE-STATES.md](docs/FEATURE-STATES.md).
+
 ## Source switches (Yozora.exe)
 
 Double-click **Yozora.exe** to open the control panel in its own native window. The source checkboxes save on Apply. A second press while the panel is open simply brings the existing window to the front.
