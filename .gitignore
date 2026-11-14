@@ -8,3 +8,4 @@ state.json
 
 dist/
 *.exe~
+.progress.md
