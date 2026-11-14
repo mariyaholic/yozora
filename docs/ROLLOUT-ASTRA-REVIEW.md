@@ -11,7 +11,7 @@ The prepublication test runs the real baseline executable installed by its publi
 ## Safeguards applied and re-reviewed
 
 1. The smoke script now requires `GITHUB_ACTIONS=true`, `RUNNER_ENVIRONMENT=github-hosted`, `RUNNER_OS=Windows`, and nonempty `RUNNER_TEMP` before mutation; it also rejects an already running Yozora process. This script must not run on a user's desktop or persistent self-hosted runner. Temporary app/config paths do not isolate Inno's global fallback `taskkill /IM Yozora.exe`, the tray class, singleton mutex or HKCU installer state.
-2. Native smoke steps and jobs now use `timeout-minutes`; network downloads and HTTP requests are also bounded. Both Setup launches use `Start-Process -Wait`, but an installer hang is bounded by the containing smoke step rather than a six-hour default job.
+2. Native smoke steps and jobs use `timeout-minutes`; network downloads and HTTP requests are also bounded. Both Setup launches wait only for the installer process with a 180-second deadline. PowerShell's process-tree wait would also await the daemon that Setup intentionally restarts, so the fixture uses `Process.WaitForExit` and retains explicit exit-code and restart assertions.
 3. Signature gates now check baseline, candidate executable and installer. Any signature state other than Valid or NotSigned fails closed. If any is validly signed, candidate executable and installer must both have matching valid subjects; a signed baseline also requires the same subject. This covers unsigned-to-signed transitions as well as existing signer continuity.
 
 ## Reviewed correctness

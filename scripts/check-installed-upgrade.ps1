@@ -27,6 +27,18 @@ function Wait-For([scriptblock]$condition, [int]$seconds, [string]$failure) {
   throw $failure
 }
 function Hash([string]$path) { (Get-FileHash -Algorithm SHA256 $path).Hash }
+function Run-Setup([string]$path, [string]$dir, [string]$label) {
+  # Start-Process -Wait waits for the entire process tree, including the
+  # long-lived daemon Setup intentionally restarts. Wait on Setup itself.
+  $p = Start-Process -FilePath $path -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/NORESTARTAPPLICATIONS',("/DIR=`"$dir`"")) -PassThru
+  if (-not $p.WaitForExit(180000)) {
+    try { $p.Kill() } catch {}
+    throw "$label setup did not exit within 180 seconds"
+  }
+  $p.Refresh()
+  if ($p.ExitCode -ne 0) { throw "$label setup failed: $($p.ExitCode)" }
+  Write-Host "$label Setup completed successfully"
+}
 function Check-Sums([string]$dir) {
   $sums = @{}
   foreach ($line in Get-Content (Join-Path $dir 'SHA256SUMS.txt')) {
@@ -61,8 +73,7 @@ try {
       if ($baseSignature.Status -eq 'Valid' -and $baseSignature.SignerCertificate.Subject -ine $setupSignature.SignerCertificate.Subject) { throw 'Candidate signing does not match the signed baseline publisher' }
     }
   }
-  $p = Start-Process -FilePath (Join-Path $baseline 'Yozora-Setup.exe') -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/NORESTARTAPPLICATIONS',("/DIR=`"$install`"")) -Wait -PassThru
-  if ($p.ExitCode -ne 0) { throw "Baseline setup failed: $($p.ExitCode)" }
+  Run-Setup (Join-Path $baseline 'Yozora-Setup.exe') $install 'Baseline'
   if ((Hash $exe) -ne (Hash (Join-Path $baseline 'Yozora.exe'))) { throw 'Baseline installed executable differs from published asset' }
   $configDir = Join-Path $env:APPDATA 'uika-resonance'
   New-Item -ItemType Directory -Force $configDir | Out-Null
@@ -138,6 +149,7 @@ public static class TrayProbe {
     } else { Write-Host 'Daemon exited before tray probe completed' }
     throw
   }
+  Write-Host 'Published baseline version, bytes and tray ownership verified'
   if ($LiveUpdate) {
     $uri = $endpoint.base_url + '/api/update'
     $headers = @{ 'X-Uika-Token' = $endpoint.token }
@@ -149,10 +161,10 @@ public static class TrayProbe {
       Start-Sleep -Seconds 5
     } while ([DateTime]::UtcNow -lt $until)
     if (-not $status.available -or $status.latest -ne $Version) { throw "Baseline did not discover published version $Version" }
+    Write-Host "Baseline naturally discovered public version $Version"
     Invoke-RestMethod -Method Post -Uri "$uri/install" -Headers $headers -TimeoutSec 5 | Out-Null
   } else {
-    $p = Start-Process -FilePath $CandidateSetup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/NORESTARTAPPLICATIONS',("/DIR=`"$install`"")) -Wait -PassThru
-    if ($p.ExitCode -ne 0) { throw "Candidate setup failed: $($p.ExitCode)" }
+    Run-Setup $CandidateSetup $install 'Candidate'
   }
   Wait-For { -not (Get-Process -Id $old.Id -ErrorAction SilentlyContinue) } 90 'Baseline process did not exit'
   Wait-For { (Test-Path $exe) -and ((Hash $exe) -eq (Hash $CandidateExe)) } 120 'Installed executable did not advance to candidate'
