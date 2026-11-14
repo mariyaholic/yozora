@@ -28,3 +28,7 @@ The JSON limit is 64 KiB. Unknown, missing, null, trailing, malformed and unsupp
 ## Delivery
 
 Create a separate draft feature PR, a Windows review-build archive with hashes, a feature assessment/state inventory, selected screenshots and evidence logs. Record remaining Windows/native/service and memory checks explicitly. Reuse prior tooling and consolidate repeated validation/download logic where it improves clarity.
+
+## Completion record
+
+The feature increment is in draft PR #16, following merged PR #15. Core implementation is `e5dc1d4`; test synchronization and CI target coverage follow in separate commits. Astra accepted the static implementation and five general learnings, transferred to Uika PR #18. The full browser result has 55 passing checks with no page/CSP errors. Local logic/race checks and Windows cross-compilation pass, and GitHub's native Windows unit/race/build and Linux jobs pass on `d3de539`. Interactive/live integration, installer checks and Windows memory parity remain separate follow-ups. Build hashes and source revision are recorded in the delivered archive manifest.

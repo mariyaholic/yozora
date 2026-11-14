@@ -51,7 +51,7 @@ There is no user Cancel control once Apply starts. The review is invalidated, fi
 
 The JSON payload limit is 64 KiB for preview and import requests, independent of total process memory. The server rejects duplicate object keys (including escaped spelling variants), unknown or missing keys, null required values, invalid UTF-8, trailing JSON, unsupported format/version, incomplete/invalid card data, an invalid source switch/order set, and unsupported theme/motion/language values. Version 1 has an exact schema; forward compatibility is not implied. A future format version must be explicitly supported in code.
 
-The ETag represents the current exported settings values, rather than file timestamps. A preview can be applied only while those values still match. Changes outside the three exported groups do not invalidate the tag because the import cannot overwrite them.
+The ETag is derived incrementally from the current values in the portable settings projection, rather than file timestamps. It can be produced even when the export endpoint rejects an unportable current card, allowing a valid backup to be previewed and imported to repair it. A preview can be applied only while the projected values still match. Changes outside the three exported groups do not invalidate the tag because the import cannot overwrite them.
 
 ## Diagnostics text download
 

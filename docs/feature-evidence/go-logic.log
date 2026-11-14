@@ -1,0 +1,14 @@
+ok  	uika-resonance/internal/presence	0.630s
+ok  	uika-resonance/internal/spotifyapi	0.103s
+ok  	uika-resonance/internal/player	0.003s
+ok  	uika-resonance/internal/config	1.173s
+ok  	uika-resonance/internal/art	0.664s
+ok  	uika-resonance/internal/template	0.011s
+ok  	uika-resonance/internal/smtc	0.006s
+ok  	uika-resonance/internal/server	5.594s
+ok  	uika-resonance/internal/update	0.264s
+ok  	uika-resonance/internal/presence	14.028s
+ok  	uika-resonance/internal/spotifyapi	2.485s
+ok  	uika-resonance/internal/config	2.284s
+ok  	uika-resonance/internal/server	34.207s
+ok  	uika-resonance/internal/update	1.267s

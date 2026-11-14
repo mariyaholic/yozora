@@ -32,6 +32,8 @@ Preset forms reuse server defaults and existing card validation/rendering/save. 
 
 Tests cover actual schema roundtrips and failure non-effects, competing writes, excluded-field preservation, imported/draft rebasing, stale preview replacement, timed-out actions, repeated downloads, filenames and bytes. Fixture tests, Linux shadow execution, Windows cross-compilation and native/live integration remain separate evidence classes. Windows process-tree memory parity is unmeasured.
 
+The full browser run also exposed fixture timing assumptions. Observing request dispatch did not prove that the server was still holding the response; operation-scoped latches now establish that cancellation boundary. In the Chromium fixture, a simulated tap immediately after a drag sometimes produced no click. The fixture now separates those simulated gestures while retaining the drag/save assertions. The production drag implementation matches baseline. A `touch-action` experiment was discarded after it failed a repeated check, and native fast-touch behavior remains a separate integration limit.
+
 ## General practices for Uika review
 
 1. Define portable backups as allowlisted projections and test both exported scope and preserved state. Validate exports against the same contract as imports.

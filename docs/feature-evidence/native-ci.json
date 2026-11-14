@@ -1,0 +1,27 @@
+{
+  "repository": "mariyaholic/yozora",
+  "source_commit": "d3de539f997252700c6f2614e98d0f121b5c2a77",
+  "workflow_run": 43584211089,
+  "workflow_url": "https://github.com/mariyaholic/yozora/actions/runs/43584211089",
+  "observed_utc": "2026-11-14T10:15:17Z",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "id": 132415120489,
+      "name": "windows",
+      "conclusion": "success",
+      "verified_steps": [
+        "Test native Windows packages",
+        "Stress state transitions with race detection",
+        "Build Windows app without publishing"
+      ]
+    },
+    {
+      "id": 132415120735,
+      "name": "linux-logic",
+      "conclusion": "success",
+      "verified_steps": ["Test portable logic with explicit Windows stubs"]
+    }
+  ],
+  "boundary": "Remote native unit execution and selected race/build checks; interactive WebView2/downloads, real media/providers, installer operation and process-tree memory parity remain unverified."
+}
