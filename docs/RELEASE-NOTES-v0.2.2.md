@@ -21,12 +21,14 @@ the candidate and do not publish it.
 ## Rollout
 
 The intended baseline is the published, unsigned `v0.2.1` per-user Setup
-installation. Windows CI verifies an isolated in-place Setup upgrade, settings
-retention, version stamping and restart before publication, then exercises the
-published `v0.2.1` updater against public release assets. The post-publish CI
-install is initiated through the local updater API, not through a WebView2
-button click. A human check of the visible flow is documented in
-[the rollout guide](ROLLOUT.md).
+installation. The Windows workflow is configured to verify an isolated in-place
+Setup upgrade, settings retention, version stamping and restart before
+publication, then exercise the published `v0.2.1` updater against public
+release assets. Two hosted pre-publish attempts have passed native tests/builds
+but failed while detecting the baseline tray host, before candidate replacement;
+see [rollout evidence](rollout-evidence/README.md). The post-publish CI install
+is initiated through the local updater API, not through a WebView2 button click.
+A human check of the visible flow is documented in [the rollout guide](ROLLOUT.md).
 
 For unsigned running builds, updater verification checks the installer hash
 against `SHA256SUMS.txt` from the same GitHub release; this detects accidental

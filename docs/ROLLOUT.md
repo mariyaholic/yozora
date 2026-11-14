@@ -77,12 +77,23 @@ signing-continuity checks before publishing. A post-publish Windows job uses
 the actual `v0.2.1` updater to discover the public candidate and sends the
 local updater API's authenticated `POST /api/update/install`; it then checks
 the HTTPS asset download, checksum/signature validation, install, restart and
-settings retention. That HTTP request is a native CI trigger. It does not
-exercise a human click in the WebView2 panel; the human procedure above covers
-the visible **Update now** control.
+settings retention. That HTTP request is a native CI trigger. The post-publish
+smoke runs after the release becomes public, so it does not gate initial
+publication. It does not exercise a human click in the WebView2 panel; the
+human procedure above covers the visible **Update now** control.
 
 ## Observed results
 
-The evidence index records actual run identifiers, outcomes, and times in
-Asia/Manila. No native Windows or human end-to-end result should be reported
-here until its corresponding run or observation is available.
+On 14 November 2026, the 55-check Chromium suite passed on revision `12b766f`
+at 19:26:36 Asia/Manila (UTC+08:00), with no page errors or CSP violations.
+English and Japanese manual-check states were captured separately at 19:29:24
+in the same synthetic fixture; the captures do not establish native WebView2 or
+live updater behavior. Hosted Windows runs [43589962089](https://github.com/mariyaholic/yozora/actions/runs/43589962089)
+and [43590379422](https://github.com/mariyaholic/yozora/actions/runs/43590379422)
+passed native package tests, race stress, candidate build/installer build and
+Linux logic. Both installed-upgrade smokes failed before candidate replacement:
+the first reported `Baseline tray host did not start` at 19:28:19; the follow-up
+reported `Baseline tray host did not start on the runner desktop` at 19:33:29.
+The follow-up saw runner and daemon in session 2 on the `Default` desktop and
+none of three tray startup error strings in the tray log. Post-publish and
+human update checks remain pending.
