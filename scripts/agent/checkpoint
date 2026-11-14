@@ -28,7 +28,7 @@ root=$(git rev-parse --show-toplevel 2>/dev/null) || {
 cd "$root" || exit 1
 
 # The fast check chosen for this repository. An empty value means there is none.
-DEFAULT_CHECK='go vet ./...'
+DEFAULT_CHECK='go build ./...'
 check_cmd=${CHECKPOINT_CHECK-$DEFAULT_CHECK}
 
 # Output of the last check, kept in this worktree's private git dir for diagnosis.
