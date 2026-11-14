@@ -28,9 +28,10 @@ var clientIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 func ValidClientID(id string) bool { return clientIDPattern.MatchString(id) }
 
 var (
-	ErrNoPendingFlow = errors.New("spotify: no authorization is waiting (start Connect again)")
-	ErrFlowExpired   = errors.New("spotify: the authorization took too long (start Connect again)")
-	ErrStateMismatch = errors.New("spotify: authorization state does not match")
+	ErrNoPendingFlow  = errors.New("spotify: no authorization is waiting (start Connect again)")
+	ErrFlowExpired    = errors.New("spotify: the authorization took too long (start Connect again)")
+	ErrStateMismatch  = errors.New("spotify: authorization state does not match")
+	ErrFlowSuperseded = errors.New("spotify: authorization was cancelled or replaced")
 )
 
 type pkceFlow struct {
@@ -46,9 +47,11 @@ type Link struct {
 	Now      func() time.Time
 	Store    func(refresh string) error
 
-	mu      sync.Mutex
-	pending *pkceFlow
-	lastErr string
+	mu         sync.Mutex
+	pending    *pkceFlow
+	lastErr    string
+	generation uint64
+	flowState  string
 }
 
 // LinkStatus is what the panel shows about the connect flow itself.
@@ -103,18 +106,45 @@ func (l *Link) Begin(clientID, redirect string) (string, error) {
 	q.Set("code_challenge_method", "S256")
 	q.Set("code_challenge", pkceChallenge(verifier))
 	l.mu.Lock()
+	l.generation++
+	l.flowState = state
 	l.pending = &pkceFlow{clientID: clientID, verifier: verifier, redirect: redirect, state: state, expires: l.now().Add(PKCEFlowTTL)}
 	l.lastErr = ""
 	l.mu.Unlock()
 	return "https://accounts.spotify.com/authorize?" + q.Encode(), nil
 }
 
-// Cancel forgets a waiting flow, so its callback can no longer succeed.
-func (l *Link) Cancel() {
+// Cancel forgets a waiting or in-flight flow.
+func (l *Link) Cancel() { _ = l.CancelWith(nil) }
+
+// CancelWith orders a disconnect transaction against a completing authorization.
+// The callback must not call back into Link.
+func (l *Link) CancelWith(disconnect func() error) error {
 	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.generation++
 	l.pending = nil
+	l.flowState = ""
 	l.lastErr = ""
-	l.mu.Unlock()
+	if disconnect != nil {
+		return disconnect()
+	}
+	return nil
+}
+
+// CancelState cancels only the flow associated with state, including an
+// exchange already in flight. A browser launch failure from an older request
+// must not cancel a newer authorization.
+func (l *Link) CancelState(state string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if state == "" || subtle.ConstantTimeCompare([]byte(state), []byte(l.flowState)) != 1 {
+		return
+	}
+	l.generation++
+	l.pending = nil
+	l.flowState = ""
+	l.lastErr = ""
 }
 
 // Status reports whether a flow is waiting and the last flow error. An expired flow is dropped here.
@@ -123,15 +153,29 @@ func (l *Link) Status() LinkStatus {
 	defer l.mu.Unlock()
 	if l.pending != nil && !l.now().Before(l.pending.expires) {
 		l.pending = nil
+		l.flowState = ""
 		l.lastErr = ErrFlowExpired.Error()
 	}
 	return LinkStatus{Waiting: l.pending != nil, Error: l.lastErr}
 }
 
-// Complete redeems the callback. A matching state consumes the flow before the exchange, so a
-// replayed callback finds nothing. A wrong state leaves the real flow waiting. It returns the client
-// ID that was authorized; the refresh token goes straight to Store and is never returned.
+// Complete redeems a callback and stores its refresh token.
 func (l *Link) Complete(state, code, denied string) (string, error) {
+	return l.CompleteWith(state, code, denied, nil)
+}
+
+// CompleteWith commits the token and callback together with respect to Begin and
+// CancelWith. The exchange runs outside the mutex; a newer flow or cancellation
+// invalidates its result. commit must not call back into Link.
+func (l *Link) CompleteWith(state, code, denied string, commit func(string) error) (string, error) {
+	return l.CompleteWithPhases(state, code, denied, nil, commit)
+}
+
+// CompleteWithPhases runs beforeStore after validating the flow and before
+// replacing its credential. This lets callers stop an old token-refreshing
+// poller before installing the newly authorized token. Both callbacks run under
+// the Link mutex and must not call back into Link.
+func (l *Link) CompleteWithPhases(state, code, denied string, beforeStore func() error, commit func(string) error) (string, error) {
 	l.mu.Lock()
 	flow := l.pending
 	if flow == nil {
@@ -143,34 +187,51 @@ func (l *Link) Complete(state, code, denied string) (string, error) {
 		return "", ErrStateMismatch
 	}
 	l.pending = nil
+	generation := l.generation
 	l.mu.Unlock()
-	err := l.redeem(flow, code, denied)
+
+	refresh, err := l.redeem(flow, code, denied)
 	l.mu.Lock()
+	defer l.mu.Unlock()
+	if generation != l.generation {
+		return "", ErrFlowSuperseded
+	}
+	l.flowState = ""
+	if err == nil && beforeStore != nil {
+		err = beforeStore()
+	}
+	if err == nil {
+		store := l.Store
+		if store == nil {
+			store = StoreRefreshToken
+		}
+		if err = store(refresh); err != nil {
+			err = fmt.Errorf("spotify: store token: %w", err)
+		} else if commit != nil {
+			err = commit(flow.clientID)
+		}
+	}
 	if err != nil {
 		l.lastErr = err.Error()
-	} else {
-		l.lastErr = ""
-	}
-	l.mu.Unlock()
-	if err != nil {
 		return "", err
 	}
+	l.lastErr = ""
 	return flow.clientID, nil
 }
 
-func (l *Link) redeem(flow *pkceFlow, code, denied string) error {
+func (l *Link) redeem(flow *pkceFlow, code, denied string) (string, error) {
 	if !l.now().Before(flow.expires) {
-		return ErrFlowExpired
+		return "", ErrFlowExpired
 	}
 	if denied != "" {
 		// Spotify's error values are short ASCII codes such as access_denied; keep only those.
 		if len(denied) > 64 || strings.Trim(denied, "abcdefghijklmnopqrstuvwxyz_") != "" {
 			denied = "unknown"
 		}
-		return errors.New("spotify: authorization was not granted (" + denied + ")")
+		return "", errors.New("spotify: authorization was not granted (" + denied + ")")
 	}
 	if code == "" {
-		return errors.New("spotify: callback carried no authorization code")
+		return "", errors.New("spotify: callback carried no authorization code")
 	}
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
@@ -188,33 +249,26 @@ func (l *Link) redeem(flow *pkceFlow, code, denied string) error {
 	}
 	req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := client.Do(req)
 	if err != nil {
 		// The transport error names the URL only, never the form body.
-		return fmt.Errorf("spotify: token exchange: %w", err)
+		return "", fmt.Errorf("spotify: token exchange: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("spotify: token exchange: status %d", resp.StatusCode)
+		return "", fmt.Errorf("spotify: token exchange: status %d", resp.StatusCode)
 	}
 	var tr struct {
 		RefreshToken string `json:"refresh_token"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&tr); err != nil {
-		return errors.New("spotify: token exchange: unreadable response")
+		return "", errors.New("spotify: token exchange: unreadable response")
 	}
 	if tr.RefreshToken == "" {
-		return errors.New("spotify: no refresh token in exchange response")
+		return "", errors.New("spotify: no refresh token in exchange response")
 	}
-	store := l.Store
-	if store == nil {
-		store = StoreRefreshToken
-	}
-	if err := store(tr.RefreshToken); err != nil {
-		return fmt.Errorf("spotify: store token: %w", err)
-	}
-	return nil
+	return tr.RefreshToken, nil
 }

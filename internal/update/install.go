@@ -95,9 +95,11 @@ func (d *downloader) get(ctx context.Context, tag string, stage func(string)) (d
 	if err != nil {
 		return "", "", "", nil, err
 	}
+	// Error returns clear the named dir result, so retain the created path for cleanup.
+	createdDir := dir
 	defer func() {
 		if err != nil {
-			os.RemoveAll(dir)
+			os.RemoveAll(createdDir)
 		}
 	}()
 	stage("downloading")

@@ -11,7 +11,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"uika-resonance/internal/config"
 	"uika-resonance/internal/presence"
@@ -27,8 +29,10 @@ type setupFixture struct {
 	openErr  error
 	stored   []string
 	cleared  int
+	clearErr error
 	exchange []url.Values
 	manager  *spotifyapi.Manager
+	link     *spotifyapi.Link
 }
 
 func newSetupFixture(t *testing.T) *setupFixture {
@@ -50,11 +54,12 @@ func newSetupFixture(t *testing.T) *setupFixture {
 	}))
 	t.Cleanup(token.Close)
 	link := &spotifyapi.Link{TokenURL: token.URL, HTTP: token.Client(), Store: func(tok string) error { f.stored = append(f.stored, tok); return nil }}
+	f.link = link
 	f.h = Handler(Deps{
 		Engine: presence.New(holder, nil, nil, nil, ""), Cfg: holder, CfgPath: path, Token: "fixture-token",
 		Spotify: f.manager, SpotifyLink: link, RedirectBase: "http://127.0.0.1:50123",
 		OpenURL:           func(u string) error { f.opened = append(f.opened, u); return f.openErr },
-		ClearSpotifyToken: func() error { f.cleared++; return nil },
+		ClearSpotifyToken: func() error { f.cleared++; return f.clearErr },
 	})
 	return f
 }
@@ -255,5 +260,162 @@ func TestStateReportsRestoredConfig(t *testing.T) {
 	}
 	if _, err := os.Stat(broken); err != nil {
 		t.Fatalf("broken file not kept: %v", err)
+	}
+}
+
+func TestSpotifyDisconnectDuringExchangeDoesNotReconnect(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "setup.toml")
+	if err := config.Save(config.Defaults(), path); err != nil {
+		t.Fatal(err)
+	}
+	holder, err := config.NewHolder(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entered, release := make(chan struct{}), make(chan struct{})
+	token := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(entered)
+		<-release
+		_, _ = w.Write([]byte(`{"refresh_token":"late-token"}`))
+	}))
+	defer token.Close()
+	stored := 0
+	link := &spotifyapi.Link{TokenURL: token.URL, HTTP: token.Client(), Store: func(string) error { stored++; return nil }}
+	manager := spotifyapi.NewManager()
+	defer manager.Stop()
+	var opened string
+	cleared := 0
+	h := Handler(Deps{Cfg: holder, CfgPath: path, Token: "fixture-token", Spotify: manager, SpotifyLink: link,
+		RedirectBase: "http://127.0.0.1:50123", OpenURL: func(u string) error { opened = u; return nil },
+		ClearSpotifyToken: func() error { cleared++; return nil }})
+	if w := request(h, "POST", "/api/spotify", `{"action":"connect","client_id":"`+spotifyTestClient+`"}`, true); w.Code != 200 {
+		t.Fatalf("connect = %d %s", w.Code, w.Body.String())
+	}
+	u, err := url.Parse(opened)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		result <- request(h, "GET", spotifyCallbackPath+"?state="+url.QueryEscape(u.Query().Get("state"))+"&code=c", "", false)
+	}()
+	<-entered
+	w := request(h, "POST", "/api/spotify", `{"action":"disconnect"}`, true)
+	close(release)
+	callback := <-result
+	if w.Code != 200 || callback.Code != http.StatusBadRequest {
+		t.Fatalf("disconnect = %d; callback = %d", w.Code, callback.Code)
+	}
+	if stored != 0 || cleared != 1 || manager.Running() || holder.Get().Spotify.Mode != "system" {
+		t.Fatalf("stored=%d cleared=%d running=%v mode=%q", stored, cleared, manager.Running(), holder.Get().Spotify.Mode)
+	}
+}
+
+func TestSpotifyCallbackReportsConfigSaveFailure(t *testing.T) {
+	f := newSetupFixture(t)
+	state := connect(t, f)
+	if err := os.Remove(f.cfg.Path()); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(f.cfg.Path(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	w := request(f.h, "GET", spotifyCallbackPath+"?state="+url.QueryEscape(state)+"&code=c", "", false)
+	if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "could not save") {
+		t.Fatalf("callback = %d %s", w.Code, w.Body.String())
+	}
+	if f.manager.Running() || f.cfg.Get().Spotify.Mode != "system" {
+		t.Fatal("failed save started Spotify or changed active config")
+	}
+	if got := decodeBody(t, request(f.h, "GET", "/api/spotify", "", true)); got["waiting"] != false || got["error"] == nil {
+		t.Fatalf("failure state = %v", got)
+	}
+}
+
+func TestSpotifyBrowserFailureDoesNotCancelNewerConnect(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "setup.toml")
+	if err := config.Save(config.Defaults(), path); err != nil {
+		t.Fatal(err)
+	}
+	holder, err := config.NewHolder(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"refresh_token":"token"}`))
+	}))
+	defer token.Close()
+	link := &spotifyapi.Link{TokenURL: token.URL, HTTP: token.Client(), Store: func(string) error { return nil }}
+	manager := spotifyapi.NewManager()
+	defer manager.Stop()
+	var calls atomic.Int32
+	firstOpened, release := make(chan struct{}), make(chan struct{})
+	var newerURL string
+	h := Handler(Deps{Cfg: holder, CfgPath: path, Token: "fixture-token", Spotify: manager, SpotifyLink: link,
+		RedirectBase: "http://127.0.0.1:50123", OpenURL: func(u string) error {
+			if calls.Add(1) == 1 {
+				close(firstOpened)
+				<-release
+				return errors.New("browser failed")
+			}
+			newerURL = u
+			return nil
+		}})
+	body := `{"action":"connect","client_id":"` + spotifyTestClient + `"}`
+	first := make(chan *httptest.ResponseRecorder, 1)
+	go func() { first <- request(h, "POST", "/api/spotify", body, true) }()
+	<-firstOpened
+	second := request(h, "POST", "/api/spotify", body, true)
+	close(release)
+	failed := <-first
+	if second.Code != 200 || failed.Code != http.StatusBadGateway {
+		t.Fatalf("newer connect = %d; first = %d", second.Code, failed.Code)
+	}
+	u, err := url.Parse(newerURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	callback := request(h, "GET", spotifyCallbackPath+"?state="+url.QueryEscape(u.Query().Get("state"))+"&code=c", "", false)
+	if callback.Code != 200 || !manager.Running() {
+		t.Fatalf("newer callback = %d %s", callback.Code, callback.Body.String())
+	}
+}
+
+func TestSpotifyDisconnectReportsAndRetriesCredentialDeletionFailure(t *testing.T) {
+	f := newSetupFixture(t)
+	state := connect(t, f)
+	if w := request(f.h, "GET", spotifyCallbackPath+"?state="+url.QueryEscape(state)+"&code=c", "", false); w.Code != 200 {
+		t.Fatalf("callback = %d %s", w.Code, w.Body.String())
+	}
+	f.clearErr = errors.New("credential manager unavailable")
+	w := request(f.h, "POST", "/api/spotify", `{"action":"disconnect"}`, true)
+	if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "could not remove Spotify credentials") {
+		t.Fatalf("disconnect = %d %s", w.Code, w.Body.String())
+	}
+	if f.manager.Running() || f.cfg.Get().Spotify.Mode != "system" || f.cleared != 1 {
+		t.Fatalf("running=%v mode=%q clears=%d", f.manager.Running(), f.cfg.Get().Spotify.Mode, f.cleared)
+	}
+	f.clearErr = nil
+	w = request(f.h, "POST", "/api/spotify", `{"action":"disconnect"}`, true)
+	if w.Code != 200 || f.cleared != 2 || f.manager.Running() || f.cfg.Get().Spotify.Mode != "system" {
+		t.Fatalf("retry = %d clears=%d running=%v mode=%q", w.Code, f.cleared, f.manager.Running(), f.cfg.Get().Spotify.Mode)
+	}
+}
+
+func TestSpotifyCallbackStopsOldManagerBeforeStoringToken(t *testing.T) {
+	f := newSetupFixture(t)
+	f.manager.Start(spotifyTestClient, "", time.Hour)
+	if !f.manager.Running() {
+		t.Fatal("old manager did not start")
+	}
+	oldRunningAtStore := true
+	f.link.Store = func(string) error {
+		oldRunningAtStore = f.manager.Running()
+		return nil
+	}
+	state := connect(t, f)
+	w := request(f.h, "GET", spotifyCallbackPath+"?state="+url.QueryEscape(state)+"&code=c", "", false)
+	if w.Code != 200 || oldRunningAtStore || !f.manager.Running() {
+		t.Fatalf("callback=%d old running at store=%v new running=%v", w.Code, oldRunningAtStore, f.manager.Running())
 	}
 }

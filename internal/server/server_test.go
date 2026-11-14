@@ -135,7 +135,7 @@ func TestDashboardSourceControls(t *testing.T) {
 			t.Errorf("missing accessible checkbox for %s", source)
 		}
 	}
-	for _, marker := range []string{`type="checkbox"`, `id="source-save"`, `role="status"`, `/api/sources`, `method:"POST"`, `JSON.stringify({enabled, order:savedOrder})`} {
+	for _, marker := range []string{`type="checkbox"`, `id="source-save"`, `role="status"`, `/api/sources`, `method:"POST"`, `JSON.stringify({enabled:currentSources(), order:savedOrder})`} {
 		if !strings.Contains(page, marker) {
 			t.Errorf("missing working control %s", marker)
 		}
@@ -430,5 +430,70 @@ func TestDashboardRendersVersion(t *testing.T) {
 	page := request(h, "GET", "/?t=fixture-token", "", false).Body.String()
 	if !strings.Contains(page, `data-version="0.1.42"`) {
 		t.Fatal("dashboard does not carry the running version")
+	}
+}
+
+func TestAutostartRejectsMalformedBodies(t *testing.T) {
+	h, _ := fixtureHandler(t)
+	for _, body := range []string{`{}`, `null`, `{"enabled":null}`, `{"enabled":"true"}`, `{"enabled":true,"extra":1}`, `{"enabled":true} {}`, strings.Repeat(" ", 257) + `{"enabled":true}`} {
+		if w := request(h, http.MethodPost, "/api/autostart", body, true); w.Code != http.StatusBadRequest {
+			t.Errorf("body %q returned %d", body[:min(len(body), 80)], w.Code)
+		}
+	}
+}
+
+func TestDashboardAndStateRejectOtherMethodsAndUnknownPaths(t *testing.T) {
+	h, _ := fixtureHandler(t)
+	for _, path := range []string{"/?t=fixture-token", "/api/state"} {
+		for _, method := range []string{http.MethodPost, http.MethodDelete} {
+			if w := request(h, method, path, "", true); w.Code != http.StatusMethodNotAllowed {
+				t.Errorf("%s %s = %d", method, path, w.Code)
+			}
+		}
+	}
+	if w := request(h, http.MethodGet, "/missing?t=fixture-token", "", true); w.Code != http.StatusNotFound {
+		t.Errorf("unknown path = %d", w.Code)
+	}
+}
+
+func TestSourceConditionalSaveRejectsStalePanel(t *testing.T) {
+	h, holder := fixtureHandler(t)
+	initial := request(h, http.MethodGet, "/api/sources", "", true)
+	tag := initial.Header().Get("ETag")
+	if tag == "" || !strings.HasPrefix(tag, `"`) || !strings.HasSuffix(tag, `"`) {
+		t.Fatalf("source ETag = %q", tag)
+	}
+	if err := SetSourceEnabled(holder.Path(), holder, "applemusic", false); err != nil {
+		t.Fatal(err)
+	}
+	post := func(condition string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(http.MethodPost, "/api/sources", strings.NewReader(`{"enabled":{"browser":true}}`))
+		r.Header.Set("X-Uika-Token", "fixture-token")
+		r.Header.Set("If-Match", condition)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	before := holder.Get()
+	if w := post(tag); w.Code != http.StatusPreconditionFailed {
+		t.Fatalf("stale save = %d %s", w.Code, w.Body.String())
+	}
+	loaded, err := config.Load(holder.Path())
+	if err != nil || !reflect.DeepEqual(loaded, before) || holder.Get() != before {
+		t.Fatalf("stale save changed sources: %v", err)
+	}
+	fresh := request(h, http.MethodGet, "/api/sources", "", true).Header().Get("ETag")
+	if fresh == "" || fresh == tag {
+		t.Fatalf("ETag did not change: %q", fresh)
+	}
+	w := post(fresh)
+	if w.Code != http.StatusOK || w.Header().Get("ETag") == fresh || w.Header().Get("ETag") == "" {
+		t.Fatalf("conditional save = %d ETag=%q body=%s", w.Code, w.Header().Get("ETag"), w.Body.String())
+	}
+	if w := post(fresh); w.Code != http.StatusPreconditionFailed {
+		t.Fatalf("reused ETag accepted: %d", w.Code)
+	}
+	if w := post("*"); w.Code != http.StatusOK {
+		t.Fatalf("wildcard condition = %d", w.Code)
 	}
 }

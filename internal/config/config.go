@@ -478,12 +478,17 @@ type Holder struct {
 	val      atomic.Pointer[Config]
 	restored *Restore
 
-	hookMu  sync.Mutex
-	onApply []func(*Config)
+	reloadMu sync.Mutex
+	applying bool
+	pending  *Config
+	hookMu   sync.Mutex
+	onApply  []func(*Config)
 }
 
-// OnChange registers fn to run, with the new config, each time a reload actually changes it.
-// Reload is the single place a changed file or a panel save lands, so this needs no polling.
+// OnChange registers fn to apply a changed config. Concurrent or reentrant reloads
+// coalesce while callbacks run, so callbacks apply the latest config in order.
+// The reload dispatching callbacks waits for them; another reload can return
+// after publication, before its callbacks run.
 func (h *Holder) OnChange(fn func(*Config)) {
 	h.hookMu.Lock()
 	h.onApply = append(h.onApply, fn)
@@ -523,15 +528,50 @@ func (h *Holder) Path() string { return h.path }
 func (h *Holder) Restored() *Restore { return h.restored }
 
 func (h *Holder) Reload() (bool, error) {
-	c, b, err := load(h.path)
+	return h.reload(load)
+}
+
+func (h *Holder) reload(loadConfig func(string) (*Config, []byte, error)) (bool, error) {
+	// Serialize the read and publication so an older, slower load cannot
+	// overwrite a newer one (or its last-good copy).
+	h.reloadMu.Lock()
+	c, b, err := loadConfig(h.path)
 	if err != nil {
+		h.reloadMu.Unlock()
 		return false, err
 	}
 	keepLastGood(h.path, b)
 	old := h.val.Load()
 	changed := !reflect.DeepEqual(old, c)
+	dispatch := false
 	if changed {
 		h.val.Store(c)
+		h.pending = c
+		if !h.applying {
+			h.applying = true
+			dispatch = true
+		}
+	}
+	// Hooks can themselves reload, so they must run outside reloadMu. The
+	// dispatcher is the only callback runner; intervening reloads replace pending.
+	h.reloadMu.Unlock()
+	if dispatch {
+		h.applyChanges()
+	}
+	return changed, nil
+}
+
+func (h *Holder) applyChanges() {
+	for {
+		h.reloadMu.Lock()
+		c := h.pending
+		h.pending = nil
+		if c == nil {
+			h.applying = false
+			h.reloadMu.Unlock()
+			return
+		}
+		h.reloadMu.Unlock()
 		h.hookMu.Lock()
 		hooks := slices.Clone(h.onApply)
 		h.hookMu.Unlock()
@@ -539,7 +579,6 @@ func (h *Holder) Reload() (bool, error) {
 			fn(c)
 		}
 	}
-	return changed, nil
 }
 
 func (h *Holder) Watch(stop <-chan struct{}) {

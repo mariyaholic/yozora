@@ -89,9 +89,9 @@ func Delete(key string) error {
 	if err != nil {
 		return err
 	}
-	r1, _, _ := procCredDelete.Call(uintptr(unsafe.Pointer(target)), credTypeGeneric, 0)
+	r1, _, callErr := procCredDelete.Call(uintptr(unsafe.Pointer(target)), credTypeGeneric, 0)
 	if r1 == 0 {
-		return fmt.Errorf("credman: CredDeleteW failed: %v", syscall.GetLastError())
+		return fmt.Errorf("credman: CredDeleteW failed: %w", callErr)
 	}
 	return nil
 }
