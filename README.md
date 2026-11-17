@@ -2,19 +2,19 @@
 
 _Made with love by [Maria](https://github.com/mariyaholic)._
 
-A Windows music detector that publishes Discord Rich Presence. This repository contains the standalone Go module; internal config and executable names remain `uika-resonance` for compatibility. Yozora competes with existing Rich Presence applications by completely culling every single negligible element that causes RAM and CPU bloat; on a good runtime it can go to as low as 10MB of RAM with barely any CPU seconds.
+Yozora is my Windows music detector. It publishes what you are listening to as Discord Rich Presence. I wanted a presence app that asks for almost nothing, so I cut every little thing that causes RAM and CPU bloat. On a good runtime it goes as low as 10MB of RAM with barely any CPU seconds. This repository holds the standalone Go module, and the internal config and executable names remain `uika-resonance` for compatibility. I hope it sits quietly on your machine and lets your music show up on its own.
 
 ## Installing (no terminal needed)
 
-**[Download Yozora-Setup.exe](https://github.com/mariyaholic/yozora/releases/latest/download/Yozora-Setup.exe)** (download this one), then open it. It installs for your user only (no admin prompt) and adds a Start menu entry. In the panel, tick "Start Yozora when I sign in to Windows" if you want it to run on its own.
+**[Download Yozora-Setup.exe](https://github.com/mariyaholic/yozora/releases/latest/download/Yozora-Setup.exe)** (download this one), then open it. It installs for your user only (no admin prompt) and adds a Start menu entry. In the panel, tick "Start Yozora when I sign in to Windows" if you want it to run on its own. That's the whole install, I promise.
 
-Yozora is not code-signed yet, so Windows SmartScreen may say "Windows protected your PC": choose **More info**, then **Run anyway**. Checksums are in `SHA256SUMS.txt` on the [release page](https://github.com/mariyaholic/yozora/releases/latest).
+Yozora is not code-signed yet, so Windows SmartScreen may say "Windows protected your PC": choose **More info**, then **Run anyway**. Checksums are in `SHA256SUMS.txt` on the [release page](https://github.com/mariyaholic/yozora/releases/latest), if you want to check them yourself.
 
-Coming from v0.1.1? Its separate `yozora-daemon-...exe` and `yozora-panel-...exe` files are replaced by the installer; the old daemon file opens a console window when double-clicked, so delete it.
+Coming from v0.1.1? Its separate `yozora-daemon-...exe` and `yozora-panel-...exe` files are replaced by the installer; the old daemon file opens a console window when double-clicked, so delete it. Sorry for the little bit of housekeeping.
 
 Advanced: a portable [Yozora.exe](https://github.com/mariyaholic/yozora/releases/latest/download/Yozora.exe) is attached to the same release.
 
-Yozora keeps an icon in the notification area for as long as it runs, including after it starts on its own at sign-in. Closing the control panel ends the panel completely while Yozora keeps running in the tray. Use **Open control panel** from the tray (or click the icon) or launch Yozora again to reopen it; choose **Quit Yozora** to stop Yozora and close the panel if it is open.
+Yozora keeps a little icon in the notification area for as long as it runs, including after it starts on its own at sign-in. Closing the control panel ends the panel completely while Yozora keeps running in the tray. Use **Open control panel** from the tray (or click the icon) or launch Yozora again to reopen it; choose **Quit Yozora** to stop Yozora and close the panel if it is open.
 
 The tray menu is built each time it opens. A greyed first row names the current track ("Title – Artist", shortened if long) or says **Nothing playing**. When a newer release is out, **Update to 0.2.N** follows **Open control panel** (see [Updating](#updating)). **Pause sharing for 1 hour** and **Pause until I resume** appear while sharing is on; **Resume sharing** replaces them while it is paused. Below a separator, **YouTube**, **Twitch** and **Background Edge tabs** are checked to match your saved settings and save through the same path as the panel's video-site switches, so the panel shows the change on its next refresh.
 
@@ -24,7 +24,7 @@ Installing a newer `Yozora-Setup.exe` over an existing install upgrades it in pl
 
 Pausing clears your Discord card straight away (within the usual five-second gap between Discord updates) and publishes nothing until you resume or the timer ends. Detection keeps running, so the panel preview still follows your player. Resuming, or the timer running out, puts the current track back through the normal path. Start a pause from the tray menu or the **Pause sharing** button beside the panel's preview; while paused the preview shows "Sharing paused until 15:30" (or "Sharing paused") with a **Resume** button.
 
-A pause is held in memory only and does not survive a restart of Yozora. That is deliberate: a pause you forgot about cannot hide you from Discord for good. The panel's endpoint is `POST /api/pause` with `{"action":"pause","minutes":60}` (1 to 1440), `{"action":"pause"}` (until resumed) or `{"action":"resume"}`; `/api/state` reports `paused` and `paused_until`.
+A pause is held in memory only and does not survive a restart of Yozora. That is deliberate. I didn't want a pause you forgot about to hide you from Discord for good. The panel's endpoint is `POST /api/pause` with `{"action":"pause","minutes":60}` (1 to 1440), `{"action":"pause"}` (until resumed) or `{"action":"resume"}`; `/api/state` reports `paused` and `paused_until`.
 
 ### Uninstalling
 
@@ -59,7 +59,7 @@ How the download is trusted depends on the running Yozora, and `/api/update` rep
 
 ## Repository
 
-You are looking at it. The second Discord button is **Yozora**, linking here.
+You are looking at it. The second Discord button on the card is **Yozora**, linking here. I like that it points back home.
 
 The built-in URL lives in `internal/config/config.go`, in `Defaults()` as `Buttons.YozoraURL`. Existing installations can override it in `%APPDATA%\uika-resonance\cadence.toml`:
 
@@ -75,7 +75,7 @@ No local drive path or enclosing repository name is used to build the URL. A fol
 
 ## Build and run
 
-Requires Windows and Go 1.27.1 or newer, matching `go.mod`.
+You need Windows and Go 1.27.1 or newer, matching `go.mod`. I kept the build plain.
 
 ```sh
 go mod download
@@ -170,7 +170,7 @@ The Windows detector reads once at startup, then polls every second by default. 
 
 ## Appearance
 
-The **Appearance** button in the panel's header opens a dialog with 11 themes, the motion setting and the language. Each theme tile previews its colours and title face. Choosing one applies it at once and saves it in `cadence.toml`:
+The **Appearance** button in the panel's header opens a dialog with 11 themes, the motion setting and the language. I had a lot of fun with these. Each theme tile previews its colours and title face. Choosing one applies it at once and saves it in `cadence.toml`:
 
 ```toml
 [ui]
@@ -244,7 +244,7 @@ The panel saves through `/api/card`, which rejects unknown fields, out-of-range 
 
 ## Hiding tracks
 
-Some tracks should never reach your profile. A hidden track is treated like a blocked source: it is never sent to Discord, nothing is looked up for it (no artwork request), and a card already showing for it is cleared at the next rate step. Unlike a blocked source, it still shows in the panel preview, marked **Hidden from Discord**.
+Some tracks should never reach your profile, and that's okay. A hidden track is treated like a blocked source: it is never sent to Discord, nothing is looked up for it (no artwork request), and a card already showing for it is cleared at the next rate step. Unlike a blocked source, it still shows in the panel preview, marked **Hidden from Discord**.
 
 - **Hide this track** on the preview offers **Hide this song** (artist and title together) and **Hide this artist**. The **Hidden from Discord** list in the Discord card section removes a rule again.
 - Rules live in `cadence.toml`, one table each. A rule names an artist, a title or both; every named field must match:
@@ -323,3 +323,5 @@ YouTube Music is a dedicated source, enabled by default, for its browser PWA and
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+Thank you for stopping by. ♡
