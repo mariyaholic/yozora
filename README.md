@@ -55,7 +55,7 @@ The verified in-place path starts with an installation made by `Yozora-Setup.exe
 How the download is trusted depends on the running Yozora, and `/api/update` reports it as `"verification"`:
 
 - `"signature"`: the running `Yozora.exe` has a valid Authenticode signature. The installer must then have a valid signature from the same signer as well as the right checksum.
-- `"checksum"`: the running `Yozora.exe` is not signed (every release until [code signing](#code-signing) is switched on, and local builds). Only the checksum is checked, and it comes from the same release as the installer, so it catches a corrupted or truncated download but not a tampered release. Update by hand from the release page if that is not enough for you.
+- `"checksum"`: the running `Yozora.exe` is not signed (every release until code signing is set up, and local builds). Only the checksum is checked, and it comes from the same release as the installer, so it catches a corrupted or truncated download but not a tampered release. Update by hand from the release page if that is not enough for you.
 
 ## Repository
 
@@ -297,16 +297,6 @@ To use an existing Chromium installation, set `CHROMIUM_PATH` to its executable 
 ## Release
 
 A merge to `main` that changes what ships tests, builds and publishes a release automatically (`.github/workflows/release.yml`): Go sources (not `_test.go` files), `go.mod`/`go.sum`, the `.syso` icon resources, `installer/`, `assets/yozora.ico`, the embedded panel (`internal/server/ui.html` and `internal/server/fonts/`), the tray icon, or the workflow itself. Documentation, scripts and test-only merges do not cut a release. The version is `<series>.N`: the latest `v<series>.N` tag plus one, starting at `.0` for a new series. The series (`0.2` now) is set by hand in the workflow and raised for a big change; fixes after that only bump N. Either way the download links above always point at the newest build; it is stamped into the binary (`Yozora.exe version`) and the installer. Use the "Run workflow" button on the release workflow to republish without a code change.
-
-### Code signing
-
-The workflow has signing steps for [SignPath Foundation](https://signpath.org), which signs open-source projects for free. They stay skipped, and releases stay unsigned, until the owner sets them up:
-
-1. Apply at signpath.org for the open-source program (the project must be OSI-licensed, MIT qualifies, and built on GitHub-hosted runners, which it is).
-2. In SignPath, create a project (slug `yozora`), a signing policy (`release-signing`) and two artifact configurations: `exe`, a zip file containing a `<pe-file path="Yozora.exe">`, and `setup`, a zip file containing a `<pe-file path="Yozora-Setup.exe">`. Link the GitHub repository as a trusted build system.
-3. In this repository's Settings > Secrets and variables > Actions, add the secret `SIGNPATH_API_TOKEN` (a CI user's API token) and the variable `SIGNPATH_ORGANIZATION_ID`. Variables `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_POLICY_SLUG`, `SIGNPATH_EXE_CONFIG_SLUG` and `SIGNPATH_SETUP_CONFIG_SLUG` override the slugs above if you chose others.
-
-Once both exist, the next release signs `Yozora.exe` before it is packed into the installer, then signs `Yozora-Setup.exe`, and fails if either signature is not valid. The uninstaller inside the setup is not signed. SignPath was chosen over Azure Trusted Signing because it is free for open-source projects and accepts individual maintainers wherever they live; Azure Trusted Signing is a paid Azure subscription and, at the time of writing, only verifies individual developers in the US and Canada. With SignPath Foundation the certificate names SignPath Foundation as publisher, not the owner. Remove the SmartScreen note under Installing once releases are signed.
 
 ### winget
 
