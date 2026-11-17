@@ -73,20 +73,9 @@ The built-in URL lives in `internal/config/config.go`, in `Defaults()` as `Butto
 
 No local drive path or enclosing repository name is used to build the URL. A folder move therefore needs no code change. If the repository ever moves, update the default and any existing local override.
 
-## Build and run
+## Build it yourself
 
-You need Windows and Go 1.27.1 or newer, matching `go.mod`. I kept the build plain.
-
-```sh
-go mod download
-go test ./... -count=1
-go build -ldflags=-H=windowsgui -o Yozora.exe ./cmd/yozora
-./Yozora.exe serve
-```
-
-Commands: `serve`, `status`, `doctor`, `setup`, `install`, `uninstall`, `stop`, `version`. `install` opts into Windows login startup; building and serving do not install autostart. `stop` quits a running Yozora started from the same executable, as the tray's **Quit Yozora** does. `version` prints the version, which is `dev` unless the build sets it with `-ldflags "-X uika-resonance/internal/version.Version=0.2.N"` as the release workflow does.
-
-`Yozora.exe` with no arguments opens the control panel (below); with any argument it acts as the command line (`Yozora.exe status`, `Yozora.exe serve`, ...). It is the only executable: the control panel starts the background daemon by re-launching itself with `serve`. The daemon owns the tray icon; its **Open control panel** re-launches the executable with the internal `panel` command, which opens the panel the same way but never starts a daemon of its own. The panel window runs in its own short-lived process that exits when the window closes or when the daemon stops. The `-H=windowsgui` linker flag keeps double-click launches free of a console window; the executable's icon comes from `cmd/yozora/rsrc_windows_amd64.syso`, generated from `assets/yozora.ico` with `go-winres simply --arch amd64 --icon ../../assets/yozora.ico --manifest gui`.
+You do not need this to use Yozora. If you like building things yourself, I keep the build steps and the command reference in [Yozora's guide](https://mariyaholic.github.io/docs/yozora/) on my site.
 
 ## Card presets, settings backup and report downloads
 
