@@ -2,7 +2,7 @@
 
 _Made with love by [Maria](https://github.com/mariyaholic)._
 
-Yozora is my Windows music detector. It publishes what you are listening to as Discord Rich Presence. I wanted a presence app that asks for almost nothing, so I cut every little thing that causes RAM and CPU bloat. On a good runtime it goes as low as 10MB of RAM with barely any CPU seconds. This repository holds the standalone Go module, and the internal config and executable names remain `uika-resonance` for compatibility. I hope it sits quietly on your machine and lets your music show up on its own.
+Yozora is my Windows music detector. It publishes what you are listening to as Discord Rich Presence. I wanted a presence app that asks for almost nothing, so I cut every little thing that causes RAM and CPU bloat. On a good runtime it goes as low as 10MB of RAM with barely any CPU seconds. This repository holds the standalone Go module. I hope it sits quietly on your machine and lets your music show up on its own.
 
 ## Installing (no terminal needed)
 
@@ -193,21 +193,21 @@ The panel and the tray menu come in English and Japanese. **Follow Windows** (`s
 
 With a Windows contrast theme on, the panel uses the system colours: focus rings, chosen themes, segments and sources, the drop line, status lines and the checklist marks are drawn in the highlight colour or with a heavier edge, so nothing depends on the theme's own colours.
 
-| Theme id | Name | Mode | Palette source |
-| --- | --- | --- | --- |
-| `yozora` (default) | Night sky | Dark | Yozora |
-| `uika` | Uika | Dark | Omoi / Uika canon |
-| `pine` | Pine | Dark | Argonaut Oak |
-| `kurisu` | Kurisu | Dark | Argonaut Oak |
-| `ava` | Ava | Dark | Argonaut Oak |
-| `astra` | Astra | Dark | Ad Astra (Console) |
-| `mariyaholic-98` | Mariyaholic-98 | Dark | Omoi |
-| `sumimi` | Sumimi | Light | Omoi / Uika canon |
-| `ledger` | Ledger | Light | Argonaut Oak (Paper) |
-| `confluence` | Confluence | Light | Omoi |
-| `astra-light` | Astra light | Light | Ad Astra (Paper) |
+| Theme id | Name | Mode |
+| --- | --- | --- |
+| `yozora` (default) | Night sky | Dark |
+| `uika` | Uika | Dark |
+| `pine` | Pine | Dark |
+| `kurisu` | Kurisu | Dark |
+| `ava` | Ava | Dark |
+| `astra` | Astra | Dark |
+| `mariyaholic-98` | Mariyaholic-98 | Dark |
+| `sumimi` | Sumimi | Light |
+| `ledger` | Ledger | Light |
+| `confluence` | Confluence | Light |
+| `astra-light` | Astra light | Light |
 
-All 11 appear in one grid, dark themes first. Themes that looked nearly identical were merged: Omoi Panel into Night sky, and Residual Night and Paper into Astra and Astra light. Saved ids `panel`, `residual` and `residual-light` load as the theme that absorbed them. Where a source called a theme "Paper", "Night" or "Console", it is renamed so each name is unique. Omoi palettes come from `prototype/tokens.css` and `prototype/inspiration.css`.
+All 11 appear in one grid, dark themes first. Themes that looked nearly identical were merged: Omoi Panel into Night sky, and Residual Night and Paper into Astra and Astra light. Saved ids `panel`, `residual` and `residual-light` load as the theme that absorbed them. Where a source called a theme "Paper", "Night" or "Console", it is renamed so each name is unique.
 
 Colours are copied exactly from each source. Where a source colour would fall below 4.5:1 as text in this panel, a lighter or darker value is used instead and marked `derived` in `internal/server/ui.html`. This happens for a few error and hover colours. The browser check measures text, muted, link, error and button contrast in every theme. Each theme's faces ship inside the binary (Latin subsets, about 370 KB, all under the SIL Open Font License; see `internal/server/fonts/README.md`), and the panel serves them itself at `/fonts/`. The content-security policy allows fonts only from the panel, so nothing is fetched from the network. Night sky uses Segoe UI and Confluence uses Georgia and Consolas, which Windows already has. The browser check confirms that every other theme loads its own faces. An unknown or missing `theme` value loads as `yozora`.
 
@@ -295,8 +295,6 @@ NODE_PATH=/tmp/yozora-ui-tools/node_modules node scripts/check-ui.cjs
 To use an existing Chromium installation, set `CHROMIUM_PATH` to its executable instead of installing Playwright's browser. Screenshots and `results.json` are written to the system temporary directory under `yozora-ui-check`; set `UI_EVIDENCE_DIR` to choose another location. These browser checks complement the Windows Go tests; they do not exercise native WebView2 or media detection.
 
 ## Release
-
-Pending release: [v0.2.1 release notes](docs/RELEASE-NOTES-v0.2.1.md) for PR #15.
 
 A merge to `main` that changes what ships tests, builds and publishes a release automatically (`.github/workflows/release.yml`): Go sources (not `_test.go` files), `go.mod`/`go.sum`, the `.syso` icon resources, `installer/`, `assets/yozora.ico`, the embedded panel (`internal/server/ui.html` and `internal/server/fonts/`), the tray icon, or the workflow itself. Documentation, scripts and test-only merges do not cut a release. The version is `<series>.N`: the latest `v<series>.N` tag plus one, starting at `.0` for a new series. The series (`0.2` now) is set by hand in the workflow and raised for a big change; fixes after that only bump N. Either way the download links above always point at the newest build; it is stamped into the binary (`Yozora.exe version`) and the installer. Use the "Run workflow" button on the release workflow to republish without a code change.
 
